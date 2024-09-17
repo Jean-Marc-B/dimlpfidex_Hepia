@@ -1,0 +1,9 @@
+No decision threshold is used.
+
+Rule for sample 0 :
+
+X3442<61.2 -> class 1
+   Train Covering size : 122
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999518

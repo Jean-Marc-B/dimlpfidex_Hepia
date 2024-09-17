@@ -1,0 +1,16 @@
+Global statistics of the rule set :
+Number of rules : 4910, mean sample covering number per rule : 101.016701, mean number of antecedents per rule : 7.106314
+
+Statistics with a test set of 10000 samples :
+
+No decision threshold is used.
+No positive index class is used.
+The global rule fidelity rate is : 0.970900
+The global rule accuracy is : 0.966600
+The explainability rate (when we can find one or more rules, either correct ones or activated ones which all agree on the same class) is : 0.951000
+The default rule rate (when we can't find any rule activated for a sample) is : 0.044100
+The mean number of correct(fidel) activated rules per sample is : 8.366100
+The mean number of wrong(not fidel) activated rules per sample is : 0.225300
+The model test accuracy is : 0.993000
+The model test accuracy when rules and model agree is : 0.994747
+The model test accuracy when activated rules and model agree is : 0.996439

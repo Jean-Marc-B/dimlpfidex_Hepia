@@ -1,0 +1,260 @@
+Number of rules : 43, mean sample covering number per rule : 5.093023, mean number of antecedents per rule : 2.534884
+No decision threshold is used.
+
+Rule 1: Weight>=101.342625 Gender_Female>=0.5 -> OLD_Obesity_Type_III
+   Train Covering size : 31
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.98
+
+Rule 2: Weight<59.456789 Height>=1.62 -> OLD_Insufficient_Weight
+   Train Covering size : 17
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.858824
+
+Rule 3: Weight<52.5 FCVC>=2.000641 -> OLD_Insufficient_Weight
+   Train Covering size : 16
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.915625
+
+Rule 4: Weight<60.526165 Height>=1.70163 -> OLD_Insufficient_Weight
+   Train Covering size : 16
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.8525
+
+Rule 5: Age>=27 Weight>=99.945408 -> OLD_Obesity_Type_II
+   Train Covering size : 11
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.89
+
+Rule 6: Weight<44.790579 -> OLD_Insufficient_Weight
+   Train Covering size : 10
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.942
+
+Rule 7: Weight>=76.063057 TUE<0.006328 Height<1.635 -> OLD_Obesity_Type_I
+   Train Covering size : 9
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.896667
+
+Rule 8: Weight>=76.063057 Age<23.136444 Age>=22.832026 -> OLD_Obesity_Type_I
+   Train Covering size : 7
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.778571
+
+Rule 9: Weight<72.276241 TUE>=0.949026 Weight>=58.895191 Height>=1.622719 FAF<2.004076 -> OLD_Normal_Weight
+   Train Covering size : 6
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.706667
+
+Rule 10: Age>=31.09159 Age<36.655146 MTRANS_Automobile>=0.5 -> OLD_Overweight_Level_II
+   Train Covering size : 6
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.766667
+
+Rule 11: CAEC<0.165 -> OLD_Overweight_Level_I
+   Train Covering size : 5
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.9
+
+Rule 12: Weight>=76.063057 TUE>=1.581674 FAF<1.937135 -> OLD_Obesity_Type_I
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.7375
+
+Rule 13: MTRANS_Walking>=0.5 CALC>=0.165 -> OLD_Normal_Weight
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.75
+
+Rule 14: Weight>=76.063057 Age<23.136444 Age>=22.185466 FCVC<2.262214 -> OLD_Obesity_Type_I
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.775
+
+Rule 15: FCVC<1.973747 Weight>=91.087753 -> OLD_Obesity_Type_II
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.885
+
+Rule 16: Weight>=100 NCP<1.784095 -> OLD_Obesity_Type_II
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.8675
+
+Rule 17: FAVC<0.5 FCVC<2.141402 Weight<77.498585 TUE>=0.0013 -> OLD_Normal_Weight
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.7475
+
+Rule 18: FCVC<2.000641 Weight<75.905434 Weight>=70.165344 -> OLD_Overweight_Level_I
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.8575
+
+Rule 19: Weight>=76.063057 Age<18.576438 Height<1.695 -> OLD_Obesity_Type_I
+   Train Covering size : 4
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.7875
+
+Rule 20: FAF>=2.149871 FAF<2.881356 -> OLD_Overweight_Level_I
+   Train Covering size : 3
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.81
+
+Rule 21: Age>=36.655146 Weight<73.016411 -> OLD_Overweight_Level_I
+   Train Covering size : 3
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.673333
+
+Rule 22: Weight<72.276241 Weight>=60.526165 FCVC>=2.862767 -> OLD_Normal_Weight
+   Train Covering size : 3
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.71
+
+Rule 23: CAEC>=0.665 Height>=1.502719 -> OLD_Normal_Weight
+   Train Covering size : 3
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.69
+
+Rule 24: Weight<75.905434 Age>=29.164296 MTRANS_Public_Transportation<0.5 -> OLD_Overweight_Level_I
+   Train Covering size : 3
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.686667
+
+Rule 25: Weight>=76.063057 Age<18.076438 -> OLD_Obesity_Type_I
+   Train Covering size : 3
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.78
+
+Rule 26: NCP<2.975748 Height>=1.670477 NCP>=2.816146 -> OLD_Overweight_Level_II
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.835
+
+Rule 27: MTRANS_Automobile>=0.5 CH2O>=2.627431 -> OLD_Obesity_Type_I
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.805
+
+Rule 28: MTRANS_Automobile>=0.5 CH2O<1.899625 Weight>=88.790962 -> OLD_Obesity_Type_I
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.72
+
+Rule 29: Age>=31.09159 Gender_Male>=0.5 Height<1.695 -> OLD_Overweight_Level_II
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.835
+
+Rule 30: TUE>=1.947052 CALC>=0.33 -> OLD_Normal_Weight
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.77
+
+Rule 31: Age>=36.655146 TUE>=0.653675 -> OLD_Overweight_Level_I
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.665
+
+Rule 32: Weight>=76.063057 TUE<0.006328 Age<23.003801 -> OLD_Obesity_Type_I
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.845
+
+Rule 33: CAEC>=0.33 Weight>=53.290579 Weight<55.126663 -> OLD_Normal_Weight
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.775
+
+Rule 34: Weight<72.276241 TUE>=0.949026 Age>=22.832026 FHWO>=0.5 -> OLD_Normal_Weight
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.715
+
+Rule 35: FAVC<0.5 NCP>=3.777487 NCP<3.988101 -> OLD_Overweight_Level_II
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.62
+
+Rule 36: NCP>=3.997573 FAF>=2.004076 -> OLD_Normal_Weight
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.68
+
+Rule 37: FCVC<1.266773 Age>=20.016897 -> OLD_Overweight_Level_I
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.765
+
+Rule 38: NCP<2.00267 Age<18.304948 -> OLD_Overweight_Level_I
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.745
+
+Rule 39: CALC<0.165 FCVC<2.380393 Age>=20.407329 Age<20.993417 -> OLD_Overweight_Level_II
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.87
+
+Rule 40: NCP<2.816146 NCP>=2.718462 -> OLD_Overweight_Level_I
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.72
+
+Rule 41: FAF>=2.881356 Weight>=70.165344 -> OLD_Overweight_Level_II
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.69
+
+Rule 42: Height<1.508624 MTRANS_Public_Transportation>=0.5 -> OLD_Overweight_Level_II
+   Train Covering size : 2
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.66
+
+Rule 43: FCVC<2.105979 FCVC>=2.064834 -> OLD_Overweight_Level_I
+   Train Covering size : 1
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.83

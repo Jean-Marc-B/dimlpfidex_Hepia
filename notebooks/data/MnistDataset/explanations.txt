@@ -1,0 +1,568 @@
+Global statistics of the rule set :
+Number of rules : 4910, mean sample covering number per rule : 101.016701, mean number of antecedents per rule : 7.106314
+
+
+--------------------------------------------------------------------
+
+Explanation for sample 0 :
+
+The model predicts class 7 with probability 1.000000
+
+We have found 23 global rules explaining the model prediction :
+
+R1: X184<35.7 X712>=127.5 X375<20.4 X460<35.7 X406<20.4 X573>=51 X219<40.8 -> class 7
+   Train Covering size : 1025
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999943
+
+R2: X268>=193.8 X233>=25.5 X179<20.4 X344<5.1 X459<5.1 X552<15.3 X348<45.9 X514<5.1 X265>=71.4 X518>=40.8 -> class 7
+   Train Covering size : 900
+   Train Fidelity : 1
+   Train Accuracy : 0.998889
+   Train Confidence : 0.999864
+
+R3: X268>=173.4 X377<5.1 X712>=61.2 X460<45.9 X519>=229.5 X432<56.1 X346<5.1 -> class 7
+   Train Covering size : 744
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999963
+
+R4: X739>=86.7 X260>=71.4 X401<10.2 X487<127.5 X374<5.1 X359<20.4 -> class 7
+   Train Covering size : 734
+   Train Fidelity : 1
+   Train Accuracy : 0.998638
+   Train Confidence : 0.999916
+
+R5: X183<25.5 X459<30.6 X685>=214.2 X267>=234.6 X406<10.2 X520>=193.8 -> class 7
+   Train Covering size : 654
+   Train Fidelity : 1
+   Train Accuracy : 0.998471
+   Train Confidence : 0.998982
+
+R6: X183<5.1 X741>=5.1 X233>=183.6 X400<10.2 X376<56.1 X461<66.3 X520>=107.1 -> class 7
+   Train Covering size : 604
+   Train Fidelity : 1
+   Train Accuracy : 0.998344
+   Train Confidence : 0.999973
+
+R7: X684>=219.3 X403<51 X711>=178.5 X461<20.4 X350<30.6 X406<158.1 X483<20.4 X345<147.9 -> class 7
+   Train Covering size : 595
+   Train Fidelity : 1
+   Train Accuracy : 0.998319
+   Train Confidence : 0.999882
+
+R8: X684>=122.4 X402<30.6 X712>=193.8 X268>=234.6 X348<66.3 X433<153 X545>=5.1 X488<76.5 -> class 7
+   Train Covering size : 588
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999974
+
+R9: X183<35.7 X713>=173.4 X430<56.1 X347<5.1 X405<10.2 X461<107.1 X299>=168.3 X547>=96.9 -> class 7
+   Train Covering size : 573
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999996
+
+R10: X268>=214.2 X350<45.9 X605<15.3 X403<10.2 X601>=219.3 X598<20.4 X461<20.4 X235>=178.5 X183<142.8 -> class 7
+   Train Covering size : 473
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999944
+
+R11: X404<40.8 X268>=147.9 X263>=163.2 X212<15.3 X713>=117.3 X431<10.2 X190<56.1 -> class 7
+   Train Covering size : 462
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999992
+
+R12: X432<20.4 X710>=15.3 X377<71.4 X400<5.1 X320<35.7 X573>=137.7 X462<204 X681<107.1 -> class 7
+   Train Covering size : 405
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999577
+
+R13: X265>=219.3 X683>=219.3 X375<20.4 X234>=91.8 X181<45.9 X400<35.7 X658<61.2 -> class 7
+   Train Covering size : 346
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999945
+
+R14: X406<51 X184<10.2 X486<5.1 X373<10.2 X269>=107.1 X569<86.7 X492>=244.8 X210<147.9 X203>=10.2 -> class 7
+   Train Covering size : 325
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999847
+
+R15: X154<5.1 X713>=173.4 X232>=81.6 X433<76.5 X377<76.5 X288<76.5 X176<122.4 -> class 7
+   Train Covering size : 295
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999164
+
+R16: X713>=204 X601>=244.8 X433<15.3 X349<76.5 X403<51 X489<35.7 X358<15.3 -> class 7
+   Train Covering size : 278
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999936
+
+R17: X685>=102 X268>=214.2 X376<5.1 X437>=122.4 X372<5.1 X405<35.7 X547>=224.4 X600>=30.6 X544<15.3 -> class 7
+   Train Covering size : 264
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999186
+
+R18: X269>=163.2 X378<10.2 X711>=188.7 X375<15.3 X429<10.2 X433<81.6 X290<173.4 X709<66.3 -> class 7
+   Train Covering size : 261
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999727
+
+R19: X158<15.3 X266>=204 X204>=127.5 X714>=30.6 X547>=229.5 X403<122.4 -> class 7
+   Train Covering size : 242
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999913
+
+R20: X406<40.8 X231>=234.6 X579<15.3 X180<35.7 X262>=137.7 X516<5.1 X687<25.5 -> class 7
+   Train Covering size : 221
+   Train Fidelity : 1
+   Train Accuracy : 0.995475
+   Train Confidence : 0.999886
+
+R21: X570<40.8 X266>=158.1 X382>=198.9 X319<66.3 X264>=244.8 X372<5.1 X550<25.5 X513<35.7 X435<122.4 X656>=71.4 -> class 7
+   Train Covering size : 177
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999679
+
+R22: X711>=188.7 X433<66.3 X378<81.6 X487<10.2 X209<61.2 X464<214.2 -> class 7
+   Train Covering size : 169
+   Train Fidelity : 1
+   Train Accuracy : 0.994083
+   Train Confidence : 0.999746
+
+R23: X712>=239.7 X204>=112.2 X687<25.5 X355>=158.1 -> class 7
+   Train Covering size : 129
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999789
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 1 :
+
+The model predicts class 2 with probability 0.999998
+
+We have found 6 global rules explaining the model prediction :
+
+R1: X583>=142.8 X498<40.8 X343<10.2 X487>=107.1 X526<5.1 -> class 2
+   Train Covering size : 236
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999913
+
+R2: X583>=107.1 X527<102 X314<5.1 X261<5.1 X584>=76.5 -> class 2
+   Train Covering size : 225
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999953
+
+R3: X149>=112.2 X514>=204 X373<15.3 X260<20.4 X410<10.2 X581>=66.3 X497<40.8 -> class 2
+   Train Covering size : 207
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999936
+
+R4: X121>=137.7 X611>=15.3 X498<40.8 X370<158.1 X431>=102 -> class 2
+   Train Covering size : 130
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999974
+
+R5: X608>=178.5 X124>=234.6 X99>=56.1 X240>=96.9 X381<30.6 -> class 2
+   Train Covering size : 47
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999736
+
+R6: X515>=10.2 X346<20.4 X152>=188.7 X149>=188.7 X441<25.5 X658<193.8 X379<198.9 X294>=153 -> class 2
+   Train Covering size : 37
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999967
+
+
+Activated rules without correct decision class :
+F1: X436<40.8 X489<10.2 X351<30.6 X212>=163.2 X568>=214.2 X547<163.2 X542>=102 X522<117.3 -> class 0
+   Train Covering size : 199
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999986
+
+
+--------------------------------------------------------------------
+
+Explanation for sample 2 :
+
+The model predicts class 1 with probability 0.999997
+
+We have found 7 global rules explaining the model prediction :
+
+R1: X323>=219.3 X517>=198.9 X180<5.1 X492<25.5 X272<25.5 X347<10.2 X576<20.4 X236<30.6 X436<132.6 X541<30.6 -> class 1
+   Train Covering size : 2156
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999678
+
+R2: X236<15.3 X464<20.4 X151<10.2 X522<5.1 X406>=234.6 X353<30.6 X271<40.8 X345<76.5 X375<20.4 X293<158.1 X575<91.8 X553<10.2 -> class 1
+   Train Covering size : 1996
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999813
+
+R3: X465<25.5 X347<10.2 X206<15.3 X406>=168.3 X353<51 X513<5.1 X403<5.1 X576<30.6 X181<5.1 X236<30.6 X595<61.2 X212>=71.4 X491<35.7 -> class 1
+   Train Covering size : 1218
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999729
+
+R4: X382<25.5 X577<5.1 X489>=234.6 X291<15.3 X323>=234.6 X494<15.3 X180<25.5 X267>=183.6 X214<209.1 X573>=244.8 X566<5.1 -> class 1
+   Train Covering size : 1171
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999362
+
+R5: X406>=219.3 X409<81.6 X489>=249.9 X207<20.4 X346<10.2 X512<35.7 X604<51 X264<91.8 X465<20.4 X124<45.9 X683<56.1 X349<71.4 X575<10.2 -> class 1
+   Train Covering size : 987
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999652
+
+R6: X410<5.1 X576<10.2 X234<81.6 X129>=35.7 X296>=168.3 X595<56.1 X211>=40.8 X153<163.2 X601>=117.3 -> class 1
+   Train Covering size : 562
+   Train Fidelity : 1
+   Train Accuracy : 0.998221
+   Train Confidence : 0.999824
+
+R7: X323>=224.4 X180<5.1 X520<15.3 X325<10.2 X374<10.2 X130>=71.4 X461>=15.3 -> class 1
+   Train Covering size : 206
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.99787
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 3 :
+
+The model predicts class 0 with probability 1.000000
+
+We have found 18 global rules explaining the model prediction :
+
+R1: X511>=127.5 X434<35.7 X427>=56.1 X627>=137.7 X380<30.6 X243>=40.8 X209>=239.7 X461<45.9 -> class 0
+   Train Covering size : 1432
+   Train Fidelity : 1
+   Train Accuracy : 0.999302
+   Train Confidence : 0.999979
+
+R2: X379<20.4 X625>=71.4 X460<5.1 X456>=102 X435<10.2 X322<86.7 X656>=244.8 -> class 0
+   Train Covering size : 1134
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999991
+
+R3: X597>=224.4 X428>=158.1 X436<5.1 X290>=163.2 X353<30.6 X384>=91.8 -> class 0
+   Train Covering size : 1032
+   Train Fidelity : 1
+   Train Accuracy : 0.999031
+   Train Confidence : 0.999973
+
+R4: X512>=244.8 X516<25.5 X373>=127.5 X270>=30.6 X434<40.8 X352<76.5 X598>=66.3 X384>=5.1 -> class 0
+   Train Covering size : 899
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999979
+
+R5: X400>=5.1 X435<5.1 X351<10.2 X598>=214.2 X489<20.4 X656>=183.6 X241>=56.1 X602>=61.2 -> class 0
+   Train Covering size : 888
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999524
+
+R6: X569>=249.9 X344>=35.7 X434<45.9 X428>=66.3 X271>=229.5 X350<178.5 X153>=25.5 -> class 0
+   Train Covering size : 708
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999986
+
+R7: X490<5.1 X409<5.1 X236>=147.9 X599>=239.7 X378<51 X299>=81.6 X485>=153 X629>=66.3 -> class 0
+   Train Covering size : 518
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999896
+
+R8: X357>=244.8 X435<10.2 X568>=214.2 X316>=173.4 X241>=234.6 X602>=25.5 -> class 0
+   Train Covering size : 516
+   Train Fidelity : 1
+   Train Accuracy : 0.998062
+   Train Confidence : 0.998594
+
+R9: X405<10.2 X464<25.5 X235>=249.9 X181>=224.4 X242>=122.4 X373>=229.5 X352<122.4 X598>=35.7 X659>=25.5 -> class 0
+   Train Covering size : 472
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999998
+
+R10: X433<25.5 X569>=45.9 X407<40.8 X345>=71.4 X323<15.3 X270>=193.8 X518<5.1 X211>=35.7 X634<122.4 -> class 0
+   Train Covering size : 456
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999997
+
+R11: X455>=198.9 X598>=214.2 X459<25.5 X240>=168.3 X329>=10.2 X262>=147.9 X297>=51 -> class 0
+   Train Covering size : 356
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999936
+
+R12: X407<5.1 X483>=168.3 X629>=188.7 X372>=66.3 X240>=219.3 X153>=224.4 -> class 0
+   Train Covering size : 310
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999993
+
+R13: X384>=193.8 X489<25.5 X484>=249.9 X268>=183.6 X601>=209.1 X380<5.1 X161<10.2 -> class 0
+   Train Covering size : 259
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999042
+
+R14: X412>=229.5 X240>=61.2 X433<20.4 X485>=107.1 X318>=244.8 X298>=183.6 X380<188.7 X425<15.3 -> class 0
+   Train Covering size : 259
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.99996
+
+R15: X540>=234.6 X413>=229.5 X270>=56.1 X372>=168.3 X434<61.2 X498<30.6 X265>=5.1 -> class 0
+   Train Covering size : 228
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999963
+
+R16: X401>=45.9 X569>=178.5 X406<5.1 X657>=51 X378<15.3 X126>=76.5 X548>=229.5 X148<20.4 -> class 0
+   Train Covering size : 224
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999996
+
+R17: X437<20.4 X378<127.5 X457>=81.6 X628>=209.1 X488<20.4 X494>=239.7 X270>=198.9 -> class 0
+   Train Covering size : 186
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999996
+
+R18: X329>=20.4 X540>=244.8 X435<86.7 X266>=219.3 X401>=102 X459<45.9 X301<132.6 -> class 0
+   Train Covering size : 98
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999504
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 4 :
+
+The model predicts class 4 with probability 1.000000
+
+We have found 1 global rule explaining the model prediction :
+
+R1: X209<56.1 X688>=35.7 X293<15.3 X180<56.1 X236<61.2 X493>=178.5 X316>=178.5 X295<20.4 -> class 4
+   Train Covering size : 299
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999942
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 5 :
+
+The model predicts class 1 with probability 1.000000
+
+We have found 7 global rules explaining the model prediction :
+
+R1: X323>=219.3 X517>=198.9 X180<5.1 X492<25.5 X272<25.5 X347<10.2 X576<20.4 X236<30.6 X436<132.6 X541<30.6 -> class 1
+   Train Covering size : 2156
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999678
+
+R2: X236<15.3 X464<20.4 X151<10.2 X522<5.1 X406>=234.6 X353<30.6 X271<40.8 X345<76.5 X375<20.4 X293<158.1 X575<91.8 X553<10.2 -> class 1
+   Train Covering size : 1996
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999813
+
+R3: X378>=204 X207<10.2 X431<25.5 X461>=249.9 X487<35.7 X270<81.6 X150<51 X319<132.6 X349>=10.2 X625<76.5 -> class 1
+   Train Covering size : 1356
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999584
+
+R4: X406>=219.3 X409<81.6 X489>=249.9 X207<20.4 X346<10.2 X512<35.7 X604<51 X264<91.8 X465<20.4 X124<45.9 X683<56.1 X349<71.4 X575<10.2 -> class 1
+   Train Covering size : 987
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999652
+
+R5: X323>=107.1 X604<5.1 X236<10.2 X375<25.5 X492<15.3 X516>=214.2 X350>=209.1 X408<117.3 X212>=214.2 -> class 1
+   Train Covering size : 977
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999478
+
+R6: X322>=132.6 X493<40.8 X319<15.3 X489>=239.7 X569<45.9 X180<20.4 X657>=10.2 X216<45.9 X491<91.8 -> class 1
+   Train Covering size : 895
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999236
+
+R7: X351>=147.9 X545>=96.9 X381<56.1 X486<25.5 X263<15.3 X180<81.6 X375<35.7 X462>=234.6 X547<10.2 X123<107.1 X211<142.8 X509<5.1 -> class 1
+   Train Covering size : 585
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999924
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 6 :
+
+The model predicts class 4 with probability 0.989569
+
+We have found 3 global rules explaining the model prediction :
+
+R1: X401>=56.1 X210<81.6 X436>=209.1 X266<5.1 X542<20.4 X180<81.6 X685>=5.1 X345>=45.9 -> class 4
+   Train Covering size : 514
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999983
+
+R2: X238<91.8 X409>=173.4 X598<66.3 X345>=81.6 X244>=76.5 X294<5.1 X183<102 X576<122.4 X487<102 -> class 4
+   Train Covering size : 349
+   Train Fidelity : 1
+   Train Accuracy : 0.997135
+   Train Confidence : 0.999754
+
+R3: X597<45.9 X267<102 X180<15.3 X183<178.5 X404>=66.3 X382>=81.6 X264<209.1 X346>=153 X211<168.3 X658>=188.7 X546>=214.2 -> class 4
+   Train Covering size : 51
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999912
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 7 :
+
+The model predicts class 9 with probability 0.999996
+
+We have found 2 global rules explaining the model prediction :
+
+R1: X408>=193.8 X570<5.1 X318>=86.7 X157<20.4 X237>=15.3 X406>=102 X352>=249.9 X600<102 X462<117.3 X605<86.7 X346<178.5 -> class 9
+   Train Covering size : 57
+   Train Fidelity : 1
+   Train Accuracy : 0.982456
+   Train Confidence : 0.99727
+
+R2: X598<30.6 X209>=137.7 X349<20.4 X153<10.2 X628<66.3 X405>=112.2 X296>=214.2 X489<35.7 X268<183.6 X295>=56.1 -> class 9
+   Train Covering size : 17
+   Train Fidelity : 1
+   Train Accuracy : 0.941176
+   Train Confidence : 0.945401
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 8 :
+
+The model predicts class 5 with probability 0.999914
+
+We have found 1 global rule explaining the model prediction :
+
+R1: X192>=25.5 X355<5.1 X325<102 X275<117.3 X541<91.8 X577>=153 X509<40.8 -> class 5
+   Train Covering size : 348
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999985
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+Explanation for sample 9 :
+
+The model predicts class 9 with probability 0.999992
+
+We have found 6 global rules explaining the model prediction :
+
+R1: X739>=25.5 X404>=183.6 X232<10.2 X219<30.6 X212>=96.9 X436>=229.5 -> class 9
+   Train Covering size : 154
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999986
+
+R2: X408>=224.4 X155<5.1 X378>=117.3 X711>=153 X659<35.7 X213>=112.2 X208<30.6 X295<81.6 -> class 9
+   Train Covering size : 128
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999896
+
+R3: X382>=214.2 X709>=15.3 X433>=102 X461<178.5 X627>=239.7 X240>=107.1 X571>=122.4 -> class 9
+   Train Covering size : 53
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999963
+
+R4: X381>=163.2 X540<5.1 X239>=153 X404>=20.4 X289>=86.7 X605<81.6 X357>=244.8 X183<66.3 -> class 9
+   Train Covering size : 39
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999505
+
+R5: X491>=158.1 X318>=209.1 X212>=81.6 X320<45.9 X633<30.6 X576<96.9 X487<51 X377>=127.5 X329>=40.8 -> class 9
+   Train Covering size : 39
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999957
+
+R6: X317>=147.9 X380>=219.3 X239>=234.6 X570<102 X431>=61.2 X187<5.1 X488<25.5 X682>=219.3 X320<15.3 -> class 9
+   Train Covering size : 14
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999978
+
+
+There are no incorrect rules.
+
+--------------------------------------------------------------------
+
+
+Fidex is used for 0.000000% of samples.

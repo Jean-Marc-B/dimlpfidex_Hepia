@@ -1,0 +1,9 @@
+No decision threshold is used.
+
+Rule for sample 0 :
+
+X739>=249.9 X230>=25.5 -> class 7
+   Train Covering size : 145
+   Train Fidelity : 1
+   Train Accuracy : 1
+   Train Confidence : 0.999995

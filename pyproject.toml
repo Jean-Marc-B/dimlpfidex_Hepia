@@ -1,0 +1,72 @@
+[project]
+name = "dimlpfidex"
+version = "0.0.6"
+description = "Discretized Interpretable Multi Layer Perceptron (DIMLP) and related algorithms"
+authors = [
+    { name = "Jean-Marc Boutay", email = "jean-marc.boutay@hesge.ch" },
+    { name = "Damian Boquete Costa", email = "damian.boquete-costa@hesge.ch" },
+    { name = "Guido Bologna", email = "guido.bologna@hesge.ch" }
+]
+dependencies = [
+    "pybind11>=2.12.0",
+    "pybind11-global>=2.10.4",
+    "numpy<2.0",
+    "scikit-learn>=1.1.3",
+    "keras>=3.3",
+    "torch>=2.3",
+    "torchvision>=0.18",
+    "matplotlib>=3.7.4",
+    "build>=1.0.3",
+    "cibuildwheel>=2.19.1",
+    "breathe>=4.35.0",
+    "exhale>=0.3.7",
+    "sphinx>=7.3.7",
+    "sphinx-rtd-theme>=2.0.0",
+]
+readme = "README.md"
+license = { text = "BSD License (BSD-3-Clause)" }
+homepage = "https://hes-xplain.github.io/"
+repository = "https://github.com/HES-XPLAIN/dimlpfidex"
+keywords = ["machine learning", "xai"]
+classifiers=[
+    'Operating System :: Microsoft :: Windows',
+    'Operating System :: POSIX',
+    'Operating System :: Unix',
+    'Operating System :: MacOS',
+    'Intended Audience :: Developers',
+    'Intended Audience :: Education',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: BSD License',
+    'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Mathematics',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    'Topic :: Software Development',
+    'Topic :: Software Development :: Libraries',
+    'Topic :: Software Development :: Libraries :: Python Modules',
+    'Programming Language :: C++',
+    'Programming Language :: Python :: 3',
+]
+requires-python = ">= 3.9.0"
+
+[build-system]
+requires = ["scikit-build-core", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "pre-commit>=3.5.0",
+]
+
+[tool.scikit-build]
+cmake.verbose = true
+logging.level = "INFO"
+build-dir = "build"
+wheel.packages = [
+#    "dimlp",
+    "dimlpfidex",
+#    "example",
+#    "fidex",
+#    "common",
+    "trainings",
+]
