@@ -311,6 +311,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setFloat(LOWEST_MIN_FIDELITY, arg);
     break;
 
+  case HI_KNOT:
+    setFloat(HI_KNOT, arg);
+    break;
+
   case DROPOUT_DIM:
     setFloat(DROPOUT_DIM, arg);
     break;
