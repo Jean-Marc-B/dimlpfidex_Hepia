@@ -187,3 +187,7 @@ compile_commands.json
 # Sphinx
 docs/api
 docs/modules
+
+# Deep Fidex data
+Deep_Fidex/Cifar/
+Deep_Fidex/Mnist/
