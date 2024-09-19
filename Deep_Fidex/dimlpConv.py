@@ -17,14 +17,14 @@ Created on Fri Mar 19 11:54:46 2021
 
 import os
 import time
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import tensorflow as tf
 
-np.random.seed(seed=None)  
- 
+np.random.seed(seed=None)
+
 from keras.models     import Sequential
 from keras.layers     import Dense, Dropout, Activation, Flatten, Input
 from keras.layers     import Convolution1D, Convolution2D, DepthwiseConv2D, MaxPooling2D, BatchNormalization
@@ -47,10 +47,10 @@ doParam            = 0.2
 
 nbIt               = 10
 nbStairsPerUnit    = 30
-# size1D             = 28    # for MNIST images
+#size1D             = 28    # for MNIST images
 size1D             = 32    # for Cifar images
 nbChannels         = 3     # for Cifar images
-# nbChannels         = 1     # for MNIST images
+#nbChannels         = 1     # for MNIST images
 
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
 
@@ -90,7 +90,7 @@ def output_data(data, data_file):
         raise ValueError(f"Error : Couldn't open file {data_file}.")
 
 def staircaseUnbound(x):
-   
+
    return (K.sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
 
 ###############################################################
@@ -99,13 +99,13 @@ def staircaseSemiLin(x):
 #    h -> nStairsPerUnit
 #    hard_sigmoid(x) =  max(0, min(1, x/6+0.5))
 #    staircaseSemiLin(x, h) = hard_sigmoid(ceil(x*h)*(1/h))
-   
+
    return (tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
 
 ###############################################################
-   
+
 def staircaseSemiLin2(x):
-   
+
    a = (tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
    a = (a - 0.5)*6.0
    return a
@@ -113,7 +113,7 @@ def staircaseSemiLin2(x):
 ###############################################################
 
 def hardSigm2(x):
-   
+
    a = tf.keras.activations.hard_sigmoid(x)
    a = (a - 0.5)*6.0
    return a
@@ -121,7 +121,7 @@ def hardSigm2(x):
 ###############################################################
 
 def staircaseBound(x):
-   
+
    a = tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit)*0.5 * nbStairsPerUnitInv)
    a = (a - 0.5)*10.0
    return(K.sigmoid(a))
@@ -167,12 +167,12 @@ def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_o
 ###############################################################
 
 def create_model(use_staircase=False):
-    
+
     model = Sequential()
     model.add(Input(shape=(size1D, size1D, nbChannels)))  # Explicit input shape definition
     # model.add(LocallyConnected2D(1,  (1, 1), activation=tf.keras.activations.hard_sigmoid, input_shape=(size1D, size1D, nbChannels)))
     # model.add(Convolution2D(1, (1, 1), activation=tf.keras.activations.hard_sigmoid, input_shape=(size1D, size1D, nbChannels)))
-    
+
     # model.add(BatchNormalization(center=False, scale=False, input_shape=(size1D, size1D, nbChannels)))
     # model.add(BatchNormalization(input_shape=(size1D, size1D, nbChannels)))
     # model.add(layers.Activation(tf.keras.activations.sigmoid))
@@ -184,42 +184,42 @@ def create_model(use_staircase=False):
     model.add(Convolution2D(32, (5, 5), activation='relu'))
     model.add(Dropout(doParam))
     model.add(MaxPooling2D(pool_size=(2, 2)))
-    
+
     # model.add(BatchNormalization())
-    
+
     model.add(Convolution2D(32, (5, 5), activation='relu'))
     model.add(Dropout(doParam))
     model.add(MaxPooling2D(pool_size=(2, 2)))
-    
-    # model.add(DepthwiseConv2D(1, depth_multiplier=2, activation=tf.keras.activations.hard_sigmoid))    
-        
+
+    # model.add(DepthwiseConv2D(1, depth_multiplier=2, activation=tf.keras.activations.hard_sigmoid))
+
     model.add(Flatten(name="flatten_layer"))
-    
+
     # model.add(BatchNormalization(center=False, scale=False, name="batchnorm_layer"))
-    
+
     model.add(BatchNormalization(name="batchnorm_layer"))
     if use_staircase:
       model.add(layers.Activation(staircaseSemiLin))
     else:
       model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
-    
+
     # model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
-    
+
     model.add(Dense(256, activation='relu'))
     model.add(Dropout(doParam))
     # model.add(Dense(128, activation='sigmoid'))
-    
+
     model.add(Dense(10, activation='softmax'))
-    
+
     model.summary()
-    
+
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
-    
+
     # theWeights  = model.get_weights()
     # m           = theWeights[0]
     # m[0,0,0,0]  = 1;
-    
+
     # m2          = theWeights[1]
     # m2[0]       = -0.5;
 
@@ -229,7 +229,7 @@ def create_model(use_staircase=False):
 ###############################################################
 
 print("Loading data...")
-    
+
 train   = np.loadtxt(train_data_file)
 
 # X_train = train.reshape(train.shape[0], nbChannels, size1D, size1D)
@@ -287,17 +287,17 @@ bestScore = float('inf')
 
 for epoch in range(nbIt):
     print(f"Epoch {epoch+1}")
-    
+
     # Train the model for 1 epoch
     model.fit(x_train_h1, y_train, batch_size=32, epochs=1, validation_data=(x_val_h1, y_val), verbose=2)
-    
+
     # Transfer the weights to model2
     model2.set_weights(model.get_weights())
-    
+
     # Evalueate model2 on validation
     val_score = model2.evaluate(x_val_h1, y_val, verbose=0)
     print(f"Validation score with staircaseSemiLin: {val_score}")
-    
+
     # Save weights if the model scores better
     if val_score[0] < bestScore:
         bestScore = val_score[0]

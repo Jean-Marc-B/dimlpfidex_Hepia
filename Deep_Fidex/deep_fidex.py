@@ -8,13 +8,13 @@ Created on Tue Sep 17 09:20:16 2024
 import os
 import sys
 import time
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import tensorflow as tf
 
-np.random.seed(seed=None)  
+np.random.seed(seed=None)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from dimlpfidex import fidex
@@ -25,7 +25,8 @@ fidex.fidex()
 start_time = time.time()
 
 nbStairsPerUnit    = 30
-size1D             = 28    # for MNIST images
+#size1D             = 28    # for MNIST images
+size1D             = 32    # for Cifar images
 
 nb_classes = 10 # for MNIST images
 hiknot = 5
@@ -35,7 +36,7 @@ K_val = 1.0
 dropout_hyp = 0.5
 dropout_dim = 0.5
 
-base_folder = "Mnist/"
+base_folder = "Cifar/"
 train_data_file = "trainData.txt"
 train_class_file = "trainClass.txt"
 test_data_file = "testData.txt"
@@ -57,7 +58,7 @@ simple_stats_file = "simple_stats_fidex.txt"
 ###############################################################
 
 print("Loading data...")
-    
+
 train_deep   = np.loadtxt(base_folder + deep_fidex_train_inputs)
 
 X_train_deep = train_deep.astype('float32')
@@ -84,7 +85,7 @@ X_test = test.astype('float32')
 print(X_test.shape)
 ##############################################################################
 
-test_sample_id = 6
+test_sample_id = 1
 test_sample_deep = X_test_deep[test_sample_id]
 test_sample_class = Y_test[test_sample_id]
 test_sample_pred = test_pred[test_sample_id]
@@ -93,7 +94,7 @@ test_sample = X_test[test_sample_id]
 
 
 try:
-    with open(deep_test_sample_file, "w") as myFile:
+    with open(base_folder + deep_test_sample_file, "w") as myFile:
         myFile.write(' '.join(map(str, test_sample_deep)) + " " + ' '.join(map(str, test_sample_class)) + "\n")
         myFile.write(' '.join(map(str,test_sample_pred)))
 
@@ -103,7 +104,7 @@ except (IOError):
     raise ValueError(f"Error : Couldn't open file {myFile}.")
 
 try:
-    with open(test_sample_file, "w") as myFile:
+    with open(base_folder + test_sample_file, "w") as myFile:
         myFile.write(' '.join(map(str, test_sample)) + " " + ' '.join(map(str, test_sample_class)) + "\n")
         myFile.write(' '.join(map(str,test_sample_pred)))
 
