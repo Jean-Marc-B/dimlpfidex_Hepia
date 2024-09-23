@@ -13,6 +13,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import tensorflow as tf
+from antecedent import Antecedent
+from rule import Rule
+from keras.models import load_model
+from dimlpConv import staircaseSemiLin
 
 np.random.seed(seed=None)
 
@@ -33,8 +37,8 @@ hiknot = 5
 hiknot_deep = 3
 nbQuantLevels = 100
 K_val = 1.0
-dropout_hyp = 0.5
-dropout_dim = 0.5
+dropout_hyp = 0.9
+dropout_dim = 0.9
 
 base_folder = "Cifar/"
 train_data_file = "trainData.txt"
@@ -47,12 +51,14 @@ deep_fidex_train_inputs = "deep_fidex_train_inputs.txt"
 deep_fidex_test_inputs = "deep_fidex_test_inputs.txt"
 train_pred_file = "train_pred.out"
 test_pred_file = "test_pred.out"
-rule_file = "fidex_rule.txt"
-simple_rule_file = "simple_fidex_rule.txt"
-deep_test_sample_file = "deep_test_sample.txt"
-test_sample_file = "test_sample.txt"
+rules_file = "fidex_rules.txt"
+simple_rules_file = "simple_fidex_rules.txt"
+deep_test_samples_file = "deep_test_sample.txt"
+test_samples_file = "test_sample.txt"
 stats_file = "stats_fidex.txt"
 simple_stats_file = "simple_stats_fidex.txt"
+
+staircase_model = base_folder + "StairCaseModel.keras"
 
 ###############################################################
 ###############################################################
@@ -85,18 +91,19 @@ X_test = test.astype('float32')
 print(X_test.shape)
 ##############################################################################
 
-test_sample_id = 1
-test_sample_deep = X_test_deep[test_sample_id]
-test_sample_class = Y_test[test_sample_id]
-test_sample_pred = test_pred[test_sample_id]
+nb_test_samples = 5
+test_samples_deep = X_test_deep[0:nb_test_samples]
+test_samples_class = Y_test[0:nb_test_samples]
+test_samples_pred = test_pred[0:nb_test_samples]
 
-test_sample = X_test[test_sample_id]
-
+test_samples = X_test[0:nb_test_samples]
 
 try:
-    with open(base_folder + deep_test_sample_file, "w") as myFile:
-        myFile.write(' '.join(map(str, test_sample_deep)) + " " + ' '.join(map(str, test_sample_class)) + "\n")
-        myFile.write(' '.join(map(str,test_sample_pred)))
+    with open(base_folder + deep_test_samples_file, "w") as myFile:
+        for i in range(0,nb_test_samples):
+            myFile.write(' '.join(map(str, test_samples_deep[i])) + " " + ' '.join(map(str, test_samples_class[i])) + "\n")
+            myFile.write(' '.join(map(str,test_samples_pred[i])))
+            myFile.write("\n\n")
 
 except (FileNotFoundError):
     raise ValueError(f"Error : File {myFile} not found.")
@@ -104,9 +111,11 @@ except (IOError):
     raise ValueError(f"Error : Couldn't open file {myFile}.")
 
 try:
-    with open(base_folder + test_sample_file, "w") as myFile:
-        myFile.write(' '.join(map(str, test_sample)) + " " + ' '.join(map(str, test_sample_class)) + "\n")
-        myFile.write(' '.join(map(str,test_sample_pred)))
+    with open(base_folder + test_samples_file, "w") as myFile:
+        for i in range(0,nb_test_samples):
+            myFile.write(' '.join(map(str, test_samples[i])) + " " + ' '.join(map(str, test_samples_class[i])) + "\n")
+            myFile.write(' '.join(map(str,test_samples_pred[i])))
+            myFile.write("\n\n")
 
 except (FileNotFoundError):
     raise ValueError(f"Error : File {myFile} not found.")
@@ -119,9 +128,9 @@ command = (
     f"--train_data_file {train_data_file} "
     f"--train_class_file {train_class_file} "
     f"--train_pred_file {train_pred_file} "
-    f"--test_data_file {test_sample_file} "
+    f"--test_data_file {test_samples_file} "
     f"--weights_file {weights_first_layer} "
-    f"--rules_outfile {simple_rule_file} "
+    f"--rules_outfile {simple_rules_file} "
     f"--nb_attributes {X_test.shape[1]} "
     f"--nb_classes {nb_classes} "
     f"--stats_file {simple_stats_file} "
@@ -140,9 +149,9 @@ command = (
     f"--train_data_file {deep_fidex_train_inputs} "
     f"--train_class_file {train_class_file} "
     f"--train_pred_file {train_pred_file} "
-    f"--test_data_file {deep_test_sample_file} "
+    f"--test_data_file {deep_test_samples_file} "
     f"--weights_file {weights_deep_fidex_outfile} "
-    f"--rules_outfile {rule_file} "
+    f"--rules_outfile {rules_file} "
     f"--nb_attributes {X_test_deep.shape[1]} "
     f"--nb_classes {nb_classes} "
     f"--stats_file {stats_file} "
@@ -152,8 +161,40 @@ command = (
     f"--dropout_dim {dropout_dim} "
 
 )
-print(command)
 fidex.fidex(command)
+
+# Get Fidex rules
+rules = []
+with open(base_folder + rules_file, "r") as myFile:
+    line = myFile.readline()
+    while line:
+        if line.startswith("Rule for sample"):
+
+            myFile.readline()
+            rule_line = myFile.readline().strip()
+            [antecedents_str, class_str] = rule_line.split("->")
+            rule_class = int(class_str.split()[-1])
+            antecedents_str = antecedents_str.split()
+            antecedents = []
+            for antecedent in antecedents_str:
+                if ">=" in antecedent:
+                    inequality=True
+                    [attribute, value] = antecedent.split(">=")
+                    attribute = int(attribute[1:])
+                    value = float(value)
+                else:
+                    inequality=False
+                    [attribute, value] = antecedent.split("<")
+                    attribute = int(attribute[1:])
+                    value = float(value)
+                antecedents.append(Antecedent(attribute, inequality, value))
+            rules.append(Rule(antecedents, rule_class))
+        line = myFile.readline()
+
+# Load model with stairCase
+stairCaseModel = load_model(staircase_model, custom_objects={'staircaseSemiLin': staircaseSemiLin})
+stairCaseModel.summary()
+
 
 end_time = time.time()
 full_time = end_time - start_time

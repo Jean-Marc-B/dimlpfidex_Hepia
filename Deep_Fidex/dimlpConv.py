@@ -45,7 +45,7 @@ start_time = time.time()
 
 doParam            = 0.2
 
-nbIt               = 10
+nbIt               = 5
 nbStairsPerUnit    = 30
 #size1D             = 28    # for MNIST images
 size1D             = 32    # for Cifar images
@@ -64,7 +64,8 @@ train_data_file = base_folder + "trainData.txt"
 train_class_file = base_folder + "trainClass.txt"
 test_data_file = base_folder + "testData.txt"
 test_class_file = base_folder + "testClass.txt"
-model_checkpoint_weights = base_folder + "weightsModel.keras"
+base_model = base_folder + "baseModel.keras"
+staircase_model = base_folder + "StairCaseModel.keras"
 weights_first_layer = base_folder + "weights_first_layer.wts"
 weights_deep_fidex_outfile = base_folder + "weights_deep_fidex.wts"
 deep_fidex_train_inputs = base_folder + "deep_fidex_train_inputs.txt"
@@ -301,7 +302,7 @@ for epoch in range(nbIt):
     # Save weights if the model scores better
     if val_score[0] < bestScore:
         bestScore = val_score[0]
-        model.save(model_checkpoint_weights)
+        model.save(base_model)
         print(f"*** New best validation score. Model saved at epoch {epoch+1}.")
 
     # Evaluate model2 on test set
@@ -309,9 +310,10 @@ for epoch in range(nbIt):
     print(f"Test score with staircaseSemiLin: {test_score}\n")
 
 
-modelBest  = load_model(model_checkpoint_weights)
+modelBest  = load_model(base_model)
 modelBest2 = create_model(use_staircase=True)
 modelBest2.set_weights(modelBest.get_weights())
+modelBest2.save(staircase_model)
 
 print("model trained")
 
