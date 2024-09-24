@@ -72,6 +72,7 @@ deep_fidex_train_inputs = base_folder + "deep_fidex_train_inputs.txt"
 deep_fidex_test_inputs = base_folder + "deep_fidex_test_inputs.txt"
 train_pred_file = base_folder + "train_pred.out"
 test_pred_file = base_folder + "test_pred.out"
+model_stats = base_folder + "stats_model.txt"
 
 ###############################################################
 ###############################################################
@@ -385,11 +386,14 @@ output_data(test_pred, test_pred_file)
 
 print("\nBest result :")
 
-score = modelBest2.evaluate(x_train_h1, y_train)
-print("Train score : ", score)
+with open(model_stats, "w") as myFile:
+    score = modelBest2.evaluate(x_train_h1, y_train)
+    print("Train score : ", score)
+    myFile.write(f"Train score : {score}\n")
 
-score = modelBest2.evaluate(X_test_h1, Y_test)
-print("Test score : ", score)
+    score = modelBest2.evaluate(X_test_h1, Y_test)
+    print("Test score : ", score)
+    myFile.write(f"Test score : {score}\n")
 
 acc_train = modelBest2.evaluate(x_train_h1, y_train, verbose=0)[1]
 acc_test = modelBest2.evaluate(X_test_h1, Y_test, verbose=0)[1]
