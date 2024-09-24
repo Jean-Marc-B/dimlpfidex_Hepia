@@ -16,7 +16,7 @@ import tensorflow as tf
 from antecedent import Antecedent
 from rule import Rule
 from keras.models import load_model
-from dimlpConv import staircaseSemiLin
+from utils import *
 
 np.random.seed(seed=None)
 
@@ -29,8 +29,8 @@ fidex.fidex()
 start_time = time.time()
 
 nbStairsPerUnit    = 30
-#size1D             = 28    # for MNIST images
-size1D             = 32    # for Cifar images
+size1D             = 28    # for MNIST images
+#size1D             = 32    # for Cifar images
 
 nb_classes = 10 # for MNIST images
 hiknot = 5
@@ -40,7 +40,8 @@ K_val = 1.0
 dropout_hyp = 0.9
 dropout_dim = 0.9
 
-base_folder = "Cifar/"
+#base_folder = "Cifar/" # for Cifar images
+base_folder = "Mnist/" # for Mnist images
 train_data_file = "trainData.txt"
 train_class_file = "trainClass.txt"
 test_data_file = "testData.txt"
