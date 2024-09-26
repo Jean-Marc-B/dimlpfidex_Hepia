@@ -122,7 +122,7 @@ except (FileNotFoundError):
     raise ValueError(f"Error : File {myFile} not found.")
 except (IOError):
     raise ValueError(f"Error : Couldn't open file {myFile}.")
-
+"""
 # Test : Normal Fidex :
 command = (
     f"--root_folder {base_folder} "
@@ -140,10 +140,10 @@ command = (
     f"--dropout_dim {dropout_dim} "
 )
 
-fidex.fidex(command)
+fidex.fidex(command)"""
 
 # Launch Fidex on deep layer for the test sample
-
+nb_attributes = X_test_deep.shape[1]
 #fidex.fidex()
 command = (
     f"--root_folder {base_folder} "
@@ -153,7 +153,7 @@ command = (
     f"--test_data_file {deep_test_samples_file} "
     f"--weights_file {weights_deep_fidex_outfile} "
     f"--rules_outfile {rules_file} "
-    f"--nb_attributes {X_test_deep.shape[1]} "
+    f"--nb_attributes {nb_attributes} "
     f"--nb_classes {nb_classes} "
     f"--stats_file {stats_file} "
     f"--nb_quant_levels {6*nbStairsPerUnit} "
@@ -196,6 +196,13 @@ with open(base_folder + rules_file, "r") as myFile:
 stairCaseModel = load_model(staircase_model, custom_objects={'staircaseSemiLin': staircaseSemiLin})
 stairCaseModel.summary()
 
+# Create new model for each rule
+for current_rule in rules:
+    current_rule = check_minimal_rule(current_rule)# Check if the rule is minimal and modify it accordingly
+    current_model = ruleToIMLP(current_rule, stairCaseModel, nb_attributes)
+    current_model.summary()
+
+    # Get predictions for this model
 
 end_time = time.time()
 full_time = end_time - start_time

@@ -3,6 +3,10 @@ import numpy as np
 import tensorflow as tf
 from stairObj import StairObj
 from keras import backend as K
+from tensorflow.keras.models import Sequential, clone_model
+from tensorflow.keras.layers import Dense
+from rule import Rule
+from antecedent import Antecedent
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
@@ -61,6 +65,11 @@ def staircaseBound(x):
 
 ###############################################################
 
+def zeroThreshold(x):
+    return tf.cast(tf.greater_equal(x, 0), tf.float32)
+
+###############################################################
+
 def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_outfile=None, mu=None, sigma=None):
     input_data = np.array(input_data)
     if step == "train": # Train datas
@@ -97,6 +106,158 @@ def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_o
 
     return (out_data, mu, sigma) if step == "train" else out_data
 
+###############################################################
+
+def check_minimal_rule(rule):
+    antecedent_dict = {}
+
+    for antecedent in rule.antecedents:
+        attribute = antecedent.attribute
+
+        if attribute not in antecedent_dict:
+            antecedent_dict[attribute] = {'ge': None, 'lt': None}
+
+        if antecedent.inequality:  # >=
+            if antecedent_dict[attribute]['ge'] is None or antecedent.value >= antecedent_dict[attribute]['ge'].value:
+                antecedent_dict[attribute]['ge'] = antecedent
+        else:  # Cas <
+            if antecedent_dict[attribute]['lt'] is None or antecedent.value < antecedent_dict[attribute]['lt'].value:
+                antecedent_dict[attribute]['lt'] = antecedent
+
+    minimal_antecedents = []
+    for attribute, antecedents in antecedent_dict.items():
+        if antecedents['ge']:
+            minimal_antecedents.append(antecedents['ge'])
+        if antecedents['lt']:
+            minimal_antecedents.append(antecedents['lt'])
+
+    minimal_rule = Rule(minimal_antecedents, rule.target_class)
+
+    return minimal_rule
+
+
+###############################################################
+
+def ruleToIMLP(current_rule, stairCaseModel, nb_attributes):
+
+    # Take ancient model's first layers, but clone them to avoid shared state
+    IMLP = Sequential()
+    for layer in stairCaseModel.layers:
+        cloned_layer = clone_model(layer)  # Clone the layer to avoid sharing weights
+        cloned_layer.set_weights(layer.get_weights())  # Copy the weights from the original layer
+        IMLP.add(cloned_layer)  # Add the cloned layer to the new model
+        if layer.name == 'flatten_layer':  # Stop after the flatten layer
+            break
+
+    # Construct first layer
+    w_1_layer = np.zeros((nb_attributes, 2*nb_attributes))
+    b_1_layer = np.zeros(2*nb_attributes)
+
+    for ant in current_rule.antecedents:
+        ant_attribute = ant.attribute
+        ant_value = ant.value
+        if ant.inequality: # >=
+            w_1_layer[ant_attribute, ant_attribute] = 1
+            b_1_layer[ant_attribute] = -ant_value
+        else: # <
+            w_1_layer[ant_attribute, nb_attributes + ant_attribute] = -1
+            b_1_layer[nb_attributes + ant_attribute] = ant_value
+
+    IMLP_layer_1 = Dense(2*nb_attributes, activation=zeroThreshold, use_bias=True)
+    IMLP_layer_1.build((None, nb_attributes))
+    IMLP_layer_1.set_weights([w_1_layer, b_1_layer])
+
+    # Construct second layer
+    w_2_layer = np.zeros((2*nb_attributes, 2))
+    b_2_layer = np.array([-len(current_rule.antecedents) + 0.5, len(current_rule.antecedents) - 0.5])
+    for ant in current_rule.antecedents:
+        if ant.inequality:  # >=
+            w_2_layer[ant.attribute, 0] = 1 #COVERED
+            w_2_layer[ant.attribute, 1] = -1 #NOT COVERED
+        else:  # <
+            w_2_layer[nb_attributes + ant.attribute, 0] = 1
+            w_2_layer[nb_attributes + ant.attribute, 1] = -1
+
+    IMLP_layer_2 = Dense(2, activation=zeroThreshold, use_bias=True)
+    IMLP_layer_2.build((None, 2*nb_attributes))
+    IMLP_layer_2.set_weights([w_2_layer, b_2_layer])
+
+    # Add the 2 layers to the IMLP model
+    IMLP.add(IMLP_layer_1)
+    IMLP.add(IMLP_layer_2)
+
+    return IMLP
 
 ###############################################################
 ###############################################################
+
+
+
+
+"""
+# Toy test example
+ant1 = Antecedent(0, True, 0.5)   # X0 >= 0.5
+ant2 = Antecedent(1, False, 0.3)  # X1 < 0.3
+ant3 = Antecedent(2, True, 0.8)   # X2 >= 0.8
+ant4 = Antecedent(3, False, 0.1)  # X3 < 0.1
+ant5 = Antecedent(4, True, 0.9)   # X4 >= 0.9
+ant6 = Antecedent(4, False, 1)   # X4 >= 0.9
+current_rule = Rule([ant1, ant2, ant3, ant4, ant5, ant6], 1)
+nb_attributes = 5
+
+IMLP = Sequential()
+# Construct first layer
+w_1_layer = np.zeros((nb_attributes, 2*nb_attributes))
+b_1_layer = np.zeros(2*nb_attributes)
+
+for ant in current_rule.antecedents:
+    ant_attribute = ant.attribute
+    ant_value = ant.value
+    if ant.inequality: # >=
+        w_1_layer[ant_attribute, ant_attribute] = 1
+        b_1_layer[ant_attribute] = -ant_value
+    else: # <
+        w_1_layer[ant_attribute, nb_attributes + ant_attribute] = -1
+        b_1_layer[nb_attributes + ant_attribute] = ant_value
+
+IMLP_layer_1 = Dense(2*nb_attributes, activation=zeroThreshold, use_bias=True)
+IMLP_layer_1.build((None, nb_attributes))
+IMLP_layer_1.set_weights([w_1_layer, b_1_layer])
+
+# Construct second layer
+w_2_layer = np.zeros((2*nb_attributes, 2))
+b_2_layer = np.array([-len(current_rule.antecedents) + 0.5, len(current_rule.antecedents) - 0.5])
+for ant in current_rule.antecedents:
+    if ant.inequality:  # >=
+        w_2_layer[ant.attribute, 0] = 1 #COVERED
+        w_2_layer[ant.attribute, 1] = -1 #NOT COVERED
+    else:  # <
+        w_2_layer[nb_attributes + ant.attribute, 0] = 1
+        w_2_layer[nb_attributes + ant.attribute, 1] = -1
+
+IMLP_layer_2 = Dense(2, activation=zeroThreshold, use_bias=True)
+IMLP_layer_2.build((None, 2*nb_attributes))
+IMLP_layer_2.set_weights([w_2_layer, b_2_layer])
+
+# Add the 2 layers to the IMLP model
+IMLP.add(IMLP_layer_1)
+IMLP.add(IMLP_layer_2)
+
+
+X_0_fail_ge = np.array([[0.4, 0.2, 0.85, 0.05, 0.95]])  # Echoue sur X_0 >= 0.5
+X_1_fail_lt = np.array([[0.6, 0.4, 0.85, 0.05, 0.95]])  # Echoue sur X_1 < 0.3
+X_2_pass = np.array([[0.6, 0.2, 0.85, 0.05, 0.95]])     # Respecte toutes les règles
+X_3_fail = np.array([[0.6, 0.2, 0.85, 0.05, 1.1]])     # Respecte pas toutes les règles
+
+# Prédictions
+prediction_0_fail_ge = IMLP.predict(X_0_fail_ge)
+prediction_1_fail_lt = IMLP.predict(X_1_fail_lt)
+prediction_2_pass = IMLP.predict(X_2_pass)
+prediction_3_fail = IMLP.predict(X_3_fail)
+
+print(f"Prediction for X_0_fail_ge: {prediction_0_fail_ge}")  # Devrait donner [0,1]
+print(f"Prediction for X_1_fail_lt: {prediction_1_fail_lt}")  # Devrait donner [0,1]
+print(f"Prediction for X_2_pass: {prediction_2_pass}")        # Devrait donner [1,0]
+print(f"Prediction for X_2_pass: {prediction_3_fail}")        # Devrait donner [0,1]
+
+"""
