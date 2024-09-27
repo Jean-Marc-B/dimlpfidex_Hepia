@@ -72,6 +72,8 @@ deep_fidex_test_inputs = base_folder + "deep_fidex_test_inputs.txt"
 train_pred_file = base_folder + "train_pred.out"
 test_pred_file = base_folder + "test_pred.out"
 model_stats = base_folder + "stats_model.txt"
+train_h1_file = base_folder + "train_h1.txt"
+test_h1_file = base_folder + "test_h1.txt"
 
 ###############################################################
 

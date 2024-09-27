@@ -138,16 +138,10 @@ def check_minimal_rule(rule):
 
 ###############################################################
 
-def ruleToIMLP(current_rule, stairCaseModel, nb_attributes):
+def ruleToIMLP(current_rule, nb_attributes):
 
     # Take ancient model's first layers, but clone them to avoid shared state
     IMLP = Sequential()
-    for layer in stairCaseModel.layers:
-        cloned_layer = clone_model(layer)  # Clone the layer to avoid sharing weights
-        cloned_layer.set_weights(layer.get_weights())  # Copy the weights from the original layer
-        IMLP.add(cloned_layer)  # Add the cloned layer to the new model
-        if layer.name == 'flatten_layer':  # Stop after the flatten layer
-            break
 
     # Construct first layer
     w_1_layer = np.zeros((nb_attributes, 2*nb_attributes))
