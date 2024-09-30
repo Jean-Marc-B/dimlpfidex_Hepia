@@ -7,6 +7,7 @@ from tensorflow.keras.models import Sequential, clone_model
 from tensorflow.keras.layers import Dense
 from rule import Rule
 from antecedent import Antecedent
+import json
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
@@ -181,6 +182,58 @@ def ruleToIMLP(current_rule, nb_attributes):
     IMLP.add(IMLP_layer_2)
 
     return IMLP
+
+
+###############################################################
+
+def getRules(rules_file):
+    rules = []
+    if rules_file.endswith(".json"):
+        with open(rules_file, "r") as myFile:
+            data = json.load(myFile)
+            for rule_data in data['rules']:
+                antecedents = []
+
+                # Extract antecedents
+                for antecedent_data in rule_data['antecedents']:
+                    attribute = antecedent_data['attribute']
+                    inequality = antecedent_data['inequality']
+                    value = antecedent_data['value']
+                    antecedents.append(Antecedent(attribute, inequality, value))
+
+                # Extract the rule class (outputClass in your case)
+                rule_class = rule_data['outputClass']
+
+                # Create a Rule object and append it to the list
+                rules.append(Rule(antecedents, rule_class))
+
+    else:
+        with open(rules_file, "r") as myFile:
+            line = myFile.readline()
+            while line:
+                if line.startswith("Rule for sample"):
+
+                    myFile.readline()
+                    rule_line = myFile.readline().strip()
+                    [antecedents_str, class_str] = rule_line.split("->")
+                    rule_class = int(class_str.split()[-1])
+                    antecedents_str = antecedents_str.split()
+                    antecedents = []
+                    for antecedent in antecedents_str:
+                        if ">=" in antecedent:
+                            inequality=True
+                            [attribute, value] = antecedent.split(">=")
+                            attribute = int(attribute[1:])
+                            value = float(value)
+                        else:
+                            inequality=False
+                            [attribute, value] = antecedent.split("<")
+                            attribute = int(attribute[1:])
+                            value = float(value)
+                        antecedents.append(Antecedent(attribute, inequality, value))
+                    rules.append(Rule(antecedents, rule_class))
+                line = myFile.readline()
+    return rules
 
 ###############################################################
 ###############################################################
