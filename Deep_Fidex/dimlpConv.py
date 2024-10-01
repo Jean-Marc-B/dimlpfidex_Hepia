@@ -45,10 +45,10 @@ doParam            = 0.2
 
 nbIt               = 5
 nbStairsPerUnit    = 30
-size1D             = 28    # for MNIST images
-#size1D             = 32    # for Cifar images
-#nbChannels         = 3     # for Cifar images
-nbChannels         = 1     # for MNIST images
+#size1D             = 28    # for MNIST images
+size1D             = 32    # for Cifar images
+nbChannels         = 3     # for Cifar images
+#nbChannels         = 1     # for MNIST images
 
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
 
@@ -271,17 +271,6 @@ except (FileNotFoundError):
     raise ValueError(f"Error : File {weights_deep_fidex_outfile} not found.")
 except (IOError):
     raise ValueError(f"Error : Couldn't open file {weights_deep_fidex_outfile}.")
-
-# Verify each of these and make sure it's computed on each train data...
-
-print("Mean:", mean.shape)
-print("Variance:", variance.shape)
-print("Scale (gamma):", gamma.shape)
-print("Center (beta):", beta.shape)
-print("Epsilon :", epsilon)
-print("Weights:", weights.shape)
-print("Biais:", biais.shape)
-
 
 train_pred = modelBest2.predict(x_train_h1)    # Predict the response for train dataset
 test_pred = modelBest2.predict(X_test_h1)    # Predict the response for test dataset

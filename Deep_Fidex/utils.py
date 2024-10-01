@@ -132,7 +132,7 @@ def check_minimal_rule(rule):
         if antecedents['lt']:
             minimal_antecedents.append(antecedents['lt'])
 
-    minimal_rule = Rule(minimal_antecedents, rule.target_class)
+    minimal_rule = Rule(minimal_antecedents, rule.target_class, rule.covering_size, rule.fidelity, rule.accuracy, rule.confidence)
 
     return minimal_rule
 
@@ -201,11 +201,8 @@ def getRules(rules_file):
                     value = antecedent_data['value']
                     antecedents.append(Antecedent(attribute, inequality, value))
 
-                # Extract the rule class (outputClass in your case)
-                rule_class = rule_data['outputClass']
-
                 # Create a Rule object and append it to the list
-                rules.append(Rule(antecedents, rule_class))
+                rules.append(Rule(antecedents, rule_data['outputClass'], rule_data['coveringSize'], rule_data['fidelity'], rule_data['accuracy'], rule_data['confidence']))
 
     else:
         with open(rules_file, "r") as myFile:
@@ -231,7 +228,15 @@ def getRules(rules_file):
                             attribute = int(attribute[1:])
                             value = float(value)
                         antecedents.append(Antecedent(attribute, inequality, value))
-                    rules.append(Rule(antecedents, rule_class))
+                    line = myFile.readline()
+                    cov_size = int(line.split(" : ")[1])
+                    line = myFile.readline()
+                    fidelity = float(line.split(" : ")[1])
+                    line = myFile.readline()
+                    accuracy = float(line.split(" : ")[1])
+                    line = myFile.readline()
+                    confidence = float(line.split(" : ")[1])
+                    rules.append(Rule(antecedents, rule_class, cov_size, fidelity, accuracy, confidence))
                 line = myFile.readline()
     return rules
 

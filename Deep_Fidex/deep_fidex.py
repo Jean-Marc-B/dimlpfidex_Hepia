@@ -25,10 +25,10 @@ fidex.fidex()
 start_time = time.time()
 
 nbStairsPerUnit    = 30
-size1D             = 28    # for MNIST images
-#size1D             = 32    # for Cifar images
-#nbChannels         = 3     # for Cifar images
-nbChannels         = 1     # for MNIST images
+#size1D             = 28    # for MNIST images
+size1D             = 32    # for Cifar images
+nbChannels         = 3     # for Cifar images
+#nbChannels         = 1     # for MNIST images
 
 nb_classes = 10 # for MNIST and Cifar images
 hiknot = 5
@@ -180,20 +180,25 @@ for sample_id, current_rule in enumerate(rules):
     )
     fidex.fidex(command)
     rule = getRules(base_folder+current_rule_file)[0]
+    # Change the class as being the class of the abstract rule
     rule.target_class = current_rule.target_class
-    print(rule)
+    final_rules.append(rule)
+with open(base_folder+current_rule_file, 'r') as myFile:
+    threshold_str = myFile.readline().strip()
 
-    # Les classes : que 2 classes : cover ou non
-    # Récup la règle, modifier sa classe comme étant la classe de la règle abstraite
-
-    #Save in final_rules_file (ajouter la phrase sur le threshold en haut puis toutes les phrases sur le numéro du sample)
+#Save the rules in final rule file
+with open(base_folder+final_rules_file, "w") as myFile:
+    myFile.write(threshold_str + "\n")
+    for n, rule in enumerate(final_rules):
+        myFile.write("\n\n")
+        myFile.write(f"Rule for sample {n} :")
+        myFile.write("\n\n")
+        myFile.write(str(rule))
+        myFile.write("\n\n")
+        myFile.write("-------------------------------------------------")
 
 end_time = time.time()
 full_time = end_time - start_time
 full_time = "{:.6f}".format(full_time).rstrip("0").rstrip(".")
 
 print(f"\nFull execution time = {full_time} sec")
-
-
-
-#TODO lowest_min_fidelity = 1
