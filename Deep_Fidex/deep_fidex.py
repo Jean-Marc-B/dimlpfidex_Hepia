@@ -25,12 +25,22 @@ fidex.fidex()
 start_time = time.time()
 
 nbStairsPerUnit    = 30
-#size1D             = 28    # for MNIST images
-size1D             = 32    # for Cifar images
-nbChannels         = 3     # for Cifar images
-#nbChannels         = 1     # for MNIST images
 
-nb_classes = 10 # for MNIST and Cifar images
+dataset = "MNIST"
+#dataset = "CIFAR"
+
+if dataset == "MNIST":     # for MNIST images
+    size1D             = 28
+    nbChannels         = 1
+    nb_classes = 10
+    base_folder = "Mnist/"
+
+elif dataset == "CIFAR":     # for Cifar images
+    size1D             = 32
+    nbChannels         = 3
+    nb_classes = 10
+    base_folder = "Cifar/"
+
 hiknot = 5
 hiknot_deep = 3
 nbQuantLevels = 100
@@ -38,8 +48,6 @@ K_val = 1.0
 dropout_hyp = 0.9
 dropout_dim = 0.9
 
-#base_folder = "Cifar/" # for Cifar images
-base_folder = "Mnist/" # for Mnist images
 train_data_file = "trainData.txt"
 train_class_file = "trainClass.txt"
 test_data_file = "testData.txt"

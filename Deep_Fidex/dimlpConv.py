@@ -45,20 +45,28 @@ doParam            = 0.2
 
 nbIt               = 5
 nbStairsPerUnit    = 30
-#size1D             = 28    # for MNIST images
-size1D             = 32    # for Cifar images
-nbChannels         = 3     # for Cifar images
-#nbChannels         = 1     # for MNIST images
+
+dataset = "MNIST"
+#dataset = "CIFAR"
+
+if dataset == "MNIST":     # for MNIST images
+    size1D             = 28
+    nbChannels         = 1
+    nb_classes = 10
+    base_folder = "Mnist/"
+
+elif dataset == "CIFAR":     # for Cifar images
+    size1D             = 32
+    nbChannels         = 3
+    nb_classes = 10
+    base_folder = "Cifar/"
 
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
 
-nb_classes = 10 # for MNIST or Cifar10 images
 hiknot = 5
 nbQuantLevels = 100
 K_val = 1.0
 
-#base_folder = "Cifar/" # for Cifar images
-base_folder = "Mnist/" # for Mnist images
 train_data_file = base_folder + "trainData.txt"
 train_class_file = base_folder + "trainClass.txt"
 test_data_file = base_folder + "testData.txt"
