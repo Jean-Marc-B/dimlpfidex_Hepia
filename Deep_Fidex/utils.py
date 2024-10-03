@@ -241,10 +241,24 @@ def getRules(rules_file):
     return rules
 
 ###############################################################
+
+def getCovering(rule, samples):
+
+    covered_samples = [
+        (sample, n)
+        for n, sample in enumerate(samples)
+        if all(
+            (sample[antecedant.attribute] >= antecedant.value if antecedant.inequality
+             else sample[antecedant.attribute] < antecedant.value)
+            for antecedant in rule.antecedants
+        )
+    ]
+
+    return covered_samples
+
+
 ###############################################################
-
-
-
+###############################################################
 
 """
 # Toy test example

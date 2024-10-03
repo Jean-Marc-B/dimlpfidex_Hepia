@@ -106,6 +106,11 @@ nb_deep_attributes = X_test_deep.shape[1]
 
 # Generate test sample images with colored pixels where the rule is activated
 
+
+# Changements à faire : essayer de regrouper les 2 "fonctions" pour simplifier le code, peut-être créer une fct
+# Utiliser getCovering -> créer un dossier pour chaque règle rule0 puis à l'intérieur itérer sur chaque sample couvert pour appliquer la règle et créer les images
+
+
 # For deep images :
 
 rules = getRules(base_folder + deep_rules_file)
