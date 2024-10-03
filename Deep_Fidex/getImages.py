@@ -1,5 +1,5 @@
 import os
-import sys
+import math
 import time
 from PIL import Image
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -11,8 +11,8 @@ from utils import *
 
 start_time = time.time()
 
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
@@ -21,6 +21,7 @@ if dataset == "MNIST":     # for MNIST images
     base_folder = "Mnist/"
     normalized = False
     classes = {
+        0:"0",
         1:"1",
         2:"2",
         3:"3",
@@ -100,17 +101,50 @@ test   = np.loadtxt(base_folder + test_data_file)
 X_test = test.astype('float32')
 print(X_test.shape)
 
-
-
-
-
+nb_deep_attributes = X_test_deep.shape[1]
 
 
 # Generate test sample images with colored pixels where the rule is activated
 
 # For deep images :
-# normaliser en 0 et 255(on modifie la phase de normalisation), la rendre la plus carée possible(on modifie la dernière étape). On peut prendre le max et le min des valeurs pour normaliser...
+
 rules = getRules(base_folder + deep_rules_file)
+image_save_folder = deep_image_folder
+
+
+for id_sample, rule in enumerate(rules):
+
+    baseimage = X_test_deep[id_sample]
+
+    #normalize values between 0 and 255
+    maxVal = np.max(baseimage)
+    minVal = np.min(baseimage)
+    normalizedImage = (255 * (baseimage - minVal) / (maxVal - minVal)).astype(np.uint8)
+    colorimage = np.stack([normalizedImage] * 3, axis=-1)
+
+    for antecedent in rule.antecedents:
+        if antecedent.inequality == False:
+            colorimage[antecedent.attribute]=[255,0,0]
+        else:
+            colorimage[antecedent.attribute]=[0,255,0]
+
+    # Change image dimension
+    side_length = math.ceil(math.sqrt(nb_deep_attributes))
+    height = side_length
+    while(side_length*(height-1) >= nb_deep_attributes):
+        height -= 1
+    # Add 0 padding
+    total_size = height * side_length
+    padding_needed = total_size - nb_deep_attributes
+    padded_colorimage = np.pad(colorimage, ((0, padding_needed), (0, 0)), mode='constant')
+
+    colorimage_array = np.array(padded_colorimage).reshape(height, side_length, 3)
+    colorimage = Image.fromarray(colorimage_array.astype('uint8'))
+
+    image_path = image_save_folder + '/img_'+ str(id_sample) + '_' + classes[rule.target_class] + '_out.png'
+    colorimage.save(image_path)
+    if show_images:
+        colorimage.show()
 
 # For final images :
 
@@ -121,15 +155,13 @@ for id_sample, rule in enumerate(rules):
 
     baseimage = X_test[id_sample]
 
+    if normalized:
+        baseimage = (baseimage * 255).astype(np.uint8)
+
     if nbChannels == 1:
-        if normalized:
-            colorimage = [[int(255*float(v)),int(255*float(v)),int(255*float(v))] for v in baseimage]
-        else:
-            colorimage = [[v,v,v] for v in baseimage]
+        colorimage = np.stack([baseimage] * 3, axis=-1)
     else:
         colorimage = baseimage
-        if normalized:
-            colorimage = [int(float(v) * 255) for v in colorimage]
 
     for antecedent in rule.antecedents:
         if antecedent.inequality == False:
