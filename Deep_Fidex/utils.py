@@ -3,11 +3,13 @@ import numpy as np
 import tensorflow as tf
 from stairObj import StairObj
 from keras import backend as K
-from tensorflow.keras.models import Sequential, clone_model
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from rule import Rule
 from antecedent import Antecedent
 import json
+import math
+from PIL import Image
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
@@ -250,12 +252,71 @@ def getCovering(rule, samples):
         if all(
             (sample[antecedant.attribute] >= antecedant.value if antecedant.inequality
              else sample[antecedant.attribute] < antecedant.value)
-            for antecedant in rule.antecedants
+            for antecedant in rule.antecedents
         )
     ]
 
-    return covered_samples
+    if covered_samples:
+        covered_samples_list, covered_samples_ids = zip(*covered_samples)
+        return list(covered_samples_list), list(covered_samples_ids)
+    else:
+        return [], []
 
+###############################################################
+# For 1D images
+def reshape_and_pad(image, nb_attributes):
+    side_length = math.ceil(math.sqrt(nb_attributes))
+    height = side_length
+    while side_length * (height - 1) >= nb_attributes:
+        height -= 1
+    # Add 0 padding
+    total_size = height * side_length
+    padding_needed = total_size - nb_attributes
+    image = np.pad(image, ((0, padding_needed)), mode='constant')
+    return image, height, side_length
+
+
+# Accepts only 1 or 3 channel images
+def get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normalize=False, normalized01=False, show_images=False):
+
+    #normalize values between 0 and 255
+    if normalize:
+        max_val = np.max(baseimage)
+        min_val = np.min(baseimage)
+        baseimage = (255 * (baseimage - min_val) / (max_val - min_val)).astype(np.uint8)
+    elif normalized01:
+        baseimage = (baseimage * 255).astype(np.uint8)
+
+    if nb_channels == 1:
+        colorimage = np.stack([baseimage] * 3, axis=-1)
+    else:
+        colorimage = baseimage
+
+    # Change pixel color when appearing in rule
+    for antecedent in rule.antecedents:
+        if antecedent.inequality == False:
+            if nb_channels == 1:
+                colorimage[antecedent.attribute]=[255,0,0]
+            else: # In this case, data was flatten at start so there were 3x more attributs
+                colorimage[antecedent.attribute - (antecedent.attribute % 3)]=255
+                colorimage[antecedent.attribute - (antecedent.attribute % 3)+1]=0
+                colorimage[antecedent.attribute - (antecedent.attribute % 3)+2]=0
+        else:
+            if nb_channels == 1:
+                colorimage[antecedent.attribute]=[0,255,0]
+            else:
+                colorimage[antecedent.attribute - (antecedent.attribute % 3)]=0
+                colorimage[antecedent.attribute - (antecedent.attribute % 3)+1]=255
+                colorimage[antecedent.attribute - (antecedent.attribute % 3)+2]=0
+
+    # Change image dimension
+    colorimage_array = np.array(colorimage).reshape(nb_rows, nb_cols, 3) # Reshape to (size1D, size1D, 3)
+
+    colorimage = Image.fromarray(colorimage_array.astype('uint8'))
+    colorimage.save(image_path)
+
+    if show_images:
+        colorimage.show()
 
 ###############################################################
 ###############################################################

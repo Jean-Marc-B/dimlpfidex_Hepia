@@ -1,11 +1,11 @@
 import os
-import math
 import time
 from PIL import Image
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import numpy as np
 from utils import *
+import shutil
 
 
 
@@ -70,11 +70,13 @@ image_folder = base_folder + "/images"
 
 show_images = False
 
-# Create folders if it doesn't exist
-if not os.path.exists(deep_image_folder):
-    os.makedirs(deep_image_folder)
-if not os.path.exists(image_folder):
-    os.makedirs(image_folder)
+# Create folders
+if os.path.exists(deep_image_folder):
+    shutil.rmtree(deep_image_folder)
+os.makedirs(deep_image_folder)
+if os.path.exists(image_folder):
+    shutil.rmtree(image_folder)
+os.makedirs(image_folder)
 
 # Get data
 
@@ -93,6 +95,10 @@ print(X_test_deep.shape)
 Y_train = np.loadtxt(base_folder + train_class_file)
 Y_train = Y_train.astype('int32')
 
+train   = np.loadtxt(base_folder + train_data_file)
+
+X_train = train.astype('float32')
+
 Y_test  = np.loadtxt(base_folder + test_class_file)
 Y_test  = Y_test.astype('int32')
 
@@ -107,8 +113,28 @@ nb_deep_attributes = X_test_deep.shape[1]
 # Generate test sample images with colored pixels where the rule is activated
 
 
-# Changements à faire : essayer de regrouper les 2 "fonctions" pour simplifier le code, peut-être créer une fct
-# Utiliser getCovering -> créer un dossier pour chaque règle rule0 puis à l'intérieur itérer sur chaque sample couvert pour appliquer la règle et créer les images
+
+#---------------------------------------------------------------------------------------
+
+def process_rules(rules, X_test, X_train, image_save_folder, with_pad = False, nb_attributes=None, size1D=None, nbChannels=3, normalize=True):
+    for id_sample, rule in enumerate(rules):
+        print(f"Processing sample {id_sample}")
+
+        # Create a new folder for the current sample
+        current_dir = os.path.join(image_save_folder, f"sample_{id_sample}_class_{classes[rule.target_class]}")
+        os.makedirs(current_dir)
+
+        # Get the covered samples
+        covered_samples, covered_samples_ids = getCovering(rule, X_train)
+        # Process the test image
+        baseimage = X_test[id_sample]
+        if with_pad:
+            baseimage, nb_rows, nb_cols = reshape_and_pad(baseimage, nb_deep_attributes)
+        image_path = os.path.join(current_dir, f"_test_img_{id_sample}_out.png")
+
+
+#---------------------------------------------------------------------------------------
+
 
 
 # For deep images :
@@ -118,38 +144,23 @@ image_save_folder = deep_image_folder
 
 
 for id_sample, rule in enumerate(rules):
+    print("deep" + str(id_sample))
+    # Create new folder
+    current_dir = image_save_folder + "/sample_" + str(id_sample)  + '_class_' + classes[rule.target_class]
+    os.makedirs(current_dir)
+
+    covered_samples, covered_samples_ids = getCovering(rule, X_train_deep)
 
     baseimage = X_test_deep[id_sample]
+    baseimage, nb_rows, nb_cols = reshape_and_pad(baseimage, nb_deep_attributes)
+    image_path = current_dir + '/_test_img_'+ str(id_sample) + '_out.png'
+    get_image(rule, baseimage, image_path, nb_rows, nb_cols, 1, normalize=True, show_images=show_images)
 
-    #normalize values between 0 and 255
-    maxVal = np.max(baseimage)
-    minVal = np.min(baseimage)
-    normalizedImage = (255 * (baseimage - minVal) / (maxVal - minVal)).astype(np.uint8)
-    colorimage = np.stack([normalizedImage] * 3, axis=-1)
-
-    for antecedent in rule.antecedents:
-        if antecedent.inequality == False:
-            colorimage[antecedent.attribute]=[255,0,0]
-        else:
-            colorimage[antecedent.attribute]=[0,255,0]
-
-    # Change image dimension
-    side_length = math.ceil(math.sqrt(nb_deep_attributes))
-    height = side_length
-    while(side_length*(height-1) >= nb_deep_attributes):
-        height -= 1
-    # Add 0 padding
-    total_size = height * side_length
-    padding_needed = total_size - nb_deep_attributes
-    padded_colorimage = np.pad(colorimage, ((0, padding_needed), (0, 0)), mode='constant')
-
-    colorimage_array = np.array(padded_colorimage).reshape(height, side_length, 3)
-    colorimage = Image.fromarray(colorimage_array.astype('uint8'))
-
-    image_path = image_save_folder + '/img_'+ str(id_sample) + '_' + classes[rule.target_class] + '_out.png'
-    colorimage.save(image_path)
-    if show_images:
-        colorimage.show()
+    for id in covered_samples_ids:
+        baseimage = X_train_deep[id]
+        baseimage, nb_rows, nb_cols = reshape_and_pad(baseimage, nb_deep_attributes)
+        image_path = current_dir + '/_train_img_'+ str(id) + '_out.png'
+        get_image(rule, baseimage, image_path, nb_rows, nb_cols, 1, normalize=True, show_images=show_images)
 
 # For final images :
 
@@ -157,42 +168,21 @@ rules = getRules(base_folder + final_rules_file)
 image_save_folder = image_folder
 
 for id_sample, rule in enumerate(rules):
+    print("front" + str(id_sample))
+    # Create new folder
+    current_dir = image_save_folder + "/sample_" + str(id_sample)  + '_class_' + classes[rule.target_class]
+    os.makedirs(current_dir)
+
+    covered_samples, covered_samples_ids = getCovering(rule, X_train)
 
     baseimage = X_test[id_sample]
+    image_path = current_dir + '/_test_img_'+ str(id_sample) + '_out.png'
+    get_image(rule, baseimage, image_path, size1D, size1D, nbChannels, normalized01=normalized, show_images=show_images)
 
-    if normalized:
-        baseimage = (baseimage * 255).astype(np.uint8)
-
-    if nbChannels == 1:
-        colorimage = np.stack([baseimage] * 3, axis=-1)
-    else:
-        colorimage = baseimage
-
-    for antecedent in rule.antecedents:
-        if antecedent.inequality == False:
-            if nbChannels == 1:
-                colorimage[antecedent.attribute]=[255,0,0]
-            else:
-                colorimage[antecedent.attribute - (antecedent.attribute % 3)]=255
-                colorimage[antecedent.attribute - (antecedent.attribute % 3)+1]=0
-                colorimage[antecedent.attribute - (antecedent.attribute % 3)+2]=0
-        else:
-            if nbChannels == 1:
-                colorimage[antecedent.attribute]=[0,255,0]
-            else:
-                colorimage[antecedent.attribute - (antecedent.attribute % 3)]=0
-                colorimage[antecedent.attribute - (antecedent.attribute % 3)+1]=255
-                colorimage[antecedent.attribute - (antecedent.attribute % 3)+2]=0
-
-    colorimage_array = np.array(colorimage).reshape(size1D, size1D, 3)
-    colorimage = Image.fromarray(colorimage_array.astype('uint8'))
-
-    image_path = image_save_folder + '/img_'+ str(id_sample) + '_' + classes[rule.target_class] + '_out.png'
-    colorimage.save(image_path)
-    if show_images:
-        colorimage.show()
-
-
+    for id in covered_samples_ids:
+        baseimage = X_train[id]
+        image_path = current_dir + '/_train_img_'+ str(id) + '_out.png'
+        get_image(rule, baseimage, image_path, size1D, size1D, nbChannels, normalized01=normalized, show_images=show_images)
 
 
 end_time = time.time()
