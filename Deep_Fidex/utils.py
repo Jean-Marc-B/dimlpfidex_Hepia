@@ -10,6 +10,7 @@ from antecedent import Antecedent
 import json
 import math
 from PIL import Image
+import os
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
@@ -275,6 +276,36 @@ def reshape_and_pad(image, nb_attributes):
     image = np.pad(image, ((0, padding_needed)), mode='constant')
     return image, height, side_length
 
+###############################################################
+# Images need to have 1 or 3 channels. If 3 channels, it's flatten. Padding used for 1D images only
+def process_rules(rules, X_test, X_train, image_save_folder, nb_channels, classes, with_pad = False, size1D=None, normalize=False, normalized01=False, show_images=False):
+    if size1D:
+        nb_rows = size1D
+        nb_cols = size1D
+    for id_sample, rule in enumerate(rules):
+        print(f"Processing sample {id_sample}")
+
+        # Create a new folder for the current sample
+        current_dir = os.path.join(image_save_folder, f"sample_{id_sample}_class_{classes[rule.target_class]}")
+        os.makedirs(current_dir)
+
+        # Get the covered samples
+        covered_samples, covered_samples_ids = getCovering(rule, X_train)
+        # Process the test image
+        baseimage = X_test[id_sample]
+        if with_pad:
+            nb_attributes = X_test.shape[1]
+            baseimage, nb_rows, nb_cols = reshape_and_pad(baseimage, nb_attributes)
+        image_path = os.path.join(current_dir, f"_test_img_{id_sample}_out.png")
+        get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normalize, normalized01=normalized01, show_images=show_images)
+        for id in covered_samples_ids:
+            baseimage = X_train[id]
+            if with_pad:
+                baseimage, nb_rows, nb_cols = reshape_and_pad(baseimage, nb_attributes)
+            image_path = current_dir + '/_train_img_'+ str(id) + '_out.png'
+            get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normalize, show_images=show_images)
+
+###############################################################
 
 # Accepts only 1 or 3 channel images
 def get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normalize=False, normalized01=False, show_images=False):
