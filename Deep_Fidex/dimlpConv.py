@@ -29,6 +29,8 @@ from keras.models     import Sequential
 from keras.layers     import Dense, Dropout, Activation, Flatten, Input
 from keras.layers     import Convolution1D, Convolution2D, DepthwiseConv2D, MaxPooling2D, BatchNormalization
 from keras.models     import Model, load_model
+from keras.applications     import ResNet50
+from keras.optimizers import Adam
 
 from keras import layers
 from keras import activations
@@ -46,20 +48,22 @@ doParam            = 0.2
 nbIt               = 5
 nbStairsPerUnit    = 30
 
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nbChannels         = 1
     nb_classes = 10
     base_folder = "Mnist/"
+    resnet=False
 
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nbChannels         = 3
     nb_classes = 10
     base_folder = "Cifar/"
+    resnet=True
 
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
 
@@ -85,62 +89,82 @@ test_h1_file = base_folder + "test_h1.txt"
 
 ###############################################################
 
-def create_model(use_staircase=False):
+def create_model(use_staircase=False, resnet=False):
 
-    model = Sequential()
-    model.add(Input(shape=(size1D, size1D, nbChannels)))  # Explicit input shape definition
-    # model.add(LocallyConnected2D(1,  (1, 1), activation=tf.keras.activations.hard_sigmoid, input_shape=(size1D, size1D, nbChannels)))
-    # model.add(Convolution2D(1, (1, 1), activation=tf.keras.activations.hard_sigmoid, input_shape=(size1D, size1D, nbChannels)))
+    if resnet:
+            input_tensor = Input(shape=(size1D, size1D, nbChannels))
+            model_base = ResNet50(include_top=False, weights="imagenet", input_tensor=input_tensor)
+            model = Sequential()
+            model.add(model_base)
+            model.add(Flatten(name="flatten_layer"))
+            model.add(Dropout(0.5))
+            model.add(BatchNormalization(name="batchnorm_layer"))
+            if use_staircase:
+                model.add(layers.Activation(staircaseSemiLin))
+            else:
+                model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
+            model.add(Dense(10, activation='softmax'))
 
-    # model.add(BatchNormalization(center=False, scale=False, input_shape=(size1D, size1D, nbChannels)))
-    # model.add(BatchNormalization(input_shape=(size1D, size1D, nbChannels)))
-    # model.add(layers.Activation(tf.keras.activations.sigmoid))
-   #  if use_staircase:
-   #    model.add(layers.Activation(staircaseSemiLin))
-   #  else:
-   #    model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
-    # model.add(layers.Activation(hardSigm2))
-    model.add(Convolution2D(32, (5, 5), activation='relu'))
-    model.add(Dropout(doParam))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+            #model.build((None, size1D, size1D, nbChannels))  # Build the model with the input shape
 
-    # model.add(BatchNormalization())
+            model.summary()
 
-    model.add(Convolution2D(32, (5, 5), activation='relu'))
-    model.add(Dropout(doParam))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-
-    # model.add(DepthwiseConv2D(1, depth_multiplier=2, activation=tf.keras.activations.hard_sigmoid))
-
-    model.add(Flatten(name="flatten_layer"))
-
-    # model.add(BatchNormalization(center=False, scale=False, name="batchnorm_layer"))
-
-    model.add(BatchNormalization(name="batchnorm_layer"))
-    if use_staircase:
-      model.add(layers.Activation(staircaseSemiLin))
+            model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['accuracy'])
     else:
-      model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
+        model = Sequential()
+        model.add(Input(shape=(size1D, size1D, nbChannels)))  # Explicit input shape definition
+        # model.add(LocallyConnected2D(1,  (1, 1), activation=tf.keras.activations.hard_sigmoid, input_shape=(size1D, size1D, nbChannels)))
+        # model.add(Convolution2D(1, (1, 1), activation=tf.keras.activations.hard_sigmoid, input_shape=(size1D, size1D, nbChannels)))
 
-    # model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
+        # model.add(BatchNormalization(center=False, scale=False, input_shape=(size1D, size1D, nbChannels)))
+        # model.add(BatchNormalization(input_shape=(size1D, size1D, nbChannels)))
+        # model.add(layers.Activation(tf.keras.activations.sigmoid))
+    #  if use_staircase:
+    #    model.add(layers.Activation(staircaseSemiLin))
+    #  else:
+    #    model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
+        # model.add(layers.Activation(hardSigm2))
+        model.add(Convolution2D(32, (5, 5), activation='relu'))
+        model.add(Dropout(doParam))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    model.add(Dense(256, activation='relu'))
-    model.add(Dropout(doParam))
-    # model.add(Dense(128, activation='sigmoid'))
+        # model.add(BatchNormalization())
 
-    model.add(Dense(10, activation='softmax'))
+        model.add(Convolution2D(32, (5, 5), activation='relu'))
+        model.add(Dropout(doParam))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    model.summary()
+        # model.add(DepthwiseConv2D(1, depth_multiplier=2, activation=tf.keras.activations.hard_sigmoid))
 
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
+        model.add(Flatten(name="flatten_layer"))
 
-    # theWeights  = model.get_weights()
-    # m           = theWeights[0]
-    # m[0,0,0,0]  = 1;
+        # model.add(BatchNormalization(center=False, scale=False, name="batchnorm_layer"))
 
-    # m2          = theWeights[1]
-    # m2[0]       = -0.5;
+        model.add(BatchNormalization(name="batchnorm_layer"))
+        if use_staircase:
+            model.add(layers.Activation(staircaseSemiLin))
+        else:
+            model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
+
+        # model.add(layers.Activation(tf.keras.activations.hard_sigmoid))
+
+        model.add(Dense(256, activation='relu'))
+        model.add(Dropout(doParam))
+        # model.add(Dense(128, activation='sigmoid'))
+
+        model.add(Dense(10, activation='softmax'))
+
+        model.summary()
+
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
+
+        # theWeights  = model.get_weights()
+        # m           = theWeights[0]
+        # m[0,0,0,0]  = 1;
+
+        # m2          = theWeights[1]
+        # m2[0]       = -0.5;
 
     return model
 
@@ -198,8 +222,8 @@ print(f"Test set: {X_test_h1.shape}, {Y_test.shape}")
 
 ##############################################################################
 
-model  = create_model(use_staircase=False)
-model2 = create_model(use_staircase=True)
+model  = create_model(use_staircase=False, resnet=resnet)
+model2 = create_model(use_staircase=True, resnet=resnet)
 
 bestScore = float('inf')
 
@@ -229,7 +253,7 @@ for epoch in range(nbIt):
 
 
 modelBest  = load_model(base_model)
-modelBest2 = create_model(use_staircase=True)
+modelBest2 = create_model(use_staircase=True, resnet=resnet)
 modelBest2.set_weights(modelBest.get_weights())
 modelBest2.save(staircase_model)
 
