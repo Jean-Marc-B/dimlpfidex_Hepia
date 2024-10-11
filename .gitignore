@@ -191,3 +191,4 @@ docs/modules
 # Deep Fidex data
 Deep_Fidex/Cifar/
 Deep_Fidex/Mnist/
+Deep_Fidex/Cifar80/
