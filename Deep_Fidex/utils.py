@@ -3,8 +3,13 @@ import numpy as np
 import tensorflow as tf
 from stairObj import StairObj
 from keras import backend as K
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+from keras.models     import Sequential
+from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D
+from keras.layers     import BatchNormalization
+from keras.applications     import ResNet50
+from keras.optimizers import Adam
+
+from keras.callbacks  import ModelCheckpoint
 from rule import Rule
 from antecedent import Antecedent
 import json
@@ -348,6 +353,139 @@ def get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normal
 
     if show_images:
         colorimage.show()
+
+
+###############################################################
+# Train a CNN with a Resnet or with a small model
+
+def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats):
+
+    print("Training CNN...")
+
+    split_index = int(0.8 * len(X_train))
+    x_train = X_train[0:split_index]
+    x_val   = X_train[split_index:]
+    y_train = Y_train[0:split_index]
+    y_val   = Y_train[split_index:]
+
+    print(f"Training set: {x_train.shape}, {y_train.shape}")
+    print(f"Validation set: {x_val.shape}, {y_val.shape}")
+    print(f"Test set: {X_test.shape}, {Y_test.shape}")
+
+    if (nbChannels == 1 and resnet):
+        # B&W to RGB
+        x_train = np.repeat(x_train, 3, axis=-1)
+        X_test = np.repeat(X_test, 3, axis=-1)
+        x_val = np.repeat(x_val, 3, axis=-1)
+        nbChannels = 3
+
+    ##############################################################################
+    if resnet:
+        input_tensor = Input(shape=(size1D, size1D, 3))
+        model_base = ResNet50(include_top=False, weights="imagenet", input_tensor=input_tensor)
+        model = Sequential()
+        model.add(model_base)
+        model.add(Flatten())
+        model.add(Dropout(0.5))
+        model.add(BatchNormalization())
+        model.add(Dense(nb_classes, activation='softmax'))
+
+        model.build((None, size1D, size1D, 3))  # Build the model with the input shape
+
+        model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
+        model.summary()
+
+    else:
+        model = Sequential()
+
+        model.add(Input(shape=(size1D, size1D, nbChannels)))
+
+        model.add(Convolution2D(32, (5, 5), activation='relu'))
+        model.add(Dropout(0.3))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        model.add(DepthwiseConv2D((5, 5), activation='relu'))
+        model.add(Dropout(0.3))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        model.add(Flatten())
+
+        model.add(Dense(256, activation='sigmoid'))
+        model.add(Dropout(0.3))
+
+        model.add(Dense(nb_classes, activation='sigmoid'))
+
+        model.summary()
+
+        model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+
+    checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True, save_weights_only=True)
+    model.fit(x_train, y_train, batch_size=32, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], verbose=2)
+
+    print("model trained")
+
+    ##############################################################################
+
+    model.load_weights(model_checkpoint_weights)
+    model.save(model_file)
+
+    train_pred = model.predict(x_train)    # Predict the response for train dataset
+    test_pred = model.predict(X_test)    # Predict the response for test dataset
+    valid_pred = model.predict(x_val)   # Predict the response for validation dataset
+    train_valid_pred = np.concatenate((train_pred,valid_pred)) # We output predictions of both validation and training sets
+
+    # Output predictions
+    output_data(train_valid_pred, train_pred_file)
+    output_data(test_pred, test_pred_file)
+
+    ##############################################################################
+
+    print("\nResult :")
+
+    with open(model_stats, "w") as myFile:
+        score = model.evaluate(x_train, y_train)
+        print("Train score : ", score)
+        myFile.write(f"Train score : {score[1]}\n")
+
+        score = model.evaluate(X_test, Y_test)
+        print("Test score : ", score)
+        myFile.write(f"Test score : {score[1]}\n")
+
+###############################################################
+# get histogram for an image on a CNN
+def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_prob):
+    image_size = [image.shape[0], image.shape[1]]
+    probability_thresholds = [(1/(nb_prob+1))*i for i in range(1,nb_prob+1)]
+    histogram_scores = [np.zeros(nb_prob, dtype=int) for _ in range(nb_classes)]
+    current_pixel = [0,0]
+    filtered_images = []
+    while current_pixel[0]+filter_size[0] <= image_size[0]:
+        # Filter image
+        filtered_img = np.zeros_like(image)
+        filtered_img[current_pixel[0]:current_pixel[0]+filter_size[0], current_pixel[1]:current_pixel[1]+filter_size[1]] = image[current_pixel[0]:current_pixel[0]+filter_size[0], current_pixel[1]:current_pixel[1]+filter_size[1]]
+        filtered_images.append(filtered_img)
+
+        # Update current pixel
+        if current_pixel[1]+filter_size[1]+stride > image_size[1]:
+            current_pixel[0]+=1
+            current_pixel[1]=0
+        else:
+            current_pixel[1] += stride
+
+    # Evaluate images
+    filtered_images = np.array(filtered_images)
+    predictions = CNNModel.predict(filtered_images, verbose=0)
+    for prediction in predictions:
+        # Loop on classes
+        for class_idx in range(nb_classes):
+            class_prob = prediction[class_idx]  # Probability of class
+            for prob_idx, threshold in enumerate(probability_thresholds):
+                if class_prob >= threshold:
+                    histogram_scores[class_idx][prob_idx] += 1 # +1 if probability score is high enough
+
+
+    return histogram_scores
+
 
 ###############################################################
 ###############################################################
