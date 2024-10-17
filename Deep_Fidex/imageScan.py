@@ -11,13 +11,14 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import keras
 import numpy as np
-from utils import trainCNN, getHistogram, output_data
+from utils import trainCNN, getHistogram, output_data, getRules
 
 np.random.seed(seed=None)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from dimlpfidex import fidex
 from trainings import randForestsTrn
+from trainings.trnFun import get_attribute_file
 
 ###############################################################
 
@@ -27,7 +28,7 @@ with_train_cnn = False
 train_cnn_only = False
 with_hist_computation = False
 with_train_second_model = False
-with_global_rules = False
+with_global_rules = True
 
 dataset = "MNIST"
 #dataset = "CIFAR"
@@ -60,7 +61,7 @@ second_model_train_pred = base_folder + "Scan/second_model_train_pred.txt"
 second_model_test_pred = base_folder + "Scan/second_model_test_pred.txt"
 second_model_output_rules = base_folder + "Scan/second_model_rules.rls"
 
-global_rules_file = base_folder + "Scan/globalRules.rls"
+global_rules_file = base_folder + "Scan/globalRules.json"
 attributes_file = base_folder + "Scan/attributes.txt"
 
 # If we train :
@@ -193,7 +194,7 @@ probability_thresholds = [(1/(nb_prob+1))*i for i in range(1,nb_prob+1)]
 with open(attributes_file, "w") as myFile:
     for i in range(nb_classes):
         for j in probability_thresholds:
-            myFile.write(f"P>={j}_{i}\n")
+            myFile.write(f"P>={j:.6g}_{i}\n")
 
 if with_global_rules:
     command = (
@@ -211,6 +212,12 @@ if with_global_rules:
 
     print("\nComputing global rules...\n")
     fidex.fidexGloRules(command)
+
+# Get rules
+global_rules = getRules(global_rules_file)
+rule = global_rules[0]
+attributes = get_attribute_file(attributes_file, nb_histogram_attributes)[0]
+print(attributes)
 
 end_time = time.time()
 full_time = end_time - start_time
