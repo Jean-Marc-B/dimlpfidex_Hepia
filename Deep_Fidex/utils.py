@@ -16,6 +16,7 @@ import json
 import math
 from PIL import Image
 import os
+import time
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
@@ -360,7 +361,9 @@ def get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normal
 
 def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats):
 
-    print("Training CNN...")
+    start_time = time.time()
+
+    print("Training CNN...\n")
 
     split_index = int(0.8 * len(X_train))
     x_train = X_train[0:split_index]
@@ -422,7 +425,13 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
     checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True, save_weights_only=True)
     model.fit(x_train, y_train, batch_size=32, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], verbose=2)
 
-    print("model trained")
+    print("\nCNN trained\n")
+
+    end_time = time.time()
+    full_time = end_time - start_time
+    full_time = "{:.6f}".format(full_time).rstrip("0").rstrip(".")
+
+    print(f"Training time = {full_time} sec\n")
 
     ##############################################################################
 
