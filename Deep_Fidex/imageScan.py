@@ -11,7 +11,8 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import keras
 import numpy as np
-from utils import trainCNN, getHistogram, output_data, getRules
+import shutil
+from utils import trainCNN, getHistogram, output_data, getRules, highlight_area
 
 np.random.seed(seed=None)
 
@@ -26,9 +27,9 @@ start_time = time.time()
 
 with_train_cnn = False
 train_cnn_only = False
-with_hist_computation = False
+with_hist_computation = True
 with_train_second_model = False
-with_global_rules = True
+with_global_rules = False
 
 dataset = "MNIST"
 #dataset = "CIFAR"
@@ -73,8 +74,8 @@ nbIt = 4
 # For histogram computation
 filter_size = [7,7] # Size of filter applied to the image
 stride = 1 # shift between each filter
-nb_prob = 9 # Number of probas wanted (ex: NProb>=0.1, NProb>=0.2, etc.)
-nb_histogram_attributes = nb_classes*nb_prob
+nb_bins = 9 # Number of bins wanted (ex: NProb>=0.1, NProb>=0.2, etc.)
+nb_histogram_attributes = nb_classes*nb_bins
 
 # For Fidex
 hiknot = 5
@@ -83,7 +84,8 @@ K_val = 1.0
 dropout_hyp = 0.9
 dropout_dim = 0.9
 
-
+# Folder for output images
+rules_folder = base_folder + "Scan/Rules"
 
 
 ##############################################################################
@@ -131,34 +133,44 @@ if with_hist_computation:
     print("\nComputing train histograms...")
 
     # Get histograms for each train sample
-    nb_train_samples = Y_train.shape[0]
+    #nb_train_samples = Y_train.shape[0]
+    nb_train_samples = 100
     train_histograms = []
-    for train_sample_id in range(100):
+    for train_sample_id in range(nb_train_samples):
         image = X_train[train_sample_id]
         image = image.reshape(size1D, size1D, nbChannels)
-        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_prob)
+        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins)
         train_histograms.append(histogram)
+        if (train_sample_id+1) % 100 == 0 or train_sample_id+1 == nb_train_samples:
+            progress = ((train_sample_id+1) / nb_train_samples) * 100
+            progress_message = f"Progress : {progress:.2f}% ({train_sample_id+1}/{nb_train_samples})"
+            print(f"\r{progress_message}", end='', flush=True)
     train_histograms = np.array(train_histograms)
 
-    print("Train histograms computed.\n")
+    print("\nTrain histograms computed.\n")
 
     print("Computing test histograms...")
 
     # Get histograms for each test sample
-    nb_test_samples = Y_test.shape[0]
+    #nb_test_samples = Y_test.shape[0]
+    nb_test_samples = 100
     test_histograms = []
-    for test_sample_id in range(100):
+    for test_sample_id in range(nb_test_samples):
         image = X_test[test_sample_id]
         image = image.reshape(size1D, size1D, nbChannels)
-        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_prob)
+        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins)
         test_histograms.append(histogram)
+        if (test_sample_id+1) % 100 == 0 or test_sample_id+1 == nb_test_samples:
+            progress = ((test_sample_id+1) / nb_test_samples) * 100
+            progress_message = f"Progress : {progress:.2f}% ({test_sample_id+1}/{nb_test_samples})"
+            print(f"\r{progress_message}", end='', flush=True)
 
     test_histograms = np.array(test_histograms)
-    print("Test histograms computed.")
+    print("\nTest histograms computed.")
     # Save in histograms in .npy file
     print("\nSaving histograms...")
-    train_histograms = train_histograms.reshape(100, nb_histogram_attributes)
-    test_histograms = test_histograms.reshape(100, nb_histogram_attributes)
+    train_histograms = train_histograms.reshape(nb_train_samples, nb_histogram_attributes)
+    test_histograms = test_histograms.reshape(nb_test_samples, nb_histogram_attributes)
     output_data(train_histograms, train_histogram_file)
     output_data(test_histograms, test_histogram_file)
     print("Histograms saved.")
@@ -190,7 +202,7 @@ if with_train_second_model:
     print("\nSecond model trained.")
 
 # Define attributes file
-probability_thresholds = [(1/(nb_prob+1))*i for i in range(1,nb_prob+1)]
+probability_thresholds = [(1/(nb_bins+1))*i for i in range(1,nb_bins+1)]
 with open(attributes_file, "w") as myFile:
     for i in range(nb_classes):
         for j in probability_thresholds:
@@ -215,9 +227,32 @@ if with_global_rules:
 
 # Get rules
 global_rules = getRules(global_rules_file)
-rule = global_rules[0]
 attributes = get_attribute_file(attributes_file, nb_histogram_attributes)[0]
-print(attributes)
+
+# Create folder for each rules
+if os.path.exists(rules_folder):
+    shutil.rmtree(rules_folder)
+os.makedirs(rules_folder)
+
+rule = global_rules[0]
+rule.include_X = False
+for ant in rule.antecedents:
+    ant.attribute = attributes[ant.attribute]
+
+# Create folder for this rule
+rule_folder = f"{rules_folder}/rule_0_class_{rule.target_class}"
+if os.path.exists(rule_folder):
+    shutil.rmtree(rule_folder)
+os.makedirs(rule_folder)
+
+# Add a readme containing the rule
+readme_file = rule_folder+'/Readme.md'
+if os.path.exists(readme_file):
+    os.remove(readme_file)
+with open(readme_file, 'w') as file:
+    file.write(str(rule))
+for img in rule.covered_samples:
+    highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule)
 
 end_time = time.time()
 full_time = end_time - start_time

@@ -1,13 +1,28 @@
 class Rule:
 
-    def __init__(self, antecedents, target_class, covering_size=None, fidelity=None, accuracy=None, confidence=None):
+    def __init__(self, antecedents, target_class, covering_size=None, fidelity=None, accuracy=None, confidence=None, covered_samples=None, include_X=True):
 
         self.antecedents = antecedents
         self.target_class = target_class
         self.covering_size = covering_size
+        self.covered_samples = covered_samples
         self.fidelity = fidelity
         self.accuracy = accuracy
         self.confidence = confidence
+        self.include_X = include_X
+        if not self.include_X:
+            for antecedent in self.antecedents:
+                antecedent.include_X = False
+
+    @property
+    def include_X(self):
+        return self._include_X
+
+    @include_X.setter
+    def include_X(self, value):
+        self._include_X = value
+        for antecedent in self.antecedents:
+            antecedent.include_X = self._include_X
 
     def __str__(self):
         antecedents_str = ' '.join(str(antecedent) for antecedent in self.antecedents)

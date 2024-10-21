@@ -211,7 +211,7 @@ def getRules(rules_file):
                     antecedents.append(Antecedent(attribute, inequality, value))
 
                 # Create a Rule object and append it to the list
-                rules.append(Rule(antecedents, rule_data['outputClass'], rule_data['coveringSize'], rule_data['fidelity'], rule_data['accuracy'], rule_data['confidence']))
+                rules.append(Rule(antecedents, rule_data['outputClass'], rule_data['coveringSize'], rule_data['fidelity'], rule_data['accuracy'], rule_data['confidence'], rule_data['coveredSamples']))
 
     else:
         with open(rules_file, "r") as myFile:
@@ -461,29 +461,47 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
         myFile.write(f"Test score : {score[1]}\n")
 
 ###############################################################
-# get histogram for an image on a CNN
-def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_prob):
-    image_size = [image.shape[0], image.shape[1]]
-    probability_thresholds = [(1/(nb_prob+1))*i for i in range(1,nb_prob+1)]
-    histogram_scores = [np.zeros(nb_prob, dtype=int) for _ in range(nb_classes)]
-    current_pixel = [0,0]
-    filtered_images = []
-    while current_pixel[0]+filter_size[0] <= image_size[0]:
-        # Filter image
-        filtered_img = np.zeros_like(image)
-        filtered_img[current_pixel[0]:current_pixel[0]+filter_size[0], current_pixel[1]:current_pixel[1]+filter_size[1]] = image[current_pixel[0]:current_pixel[0]+filter_size[0], current_pixel[1]:current_pixel[1]+filter_size[1]]
-        filtered_images.append(filtered_img)
 
-        # Update current pixel
-        if current_pixel[1]+filter_size[1]+stride > image_size[1]:
-            current_pixel[0]+=1
-            current_pixel[1]=0
-        else:
-            current_pixel[1] += stride
+def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride):
+    image_size = [image.shape[0], image.shape[1]]
+    filtered_images = []
+    positions = []  # To keep the position of each filter
+
+    current_pixel = [0, 0]
+    while current_pixel[0] + filter_size[0] <= image_size[0]:
+        while current_pixel[1] + filter_size[1] <= image_size[1]:
+            # Create filtered image
+            filtered_img = np.zeros_like(image)
+            filtered_img[current_pixel[0]:current_pixel[0]+filter_size[0],
+                         current_pixel[1]:current_pixel[1]+filter_size[1]] = \
+                image[current_pixel[0]:current_pixel[0]+filter_size[0],
+                      current_pixel[1]:current_pixel[1]+filter_size[1]]
+            filtered_images.append(filtered_img)
+            positions.append((current_pixel[0], current_pixel[1]))
+
+            current_pixel[1] += stride  # Move horizontally
+
+        current_pixel[1] = 0  # reset the column
+        current_pixel[0] += stride  # Move vertically
+
+    filtered_images = np.array(filtered_images)
+
+    # Get predictions
+    predictions = CNNModel.predict(filtered_images, verbose=0)
+
+    return filtered_images, predictions, positions
+
+###############################################################
+
+# get histogram for an image on a CNN
+def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
+    filtered_images, predictions, _ = generate_filtered_images_and_predictions(
+        CNNModel, image, filter_size, stride)
+
+    probability_thresholds = [(1 / (nb_bins + 1)) * i for i in range(1, nb_bins + 1)]
+    histogram_scores = [np.zeros(nb_bins, dtype=int) for _ in range(nb_classes)]
 
     # Evaluate images
-    filtered_images = np.array(filtered_images)
-    predictions = CNNModel.predict(filtered_images, verbose=0)
     for prediction in predictions:
         # Loop on classes
         for class_idx in range(nb_classes):
@@ -495,6 +513,39 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_prob):
 
     return histogram_scores
 
+###############################################################
+# Create images for each antecedant highlighting the important areas
+def highlight_area(CNNModel, image, filter_size, stride, rule):
+    filtered_images, predictions, positions = generate_filtered_images_and_predictions(
+    CNNModel, image, filter_size, stride)
+
+    # Copier l'image pour la modification
+    highlighted_image = image.copy()
+
+    # Assurer que l'image est en RGB
+    if len(highlighted_image.shape) == 2 or highlighted_image.shape[2] == 1:
+        # Convertir en RGB si nécessaire
+        highlighted_image = np.stack((highlighted_image,) * 3, axis=-1)
+
+    for idx, (prediction, position) in enumerate(zip(predictions, positions)):
+        class_idx = rule.attribute
+        class_prob = prediction[class_idx]
+
+        # Vérifier si la prédiction satisfait l'antécédent
+        if (rule.inequality and class_prob >= rule.value) or \
+           (not rule.inequality and class_prob < rule.value):
+            # La zone satisfait l'antécédent
+            print("Oui")
+            top_left = position
+            bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
+
+            # Mettre en évidence la zone (par exemple, en superposant une couleur rouge transparente)
+            highlighted_image[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1], 0] = 255  # Canal Rouge
+        else:
+            print("Non")
+
+    return highlighted_image
+    return image
 
 ###############################################################
 ###############################################################
