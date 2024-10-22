@@ -17,6 +17,8 @@ import math
 from PIL import Image
 import os
 import time
+import re
+import matplotlib.pyplot as plt
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
@@ -519,33 +521,74 @@ def highlight_area(CNNModel, image, filter_size, stride, rule):
     filtered_images, predictions, positions = generate_filtered_images_and_predictions(
     CNNModel, image, filter_size, stride)
 
-    # Copier l'image pour la modification
     highlighted_image = image.copy()
 
-    # Assurer que l'image est en RGB
-    if len(highlighted_image.shape) == 2 or highlighted_image.shape[2] == 1:
-        # Convertir en RGB si nécessaire
-        highlighted_image = np.stack((highlighted_image,) * 3, axis=-1)
+    # Convert to RGB if necessary
+    if len(image.shape) == 2:
+        original_image_rgb = np.stack((image,) * 3, axis=-1)
+    elif len(image.shape) == 3 and image.shape[2] == 1:
+        original_image_rgb = np.squeeze(image, axis=2)  # Supprimer la dimension supplémentaire
+        original_image_rgb = np.stack((original_image_rgb,) * 3, axis=-1)
+    else:
+        original_image_rgb = image.copy()
 
-    for idx, (prediction, position) in enumerate(zip(predictions, positions)):
-        class_idx = rule.attribute
-        class_prob = prediction[class_idx]
+    pattern = r'^P>=([\d\.]+)_(\d+)$'
+    highlighted_images = []
 
-        # Vérifier si la prédiction satisfait l'antécédent
-        if (rule.inequality and class_prob >= rule.value) or \
-           (not rule.inequality and class_prob < rule.value):
-            # La zone satisfait l'antécédent
-            print("Oui")
-            top_left = position
-            bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
-
-            # Mettre en évidence la zone (par exemple, en superposant une couleur rouge transparente)
-            highlighted_image[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1], 0] = 255  # Canal Rouge
+    for antecedent in rule.antecedents: # For each antecedent
+        print("Antecedent : ", antecedent)
+        # Get the class id and prediction threshold of this antecedent
+        match = re.match(pattern, antecedent.attribute)
+        if match:
+            pred_threshold = float(match.group(1))
+            class_id = int(match.group(2))
         else:
-            print("Non")
+            raise ValueError(f"Wrong antecedant format : {antecedent.attribute}")
 
-    return highlighted_image
-    return image
+        highlighted_image = original_image_rgb.copy()
+
+        # For each area
+        nbOui = 0
+        nbNon = 0
+        for (prediction, position) in zip(predictions, positions):
+            class_prob = prediction[class_id] # Prediction of the area
+
+            # Check if the prediction with this area satisfies the antecedent
+            if (class_prob >= pred_threshold):
+                nbOui += 1
+                top_left = position
+                bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
+
+                # Mettre en évidence la zone (par exemple, en superposant une couleur rouge transparente)
+                highlighted_image[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1], 0] = 255  # Canal Rouge
+            else:
+                nbNon += 1
+
+        print("nbOui : ", nbOui)
+        print("nbNon : ", nbNon)
+        highlighted_images.append((highlighted_image, antecedent.attribute))
+
+    # Create the matplotlib figure
+    num_antecedents = len(rule.antecedents)
+    fig, axes = plt.subplots(1, num_antecedents + 1, figsize=(5 * (num_antecedents + 1), 5))
+    fig.suptitle("Original and highlighted Areas for each rule antecedent", fontsize=16)
+
+    # Show the original image on top left
+    axes[0].imshow(original_image_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # Show each highlited image
+    for i, (highlighted_img, title) in enumerate(highlighted_images, start=1):
+        axes[i].imshow(highlighted_img)
+        axes[i].set_title(title)
+        axes[i].axis('off')
+
+    plt.tight_layout() # Adjust spacing
+    plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    return fig
+
 
 ###############################################################
 ###############################################################

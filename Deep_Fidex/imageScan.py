@@ -27,7 +27,7 @@ start_time = time.time()
 
 with_train_cnn = False
 train_cnn_only = False
-with_hist_computation = True
+with_hist_computation = False
 with_train_second_model = False
 with_global_rules = False
 
@@ -251,8 +251,10 @@ if os.path.exists(readme_file):
     os.remove(readme_file)
 with open(readme_file, 'w') as file:
     file.write(str(rule))
-for img in rule.covered_samples:
+for img_id in rule.covered_samples:
+    img = X_train[img_id]
     highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule)
+    highlighted_image.savefig(f"{rule_folder}/{img_id}.png")
 
 end_time = time.time()
 full_time = end_time - start_time
