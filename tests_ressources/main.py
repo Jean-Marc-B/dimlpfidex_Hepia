@@ -165,7 +165,7 @@ if __name__ == "__main__":
     # normalization("--json_config_file config/normalization.json")
     # dimlpBT("--json_config_file config/dimlpbt.json")
     # fidexGloRules("--json_config_file config/fidexglorules.json")
-    # dimlpPred("--json_config_file config/dimlppred.json")
+    # densCls("--json_config_file config/dimlppred.json") # TODO: adapt this to densCls
     # fidexGlo("--json_config_file config/fidexglo.json")
 
     with open("temp/explanation.json") as fp:
