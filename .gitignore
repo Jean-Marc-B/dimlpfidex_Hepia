@@ -193,3 +193,9 @@ Deep_Fidex/Cifar/
 Deep_Fidex/Mnist/
 Deep_Fidex/Cifar80/
 Deep_Fidex/CifarLeakyReluResnet/
+
+tests_ressources/temp/
+tests_ressources/dataset/
+tests_ressources/input/
+tests_ressources/output/
+tests_ressources/patients_data/

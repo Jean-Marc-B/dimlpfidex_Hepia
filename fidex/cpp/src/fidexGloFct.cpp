@@ -101,7 +101,7 @@ void showFidexGloParams() {
  * @param attributeNames Reference to a vector of strings containing the attribute names.
  * @param classNames Reference to a vector of strings containing the class names.
  */
-void executeFidex(std::vector<std::string> &lines, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredValue, int mainSampleClass, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames) {
+void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredValue, int mainSampleClass, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames) {
   int nbFidexRules = p.getInt(NB_FIDEX_RULES);
   if (nbFidexRules == 1) {
     std::cout << "\nWe launch Fidex." << std::endl;
@@ -131,6 +131,7 @@ void executeFidex(std::vector<std::string> &lines, DataSetFid &trainDataset, Par
     lines.emplace_back("Local rules :\n");
   }
   for (Rule rule : rules) {
+    currentRules.push_back(rule);
     std::cout << rule.toString(attributeNames, classNames) << std::endl;
     lines.emplace_back(rule.toString(attributeNames, classNames) + "\n");
   }
@@ -532,8 +533,10 @@ int fidexGlo(const std::string &command) {
     }
     int nb_fidex = 0; // Number of times Fidex is used
     bool launchingFidex;
+    std::vector<std::vector<Rule>> rulesPerSamples(nbSamples, std::vector<Rule>(0));
     for (int currentSample = 0; currentSample < nbSamples; currentSample++) {
       launchingFidex = false;
+      std::vector<Rule> currentRules;
       if (nbSamples > 1) {
         lines.push_back("Explanation for sample " + std::to_string(currentSample) + " :\n");
         std::cout << "Explanation for sample " << std::to_string(currentSample) << " :" << std::endl
@@ -572,6 +575,7 @@ int fidexGlo(const std::string &command) {
       } else { // There are some activated rules
         for (int v : activatedRules) {
           if (rules[v].getOutputClass() == testSamplesPreds[currentSample]) { // Check if the class of the rule is the predicted one
+            // currentRules.emplace_back(rules[v]);
             correctRules.push_back(v);
           } else {
             notCorrectRules.push_back(v);
@@ -599,6 +603,7 @@ int fidexGlo(const std::string &command) {
                         << std::endl;
             }
             for (int v = 0; v < activatedRules.size(); v++) {
+              currentRules.push_back(rules[activatedRules[v]]); // add a rule for a given sample
               lines.emplace_back("R" + std::to_string(v + 1) + ": " + rules[activatedRules[v]].toString(attributeNames, classNames));
               std::cout << "R" << std::to_string(v + 1) << ": " << rules[activatedRules[v]].toString(attributeNames, classNames) << std::endl;
             }
@@ -632,6 +637,7 @@ int fidexGlo(const std::string &command) {
                       << std::endl; // There is no explanation, we choose the model decision
           }
           for (int c = 0; c < correctRules.size(); c++) {
+            currentRules.push_back(rules[correctRules[c]]); // add a rule for a given sample
             lines.emplace_back("R" + std::to_string(c + 1) + ": " + rules[correctRules[c]].toString(attributeNames, classNames));
             std::cout << "R" << std::to_string(c + 1) << ": " << rules[correctRules[c]].toString(attributeNames, classNames) << std::endl;
           }
@@ -666,8 +672,9 @@ int fidexGlo(const std::string &command) {
         } else {
           mainSampleClass = -1;
         }
-        executeFidex(lines, trainDataset, *params, hyperspace, mainSampleValues, mainSamplePred, mainSamplePredValue, mainSampleClass, attributeNames, classNames);
+        executeFidex(lines, currentRules, trainDataset, *params, hyperspace, mainSampleValues, mainSamplePred, mainSamplePredValue, mainSampleClass, attributeNames, classNames);
       }
+      rulesPerSamples[currentSample] = currentRules;
 
       lines.emplace_back("\n--------------------------------------------------------------------\n");
       std::cout << "\n--------------------------------------------------------------------" << std::endl;
@@ -687,14 +694,27 @@ int fidexGlo(const std::string &command) {
 
     // Output global explanation result
     if (params->isStringSet(EXPLANATION_FILE)) {
-      std::ofstream outputFile(params->getString(EXPLANATION_FILE));
-      if (outputFile.is_open()) {
-        for (const auto &line : lines) {
-          outputFile << line << "" << std::endl;
+      std::string filename = params->getString(EXPLANATION_FILE);
+      if (filename.substr(filename.find_last_of('.') + 1) != "json") {
+        std::ofstream outputFile(filename);
+
+        if (outputFile.is_open()) {
+          for (const auto &line : lines) {
+            outputFile << line << "" << std::endl;
+          }
+          outputFile.close();
+        } else {
+          throw CannotOpenFileError("Error : Couldn't open explanation extraction file " + params->getString(EXPLANATION_FILE) + ".");
         }
-        outputFile.close();
       } else {
-        throw CannotOpenFileError("Error : Couldn't open explanation extraction file " + params->getString(EXPLANATION_FILE) + ".");
+        // writing JSON file
+        for (int i = 0; i < rulesPerSamples.size(); i++) {
+          std::cout << "Sample #" << i << "---------------------------------------------------------------------------------------------" << std::endl;
+          for (Rule r : rulesPerSamples[i]) {
+            std::cout << r << std::endl;
+          }
+        }
+        Rule::toJsonGloFile(filename, rulesPerSamples);
       }
     }
 

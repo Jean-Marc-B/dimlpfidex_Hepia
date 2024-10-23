@@ -31,7 +31,7 @@ void checkParametersLogicValues(Parameters &p);
 /**
  * @brief Executes the Fidex algorithm to extract an explanation rule for a given sample.
  */
-void executeFidex(std::vector<std::string> &lines, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredValue, int mainSampleClass, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames);
+void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &generatedRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredValue, int mainSampleClass, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames);
 
 /**
  * @brief Executes the FidexGlo algorithm with specified parameters to extract explanation rules for each test sample.
