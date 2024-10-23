@@ -182,6 +182,29 @@ void Rule::toJsonStatsFile(const std::string &filename, const std::vector<Rule> 
 }
 
 /**
+ * @brief Writes rules for a given sample into a JSON file. (Ugly workaround for fidexGlo program)
+ *
+ * @param filename Name of the file to be written.
+ * @param sampleId id of the given sample.
+ * @param rules Vector of train rules to be written.
+ */
+void Rule::toJsonGloFile(const std::string &filename, const std::vector<std::vector<Rule>> &rulesPerSamples) {
+  std::ofstream ofs(filename, std::ios_base::app);
+
+  if (!ofs.is_open() || ofs.fail()) {
+    throw FileNotFoundError("JSON file to be written named '" + filename + "' couldn't be opened, cannot proceed.");
+  }
+
+  Json jsonData;
+
+  for (int i = 0; i < rulesPerSamples.size(); i++) {
+    jsonData["samples"].push_back({{"sampleId", i}, {"rules", rulesPerSamples[i]}});
+  }
+
+  ofs << std::setw(4) << jsonData << std::endl;
+}
+
+/**
  * @brief Compares a rule with another to determine whether they're identical.
  *
  * @param other Other rule for comparison.
