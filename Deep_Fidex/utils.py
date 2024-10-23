@@ -517,72 +517,141 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
 
 ###############################################################
 # Create images for each antecedant highlighting the important areas
-def highlight_area(CNNModel, image, filter_size, stride, rule):
+def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
     filtered_images, predictions, positions = generate_filtered_images_and_predictions(
     CNNModel, image, filter_size, stride)
-
-    highlighted_image = image.copy()
 
     # Convert to RGB if necessary
     if len(image.shape) == 2:
         original_image_rgb = np.stack((image,) * 3, axis=-1)
     elif len(image.shape) == 3 and image.shape[2] == 1:
-        original_image_rgb = np.squeeze(image, axis=2)  # Supprimer la dimension supplémentaire
+        original_image_rgb = np.squeeze(image, axis=2)  # Remove the supplementary dimension
         original_image_rgb = np.stack((original_image_rgb,) * 3, axis=-1)
     else:
         original_image_rgb = image.copy()
 
-    pattern = r'^P>=([\d\.]+)_(\d+)$'
-    highlighted_images = []
+    # Initialize the combined intensity maps for green and red
+    combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
+    combined_red_intensity = np.zeros((image.shape[0], image.shape[1]))
+
+    pattern = r'^P_(\d+)>=([\d\.]+)$'
+    individual_maps = []
 
     for antecedent in rule.antecedents: # For each antecedent
-        print("Antecedent : ", antecedent)
         # Get the class id and prediction threshold of this antecedent
         match = re.match(pattern, antecedent.attribute)
         if match:
-            pred_threshold = float(match.group(1))
-            class_id = int(match.group(2))
+            pred_threshold = float(match.group(2))
+            class_id = int(match.group(1))
         else:
             raise ValueError(f"Wrong antecedant format : {antecedent.attribute}")
 
-        highlighted_image = original_image_rgb.copy()
+        individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
 
         # For each area
-        nbOui = 0
-        nbNon = 0
         for (prediction, position) in zip(predictions, positions):
             class_prob = prediction[class_id] # Prediction of the area
 
             # Check if the prediction with this area satisfies the antecedent
             if (class_prob >= pred_threshold):
-                nbOui += 1
                 top_left = position
                 bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
 
-                # Mettre en évidence la zone (par exemple, en superposant une couleur rouge transparente)
-                highlighted_image[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1], 0] = 255  # Canal Rouge
-            else:
-                nbNon += 1
+                # Accumulate the intensity of the activation in the individual color map
+                individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
 
-        print("nbOui : ", nbOui)
-        print("nbNon : ", nbNon)
-        highlighted_images.append((highlighted_image, antecedent.attribute))
+                # Accumulate the intensity in the combined map for each activations
+                if antecedent.inequality:
+                    combined_green_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+                else:
+                    combined_red_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
 
-    # Create the matplotlib figure
+        individual_maps.append((individual_intensity_map, antecedent))
+
+
+
+    # Create the image combined with all filter of all antecedents
+
+    max_green = np.max(combined_green_intensity) if np.max(combined_green_intensity) > 0 else 1
+    max_red = np.max(combined_red_intensity) if np.max(combined_red_intensity) > 0 else 1
+
+    # Normalise the intensity maps combined between 0 and 255
+    green_overlay = (combined_green_intensity / max_green) * 255
+    red_overlay = (combined_red_intensity / max_red) * 255
+
+    combined_image = original_image_rgb.copy().astype(np.float32)
+
+    # Apply the combined filters
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + red_overlay, 0, 255)  # Ajout du rouge
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1] + green_overlay, 0, 255)  # Ajout du vert
+
+    combined_image = combined_image.astype(np.uint8)
+
+    # Determine the number of rows and columns for the subplots
     num_antecedents = len(rule.antecedents)
-    fig, axes = plt.subplots(1, num_antecedents + 1, figsize=(5 * (num_antecedents + 1), 5))
-    fig.suptitle("Original and highlighted Areas for each rule antecedent", fontsize=16)
+    total_images = num_antecedents + 2  # Original, combined, and individual filters
+
+    # We set a maximum number of columns per row for better visualization
+    max_columns = 4
+    num_columns = min(max_columns, total_images)
+    num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
+
+    # Create the matplotlib figure with dynamic rows and columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+
+    # If axes is a single AxesSubplot, convert it to a list for consistent indexing
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
 
     # Show the original image on top left
     axes[0].imshow(original_image_rgb)
     axes[0].set_title("Original Image")
     axes[0].axis('off')
 
-    # Show each highlited image
-    for i, (highlighted_img, title) in enumerate(highlighted_images, start=1):
-        axes[i].imshow(highlighted_img)
-        axes[i].set_title(title)
+    # Show combined image
+    axes[1].imshow(combined_image)
+    axes[1].set_title("Combined Filters")
+    axes[1].axis('off')
+
+    # Show each image with an individual filter (for each antecedent)
+    for i, (intensity_map, antecedent) in enumerate(individual_maps, start=2):
+        # Normlaise the intensity of the filter for the antecedent
+        max_intensity = np.max(intensity_map) if np.max(intensity_map) > 0 else 1
+        normalized_intensity = (intensity_map / max_intensity) * 255
+
+        individual_image = original_image_rgb.copy().astype(np.float32)
+
+        # Apply filter green for >= or red for <
+        if antecedent.inequality:
+            # Apply green filter
+            individual_image[:, :, 1] = np.clip(individual_image[:, :, 1] + normalized_intensity, 0, 255)
+        else:
+            # Apply red filter
+            individual_image[:, :, 0] = np.clip(individual_image[:, :, 0] + normalized_intensity, 0, 255)
+
+        individual_image = individual_image.astype(np.uint8)
+
+        # Show an image for each individual antecedant
+        match = re.match(pattern, antecedent.attribute)
+        if match:
+            class_id = int(match.group(1))
+            pred_threshold = match.group(2)
+            class_name = classes[class_id]  # Get the class name
+        if antecedent.inequality:
+            ineq = ">="
+        else:
+            ineq = "<"
+
+        axes[i].imshow(individual_image)
+        axes[i].set_title(f"Filter for P_{class_name}>={pred_threshold}{ineq}{antecedent.value}")
         axes[i].axis('off')
+
+    # Hide any remaining empty subplots if total_images < num_rows * num_columns
+    for j in range(total_images, len(axes)):
+        axes[j].axis('off')
 
     plt.tight_layout() # Adjust spacing
     plt.subplots_adjust(top=0.85)  # Let space for the main title

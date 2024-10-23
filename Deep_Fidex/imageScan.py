@@ -12,6 +12,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import keras
 import numpy as np
 import shutil
+import re
+import copy
 from utils import trainCNN, getHistogram, output_data, getRules, highlight_area
 
 np.random.seed(seed=None)
@@ -25,26 +27,52 @@ from trainings.trnFun import get_attribute_file
 
 start_time = time.time()
 
-with_train_cnn = False
+with_train_cnn = True
 train_cnn_only = False
-with_hist_computation = False
-with_train_second_model = False
-with_global_rules = False
+with_hist_computation = True
+with_train_second_model = True
+with_global_rules = True
 
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nbChannels         = 1
     nb_classes = 10
     base_folder = "Mnist/"
+    data_type = "integer"
+    classes = {
+        0:"0",
+        1:"1",
+        2:"2",
+        3:"3",
+        4:"4",
+        5:"5",
+        6:"6",
+        7:"7",
+        8:"8",
+        9:"9",
+    }
 
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nbChannels         = 3
     nb_classes = 10
     base_folder = "Cifar/"
+    data_type = "integer"
+    classes = {
+        0: "airplane",
+        1: "automobile",
+        2: "bird",
+        3: "cat",
+        4: "deer",
+        5: "dog",
+        6: "frog",
+        7: "horse",
+        8: "ship",
+        9: "truck",
+    }
 
 # Files
 train_data_file = base_folder + "trainData.txt"
@@ -94,12 +122,18 @@ print("\nLoading data...")
 
 train   = np.loadtxt(train_data_file)
 X_train = train.reshape(train.shape[0], size1D, size1D, nbChannels)
-X_train = X_train.astype('float32')
+if data_type == "integer":
+    X_train = X_train.astype('int32')
+else:
+    X_train = X_train.astype('float32')
 print(X_train.shape)
 
 test   = np.loadtxt(test_data_file)
 X_test = test.reshape(test.shape[0], size1D, size1D, nbChannels)
-X_test = X_test.astype('float32')
+if data_type == "integer":
+    X_test = X_test.astype('int32')
+else:
+    X_test = X_test.astype('float32')
 print(X_test.shape)
 
 Y_train = np.loadtxt(train_class_file)
@@ -206,7 +240,7 @@ probability_thresholds = [(1/(nb_bins+1))*i for i in range(1,nb_bins+1)]
 with open(attributes_file, "w") as myFile:
     for i in range(nb_classes):
         for j in probability_thresholds:
-            myFile.write(f"P>={j:.6g}_{i}\n")
+            myFile.write(f"P_{i}>={j:.6g}\n")
 
 if with_global_rules:
     command = (
@@ -229,32 +263,47 @@ if with_global_rules:
 global_rules = getRules(global_rules_file)
 attributes = get_attribute_file(attributes_file, nb_histogram_attributes)[0]
 
-# Create folder for each rules
+# Create folder for all rules
 if os.path.exists(rules_folder):
     shutil.rmtree(rules_folder)
 os.makedirs(rules_folder)
 
-rule = global_rules[0]
-rule.include_X = False
-for ant in rule.antecedents:
-    ant.attribute = attributes[ant.attribute]
+pattern = r'^P_(\d+)>=([\d\.]+)$' # Pattern of an antecedent
 
-# Create folder for this rule
-rule_folder = f"{rules_folder}/rule_0_class_{rule.target_class}"
-if os.path.exists(rule_folder):
-    shutil.rmtree(rule_folder)
-os.makedirs(rule_folder)
+# For each rule we get filter images
+for id,rule in enumerate(global_rules[0:10]):
+    rule.include_X = False
+    for ant in rule.antecedents:
+        ant.attribute = attributes[ant.attribute]
 
-# Add a readme containing the rule
-readme_file = rule_folder+'/Readme.md'
-if os.path.exists(readme_file):
-    os.remove(readme_file)
-with open(readme_file, 'w') as file:
-    file.write(str(rule))
-for img_id in rule.covered_samples:
-    img = X_train[img_id]
-    highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule)
-    highlighted_image.savefig(f"{rule_folder}/{img_id}.png")
+    # Create folder for this rule
+    rule_folder = f"{rules_folder}/rule_{id}_class_{classes[rule.target_class]}"
+    if os.path.exists(rule_folder):
+        shutil.rmtree(rule_folder)
+    os.makedirs(rule_folder)
+
+    # Add a readme containing the rule
+    readme_file = rule_folder+'/Readme.md'
+    rule_to_print = copy.deepcopy(rule)
+    # Change antecedent with real class names
+    for antecedent in rule_to_print.antecedents:
+        match = re.match(pattern, antecedent.attribute)
+        if match:
+            class_id = int(match.group(1))
+            pred_threshold = match.group(2)
+            class_name = classes[class_id]  # Get the class name
+            antecedent.attribute = f"P_{class_name}>={pred_threshold}"
+        else:
+            raise ValueError("Wrong antecedent...")
+    if os.path.exists(readme_file):
+        os.remove(readme_file)
+    with open(readme_file, 'w') as file:
+        file.write(str(rule_to_print))
+    # Create filters
+    for img_id in rule.covered_samples:
+        img = X_train[img_id]
+        highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule, classes)
+        highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 end_time = time.time()
 full_time = end_time - start_time
