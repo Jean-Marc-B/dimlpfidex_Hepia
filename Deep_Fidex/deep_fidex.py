@@ -3,6 +3,15 @@
 Created on Tue Sep 17 09:20:16 2024
 
 @author: jean-marc.boutay
+
+This script loads data from the MNIST or CIFAR dataset, processes it through a deep model to extract intermediate representations,
+and applies Fidex to extract abstract rules from these representations. The script then evaluates and saves these rules
+along with their associated predictions and statistics.
+
+Then, each rule is transformed into an IMLP (Interpretable Multi Layer Perceptron) added to the first CNN model after the flatten layer. We make the predictions on
+this new model and apply Fidex on the first layer of the model for each sample to get one rule per sample. The class of this
+new rule is the class of the abstract rule. Finally, these rules are saved.
+
 """
 
 import os

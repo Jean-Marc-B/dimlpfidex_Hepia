@@ -1,3 +1,15 @@
+"""
+This script implements a Human Activity Recognition (HAR) system using a Convolutional Neural Network (CNN)
+to classify activities based on sensor data. The script loads and preprocesses time-series data, splits it
+into training, validation, and test sets, and then trains a CNN with multiple configurations.
+
+It computes and evaluates the performance of the model using different activation functions, including a
+custom staircase activation function, `staircaseSemiLin`, used for the usage of Fidex.
+The model without the staircase function is trained but validated with this activation function.
+The model's weights are saved when improvement is detected, and predictions are output for further analysis. It also computes and saves the
+statistics of the best model. Various hyperparameters and file paths are used to manage the experiment setup.
+"""
+
 import numpy as np
 import sys
 import time
@@ -89,7 +101,7 @@ print("Training model...")
 
 def create_model(use_staircase=False):
     input_tensor = Input(shape=(250, 6))
-    
+
     x = Conv1D(filters=64, kernel_size=3, activation='relu')(input_tensor)
     x = BatchNormalization()(x)
     x = MaxPooling1D(pool_size=2)(x)
@@ -132,17 +144,17 @@ bestScore = float('inf')
 
 for epoch in range(nb_epochs):
     print(f"Epoch {epoch+1}")
-    
+
     # Train the model for 1 epoch
     model.fit(x_train_h1, y_train, batch_size=32, epochs=1, validation_data=(x_val_h1, y_val), verbose=2)
-    
+
     # Transfer the weights to model2
     model2.set_weights(model.get_weights())
-    
-    # Evalueate model2 on validation
+
+    # Evaluate model2 on validation
     val_score = model2.evaluate(x_val_h1, y_val, verbose=0)
     print(f"Validation score with staircaseSemiLin: {val_score}")
-    
+
     # Save weights if the model scores better
     if val_score[0] < bestScore:
         bestScore = val_score[0]
@@ -156,7 +168,7 @@ for epoch in range(nb_epochs):
 
 modelBest  = load_model(model_checkpoint_weights)
 modelBest2 = create_model(use_staircase=True)
-   
+
 modelBest2.set_weights(modelBest.get_weights())
 
 #checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True)

@@ -13,6 +13,17 @@ Created on Fri Mar 19 11:54:46 2021
 @author: guido.bologna
 """
 
+"""
+This script implements and trains a Convolutional Neural Network (CNN) for image classification tasks using
+either the MNIST or CIFAR dataset. It supports training with two different architectures:
+a ResNet-based model or a smaller custom CNN. The script processes input data, applies convolutional and pooling
+layers, and offers the option to use a custom staircase activation function, `staircaseSemiLin`, used for the usage of Fidex.
+The model without the staircase function is trained but validated with this activation function.
+
+The model is trained and evaluated on training, validation, and test datasets. The script extracts the deep Fidex input values
+(after the flatten layer), and outputs the results and statistics. It also computes the weights of the batchnorm layer to apply Fidex on this layer Deep.
+"""
+
 ###############################################################
 
 import os

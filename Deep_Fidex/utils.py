@@ -26,6 +26,16 @@ nbStairsPerUnitInv = 1.0/nbStairsPerUnit
 
 
 def output_data(data, data_file):
+    """
+    Outputs a given dataset to a specified file.
+
+    Parameters:
+    data (np.ndarray): The dataset to be written, structured as a 2D array.
+    data_file (str): Path to the output file where the data will be saved.
+
+    Raises:
+    ValueError: If the file is not found or cannot be opened.
+    """
     try:
         with open(data_file, "w") as file:
             for var in data:
@@ -40,50 +50,117 @@ def output_data(data, data_file):
         raise ValueError(f"Error : Couldn't open file {data_file}.")
 
 def staircaseUnbound(x):
+    """
+    Applies an unbounded staircase activation function to the input.
 
-   return (K.sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
+    Parameters:
+    x (tf.Tensor): Input tensor to be transformed using the staircase function.
+
+    Returns:
+    tf.Tensor: Transformed tensor using the staircase activation.
+    """
+
+    return (K.sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
 
 ###############################################################
 
 def staircaseSemiLin(x):
-#    h -> nStairsPerUnit
-#    hard_sigmoid(x) =  max(0, min(1, x/6+0.5))
-#    staircaseSemiLin(x, h) = hard_sigmoid(ceil(x*h)*(1/h))
+    """
+    Applies a semi-linear staircase activation function to the input.
 
-   return (tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
+    Parameters:
+    x (tf.Tensor): Input tensor to be transformed using the semi-linear staircase function.
+
+    Returns:
+    tf.Tensor: Transformed tensor using the semi-linear staircase activation.
+    """
+#   h -> nStairsPerUnit
+#   hard_sigmoid(x) =  max(0, min(1, x/6+0.5))
+#   staircaseSemiLin(x, h) = hard_sigmoid(ceil(x*h)*(1/h))
+
+    return (tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
 
 ###############################################################
 
 def staircaseSemiLin2(x):
+    """
+    Applies a modified version of the semi-linear staircase activation function to the input.
 
-   a = (tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
-   a = (a - 0.5)*6.0
-   return a
+    Parameters:
+    x (tf.Tensor): Input tensor to be transformed.
+
+    Returns:
+    tf.Tensor: Transformed tensor adjusted to range between -3 and 3 based on the staircase activation.
+    """
+    a = (tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit) * nbStairsPerUnitInv))
+    a = (a - 0.5)*6.0
+    return a
 
 ###############################################################
 
 def hardSigm2(x):
+    """
+    Applies a modified version of the hard sigmoid activation function to the input.
 
-   a = tf.keras.activations.hard_sigmoid(x)
-   a = (a - 0.5)*6.0
-   return a
+    Parameters:
+    x (tf.Tensor): Input tensor to be transformed.
+
+    Returns:
+    tf.Tensor: Transformed tensor adjusted to range between -3 and 3.
+    """
+    a = tf.keras.activations.hard_sigmoid(x)
+    a = (a - 0.5)*6.0
+    return a
 
 ###############################################################
 
 def staircaseBound(x):
+    """
+    Applies a bounded staircase activation function to the input.
 
-   a = tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit)*0.5 * nbStairsPerUnitInv)
-   a = (a - 0.5)*10.0
-   return(K.sigmoid(a))
+    Parameters:
+    x (tf.Tensor): Input tensor to be transformed using the bounded staircase function.
+
+    Returns:
+    tf.Tensor: Transformed tensor using the bounded staircase activation.
+    """
+    a = tf.keras.activations.hard_sigmoid(tf.math.ceil(x*nbStairsPerUnit)*0.5 * nbStairsPerUnitInv)
+    a = (a - 0.5)*10.0
+    return(K.sigmoid(a))
 
 ###############################################################
 
 def zeroThreshold(x):
+    """
+    Applies a zero-threshold activation, setting values greater than or equal to zero to 1, and others to 0.
+
+    Parameters:
+    x (tf.Tensor): Input tensor.
+
+    Returns:
+    tf.Tensor: Tensor with values set to 1 or 0 based on the threshold.
+    """
     return tf.cast(tf.greater_equal(x, 0), tf.float32)
 
 ###############################################################
 
 def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_outfile=None, mu=None, sigma=None):
+    """
+    Computes the first hidden layer of the model using a staircase activation function.
+
+    Parameters:
+    step (str): Specifies whether to compute using "train" or "test" data.
+    input_data (np.ndarray): Input data to be transformed.
+    k (float): Scaling factor for normalization.
+    nb_stairs (int): Number of staircase steps for quantization.
+    hiknot (int): Parameter for the staircase function.
+    weights_outfile (str, optional): File path to save weights if using training data.
+    mu (np.ndarray, optional): Mean values for normalization (training step).
+    sigma (np.ndarray, optional): Standard deviation values for normalization (training step).
+
+    Returns:
+    np.ndarray: Transformed data after applying the first hidden layer.
+    """
     input_data = np.array(input_data)
     if step == "train": # Train datas
         if weights_outfile is None:
@@ -122,6 +199,15 @@ def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_o
 ###############################################################
 
 def check_minimal_rule(rule):
+    """
+    Checks and returns the minimal version of a given rule by reducing redundant antecedents.
+
+    Parameters:
+    rule (Rule): The rule object containing antecedents.
+
+    Returns:
+    Rule: The minimal version of the rule with reduced antecedents.
+    """
     antecedent_dict = {}
 
     for antecedent in rule.antecedents:
@@ -152,6 +238,16 @@ def check_minimal_rule(rule):
 ###############################################################
 
 def ruleToIMLP(current_rule, nb_attributes):
+    """
+    Converts a rule into an Interpretable Multi Layer Perceptron (IMLP) model.
+
+    Parameters:
+    current_rule (Rule): The rule object containing antecedents.
+    nb_attributes (int): The number of attributes in the dataset.
+
+    Returns:
+    keras.Sequential: A Sequential model implementing the rule as an IMLP.
+    """
 
     # Take ancient model's first layers, but clone them to avoid shared state
     IMLP = Sequential()
@@ -199,6 +295,15 @@ def ruleToIMLP(current_rule, nb_attributes):
 ###############################################################
 
 def getRules(rules_file):
+    """
+    Loads and parses rules from a specified file.
+
+    Parameters:
+    rules_file (str): The path to the file containing rules (in JSON or text format).
+
+    Returns:
+    list: A list of Rule objects parsed from the file.
+    """
     rules = []
     if rules_file.endswith(".json"):
         with open(rules_file, "r") as myFile:
@@ -255,6 +360,16 @@ def getRules(rules_file):
 ###############################################################
 
 def getCovering(rule, samples):
+    """
+    Identifies the samples that a given rule covers.
+
+    Parameters:
+    rule (Rule): The rule object.
+    samples (np.ndarray): Dataset samples to be checked against the rule.
+
+    Returns:
+    tuple: A tuple containing the list of covered samples and their respective indices.
+    """
 
     covered_samples = [
         (sample, n)
@@ -275,6 +390,16 @@ def getCovering(rule, samples):
 ###############################################################
 # For 1D images
 def reshape_and_pad(image, nb_attributes):
+    """
+    Reshapes and pads a 1D image to a 2D format based on the number of attributes.
+
+    Parameters:
+    image (np.ndarray): The 1D image array.
+    nb_attributes (int): The number of attributes in the image.
+
+    Returns:
+    tuple: A tuple containing the reshaped image, its height, and width.
+    """
     side_length = math.ceil(math.sqrt(nb_attributes))
     height = side_length
     while side_length * (height - 1) >= nb_attributes:
@@ -288,6 +413,22 @@ def reshape_and_pad(image, nb_attributes):
 ###############################################################
 # Images need to have 1 or 3 channels. If 3 channels, it's flatten. Padding used for 1D images only
 def process_rules(rules, X_test, X_train, image_save_folder, nb_channels, classes, with_pad = False, size1D=None, normalize=False, normalized01=False, show_images=False):
+    """
+    Processes rules and generates images highlighting areas activated by each rule.
+
+    Parameters:
+    rules (list): List of Rule objects to be processed.
+    X_test (np.ndarray): Test dataset.
+    X_train (np.ndarray): Training dataset.
+    image_save_folder (str): Folder path to save the generated images.
+    nb_channels (int): Number of channels in the images.
+    classes (dict): Mapping of class IDs to class names.
+    with_pad (bool, optional): If True, applies padding to images.
+    size1D (int, optional): Size of the images if they are square.
+    normalize (bool, optional): If True, normalizes pixel values between 0 and 255.
+    normalized01 (bool, optional): If True, normalizes pixel values between 0 and 1.
+    show_images (bool, optional): If True, displays the images.
+    """
     if size1D:
         nb_rows = size1D
         nb_cols = size1D
@@ -318,6 +459,20 @@ def process_rules(rules, X_test, X_train, image_save_folder, nb_channels, classe
 
 # Accepts only 1 or 3 channel images
 def get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normalize=False, normalized01=False, show_images=False):
+    """
+    Generates and saves an image highlighting the areas activated by a rule.
+
+    Parameters:
+    rule (Rule): The rule object containing antecedents.
+    baseimage (np.ndarray): The image to process.
+    image_path (str): The path where the image will be saved.
+    nb_rows (int): The number of rows in the image.
+    nb_cols (int): The number of columns in the image.
+    nb_channels (int): The number of channels in the image (1 or 3).
+    normalize (bool, optional): If True, normalizes the image pixel values between 0 and 255.
+    normalized01 (bool, optional): If True, normalizes pixel values between 0 and 1.
+    show_images (bool, optional): If True, displays the processed image.
+    """
 
     #normalize values between 0 and 255
     if normalize:

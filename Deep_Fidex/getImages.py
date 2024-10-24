@@ -1,3 +1,15 @@
+"""
+This script processes image data using extracted rules from deep_fidex to generate visualizations that highlight areas of interest.
+The script supports datasets such as MNIST and CIFAR, and it operates by loading data, applying rules extracted
+from a deep learning model (using Fidex), and generating corresponding images to illustrate which pixels are
+used by the rules for each image covered by the rule.
+
+The script creates folders to organize and save these visualizations, including images derived from both the
+intermediate and original representations of the dataset. For each rule and test sample, the script saves the
+highlighted image and those of training samples that the rule covers. The script uses various hyperparameters
+and configurations to control how images are processed and displayed.
+"""
+
 import os
 import time
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
