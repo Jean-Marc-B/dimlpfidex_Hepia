@@ -1,4 +1,21 @@
 class Rule:
+    """
+    Represents a classification rule consisting of multiple antecedents and a target class.
+
+    Attributes:
+    - antecedents: A list of Antecedent objects representing conditions that make up the rule.
+    - target_class: The target class associated with the rule when the antecedents are satisfied.
+    - covering_size: (Optional) The number of samples covered by the rule.
+    - fidelity: (Optional) The fidelity of the rule when evaluated on a train dataset.
+    - accuracy: (Optional) The accuracy of the rule.
+    - confidence: (Optional) The confidence of the rule.
+    - covered_samples: (Optional) The list of samples covered by the rule.
+    - include_X: Boolean indicating whether to include the prefix 'X' when displaying antecedents.
+
+    Methods:
+    - __str__: Returns a string representation of the rule.
+    - __repr__: Returns a string representation (same as __str__).
+    """
 
     def __init__(self, antecedents, target_class, covering_size=None, fidelity=None, accuracy=None, confidence=None, covered_samples=None, include_X=True):
 
@@ -16,6 +33,7 @@ class Rule:
 
     @property
     def include_X(self):
+        """Gets or sets the include_X property, updating all antecedents when modified."""
         return self._include_X
 
     @include_X.setter
@@ -25,6 +43,12 @@ class Rule:
             antecedent.include_X = self._include_X
 
     def __str__(self):
+        """
+        Returns a string representation of the rule, including:
+        - Antecedents and their conditions.
+        - Target class.
+        - Optional metrics such as covering size, fidelity, accuracy, and confidence if available.
+        """
         antecedents_str = ' '.join(str(antecedent) for antecedent in self.antecedents)
         metrics = []
         if self.covering_size is not None:
@@ -41,4 +65,5 @@ class Rule:
         return rule_str
 
     def __repr__(self):
+        """Returns the string representation of the rule (same as __str__)."""
         return self.__str__()

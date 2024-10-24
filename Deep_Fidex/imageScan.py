@@ -3,6 +3,17 @@
 Created on Mon Oct 14 15:24:08 2024
 
 @author: jean-marc.boutay
+
+This script performs the training and evaluation of a Convolutional Neural Network (CNN) on a specified dataset
+(either MNIST or CIFAR). It includes options for training the CNN, computing histograms from CNN predictions on filtered areas,
+training a secondary model (e.g., random forests) based on these histograms and extracting global classification rules.
+The script also generates images highlighting important areas of the input images based on the learned rules,
+saving these images and information for further analysis. Various hyperparameters and file paths are specified to manage
+the workflow, allowing for flexibility and customization of the experiment.
+
+The histograms are the probabilities of each class on all the different filtered areas, Fidex is used on it to get rules,
+we go back to the filtered images to see where the rule is applied on the image to see the important areas of the image with
+respect to this rule.
 """
 import os
 import sys
@@ -14,7 +25,8 @@ import numpy as np
 import shutil
 import re
 import copy
-from utils import trainCNN, getHistogram, output_data, getRules, highlight_area
+from constants import HISTOGRAM_ANTECEDENT_PATTERN
+from utils import trainCNN, compute_histograms, output_data, getRules, highlight_area, getProbabilityThresholds
 
 np.random.seed(seed=None)
 
@@ -27,18 +39,24 @@ from trainings.trnFun import get_attribute_file
 
 start_time = time.time()
 
-with_train_cnn = True
-train_cnn_only = False
+
+# What to launch
+with_train_cnn = False
 with_hist_computation = True
 with_train_second_model = True
 with_global_rules = True
+get_images = True
 
-#dataset = "MNIST"
-dataset = "CIFAR"
+
+##############################################################################
+
+# Which dataset to launch
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
-    nbChannels         = 1
+    nb_channels         = 1
     nb_classes = 10
     base_folder = "Mnist/"
     data_type = "integer"
@@ -57,7 +75,7 @@ if dataset == "MNIST":     # for MNIST images
 
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
-    nbChannels         = 3
+    nb_channels         = 3
     nb_classes = 10
     base_folder = "Cifar/"
     data_type = "integer"
@@ -73,6 +91,11 @@ elif dataset == "CIFAR":     # for Cifar images
         8: "ship",
         9: "truck",
     }
+
+
+##############################################################################
+
+# Parameters
 
 # Files
 train_data_file = base_folder + "trainData.txt"
@@ -118,10 +141,12 @@ rules_folder = base_folder + "Scan/Rules"
 
 ##############################################################################
 
+# Get data
+
 print("\nLoading data...")
 
 train   = np.loadtxt(train_data_file)
-X_train = train.reshape(train.shape[0], size1D, size1D, nbChannels)
+X_train = train.reshape(train.shape[0], size1D, size1D, nb_channels)
 if data_type == "integer":
     X_train = X_train.astype('int32')
 else:
@@ -129,7 +154,7 @@ else:
 print(X_train.shape)
 
 test   = np.loadtxt(test_data_file)
-X_test = test.reshape(test.shape[0], size1D, size1D, nbChannels)
+X_test = test.reshape(test.shape[0], size1D, size1D, nb_channels)
 if data_type == "integer":
     X_test = X_test.astype('int32')
 else:
@@ -146,21 +171,16 @@ print("Data loaded.\n")
 
 ##############################################################################
 
-# Get data and save in dataSet class
-
 # Train CNN model
 if with_train_cnn:
-    trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats)
-    if train_cnn_only:
-        end_time = time.time()
-        full_time = end_time - start_time
-        full_time = "{:.6f}".format(full_time).rstrip("0").rstrip(".")
-
-        print(f"\nFull execution time = {full_time} sec")
-        sys.exit()
+    trainCNN(size1D, nb_channels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats)
 
 
 CNNModel = keras.saving.load_model(model_file)
+
+
+##############################################################################
+# Compute histograms
 
 if with_hist_computation:
 
@@ -169,18 +189,8 @@ if with_hist_computation:
     # Get histograms for each train sample
     #nb_train_samples = Y_train.shape[0]
     nb_train_samples = 100
-    train_histograms = []
-    for train_sample_id in range(nb_train_samples):
-        image = X_train[train_sample_id]
-        image = image.reshape(size1D, size1D, nbChannels)
-        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins)
-        train_histograms.append(histogram)
-        if (train_sample_id+1) % 100 == 0 or train_sample_id+1 == nb_train_samples:
-            progress = ((train_sample_id+1) / nb_train_samples) * 100
-            progress_message = f"Progress : {progress:.2f}% ({train_sample_id+1}/{nb_train_samples})"
-            print(f"\r{progress_message}", end='', flush=True)
-    train_histograms = np.array(train_histograms)
 
+    train_histograms = compute_histograms(nb_train_samples, X_train, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
     print("\nTrain histograms computed.\n")
 
     print("Computing test histograms...")
@@ -188,18 +198,8 @@ if with_hist_computation:
     # Get histograms for each test sample
     #nb_test_samples = Y_test.shape[0]
     nb_test_samples = 100
-    test_histograms = []
-    for test_sample_id in range(nb_test_samples):
-        image = X_test[test_sample_id]
-        image = image.reshape(size1D, size1D, nbChannels)
-        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins)
-        test_histograms.append(histogram)
-        if (test_sample_id+1) % 100 == 0 or test_sample_id+1 == nb_test_samples:
-            progress = ((test_sample_id+1) / nb_test_samples) * 100
-            progress_message = f"Progress : {progress:.2f}% ({test_sample_id+1}/{nb_test_samples})"
-            print(f"\r{progress_message}", end='', flush=True)
+    test_histograms = compute_histograms(nb_test_samples, X_test, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
 
-    test_histograms = np.array(test_histograms)
     print("\nTest histograms computed.")
     # Save in histograms in .npy file
     print("\nSaving histograms...")
@@ -209,6 +209,8 @@ if with_hist_computation:
     output_data(test_histograms, test_histogram_file)
     print("Histograms saved.")
 
+##############################################################################
+# Train second model with histograms
 
 train_class_file_temp = base_folder + "trainClass_temp.txt"
 test_class_file_temp = base_folder + "testClass_temp.txt"
@@ -235,12 +237,16 @@ if with_train_second_model:
 
     print("\nSecond model trained.")
 
-# Define attributes file
-probability_thresholds = [(1/(nb_bins+1))*i for i in range(1,nb_bins+1)]
+# Define attributes file for histograms
+probability_thresholds = getProbabilityThresholds(nb_bins)
 with open(attributes_file, "w") as myFile:
     for i in range(nb_classes):
         for j in probability_thresholds:
             myFile.write(f"P_{i}>={j:.6g}\n")
+
+
+##############################################################################
+# Compute global rules
 
 if with_global_rules:
     command = (
@@ -259,51 +265,55 @@ if with_global_rules:
     print("\nComputing global rules...\n")
     fidex.fidexGloRules(command)
 
-# Get rules
-global_rules = getRules(global_rules_file)
-attributes = get_attribute_file(attributes_file, nb_histogram_attributes)[0]
 
-# Create folder for all rules
-if os.path.exists(rules_folder):
-    shutil.rmtree(rules_folder)
-os.makedirs(rules_folder)
+##############################################################################
+# Get images explaining and illustrating the samples and rules
 
-pattern = r'^P_(\d+)>=([\d\.]+)$' # Pattern of an antecedent
+if get_images:
+    # Get rules and attributes
+    global_rules = getRules(global_rules_file)
+    attributes = get_attribute_file(attributes_file, nb_histogram_attributes)[0]
 
-# For each rule we get filter images
-for id,rule in enumerate(global_rules[0:10]):
-    rule.include_X = False
-    for ant in rule.antecedents:
-        ant.attribute = attributes[ant.attribute]
+    # Create folder for all rules
+    if os.path.exists(rules_folder):
+        shutil.rmtree(rules_folder)
+    os.makedirs(rules_folder)
 
-    # Create folder for this rule
-    rule_folder = f"{rules_folder}/rule_{id}_class_{classes[rule.target_class]}"
-    if os.path.exists(rule_folder):
-        shutil.rmtree(rule_folder)
-    os.makedirs(rule_folder)
+    # For each rule we get filter images for train samples covering the rule
+    for id,rule in enumerate(global_rules[0:10]):
+        rule.include_X = False
+        for ant in rule.antecedents:
+            ant.attribute = attributes[ant.attribute] # Get true name of attribute
 
-    # Add a readme containing the rule
-    readme_file = rule_folder+'/Readme.md'
-    rule_to_print = copy.deepcopy(rule)
-    # Change antecedent with real class names
-    for antecedent in rule_to_print.antecedents:
-        match = re.match(pattern, antecedent.attribute)
-        if match:
-            class_id = int(match.group(1))
-            pred_threshold = match.group(2)
-            class_name = classes[class_id]  # Get the class name
-            antecedent.attribute = f"P_{class_name}>={pred_threshold}"
-        else:
-            raise ValueError("Wrong antecedent...")
-    if os.path.exists(readme_file):
-        os.remove(readme_file)
-    with open(readme_file, 'w') as file:
-        file.write(str(rule_to_print))
-    # Create filters
-    for img_id in rule.covered_samples:
-        img = X_train[img_id]
-        highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule, classes)
-        highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
+        # Create folder for this rule
+        rule_folder = f"{rules_folder}/rule_{id}_class_{classes[rule.target_class]}"
+        if os.path.exists(rule_folder):
+            shutil.rmtree(rule_folder)
+        os.makedirs(rule_folder)
+
+        # Add a readme containing the rule
+        readme_file = rule_folder+'/Readme.md'
+        rule_to_print = copy.deepcopy(rule)
+        # Change antecedent with real class names
+        for antecedent in rule_to_print.antecedents:
+            match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
+            if match:
+                class_id = int(match.group(1))
+                pred_threshold = match.group(2)
+                class_name = classes[class_id]  # Get the class name
+                antecedent.attribute = f"P_{class_name}>={pred_threshold}"
+            else:
+                raise ValueError("Wrong antecedent...")
+        if os.path.exists(readme_file):
+            os.remove(readme_file)
+        with open(readme_file, 'w') as file:
+            file.write(str(rule_to_print))
+
+        # Create full image with all filters and save it
+        for img_id in rule.covered_samples:
+            img = X_train[img_id]
+            highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule, classes)
+            highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 end_time = time.time()
 full_time = end_time - start_time

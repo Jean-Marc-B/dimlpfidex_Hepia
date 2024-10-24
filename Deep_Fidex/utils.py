@@ -19,6 +19,7 @@ import os
 import time
 import re
 import matplotlib.pyplot as plt
+from constants import HISTOGRAM_ANTECEDENT_PATTERN
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
@@ -362,6 +363,26 @@ def get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normal
 # Train a CNN with a Resnet or with a small model
 
 def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats):
+    """
+    Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
+
+    Parameters:
+    - size1D: The size of one dimension of the input image (image is size1D x size1D).
+    - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
+    - nb_classes: The number of classes for classification.
+    - resnet: Boolean indicating whether to use a ResNet architecture (True) or a smaller custom model (False).
+    - nbIt: The number of epochs to train the model.
+    - model_file: File path to save the trained model.
+    - model_checkpoint_weights: File path for saving the best model weights during training.
+    - X_train, Y_train: Training dataset (images and labels).
+    - X_test, Y_test: Test dataset (images and labels).
+    - train_pred_file: File path to save the training set predictions.
+    - test_pred_file: File path to save the test set predictions.
+    - model_stats: File path to save the model's performance statistics.
+
+    Returns:
+    - None. The trained model is saved to the specified file, and predictions and performance metrics are saved.
+    """
 
     start_time = time.time()
 
@@ -464,7 +485,59 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
 
 ###############################################################
 
+def compute_histograms(nb_samples, data, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins):
+    """
+    Computes histograms for each sample in the dataset using the CNN model. It's the histogram of the probabilities of each class on the CNN
+    evaluated on each area (or patches) added on the image (by a sliding filter). A patch is applied and outside of this area everything is 0.
+
+    Parameters:
+    - nb_samples: The number of samples in the dataset.
+    - data: The dataset containing images to be processed.
+    - size1D: The size of one dimension of the input image (image is size1D x size1D).
+    - nb_channels: The number of channels in the input images (1 for grayscale, 3 for RGB).
+    - CNNModel: The CNN model used for making predictions.
+    - nb_classes: The number of classes for classification.
+    - filter_size: The size of the filter applied to the image.
+    - stride: The stride value for moving the filter across the image.
+    - nb_bins: The number of bins used for computing the histogram.
+
+    Returns:
+    - histograms: A numpy array containing the computed histograms for each sample.
+    """
+
+    histograms = []
+    for sample_id in range(nb_samples):
+        image = data[sample_id]
+        image = image.reshape(size1D, size1D, nb_channels)
+        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins)
+        histograms.append(histogram)
+        if (sample_id+1) % 100 == 0 or sample_id+1 == nb_samples:
+            progress = ((sample_id+1) / nb_samples) * 100
+            progress_message = f"Progress : {progress:.2f}% ({sample_id+1}/{nb_samples})"
+            print(f"\r{progress_message}", end='', flush=True)
+    histograms = np.array(histograms)
+
+    return histograms
+
+###############################################################
+
 def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride):
+
+    """
+    Generates filtered versions of an image by applying a sliding filter and predicts each filtered image using the CNN model.
+
+    Parameters:
+    - CNNModel: The CNN model used for predicting the filtered images.
+    - image: The input image to be processed (2D grayscale or 3D RGB).
+    - filter_size: The size of the filter applied to the image (height, width).
+    - stride: The stride value for moving the filter across the image.
+
+    Returns:
+    - filtered_images: An array of filtered images created by applying the filter at different positions.
+    - predictions: Predictions from the CNN model for each filtered image.
+    - positions: A list of (row, column) tuples indicating the top-left position of each filter applied.
+    """
+
     image_size = [image.shape[0], image.shape[1]]
     filtered_images = []
     positions = []  # To keep the position of each filter
@@ -494,13 +567,45 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     return filtered_images, predictions, positions
 
 ###############################################################
+# get probability thresholds
+def getProbabilityThresholds(nb_bins):
+    """
+    Computes the probability thresholds for binning probabilities into a histogram.
+
+    Parameters:
+    - nb_bins: The number of bins used for the histogram.
+
+    Returns:
+    - A list of probability thresholds, evenly spaced between 0 and 1.
+    """
+
+    return [(1 / (nb_bins + 1)) * i for i in range(1, nb_bins + 1)]
+
+
+###############################################################
 
 # get histogram for an image on a CNN
 def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
+    """
+    Computes a histogram for a given image based on CNN model predictions for different areas of the image.
+
+    Parameters:
+    - CNNModel: The CNN model used for predicting filtered images.
+    - image: The input image to be processed.
+    - nb_classes: The number of classes for classification.
+    - filter_size: The size of the filter applied to the image (height, width).
+    - stride: The stride value for moving the filter across the image.
+    - nb_bins: The number of bins used for computing the histogram.
+
+    Returns:
+    - histogram_scores: A list of numpy arrays where each array corresponds to a class, containing counts of probabilities
+      falling into each bin.
+    """
+
     filtered_images, predictions, _ = generate_filtered_images_and_predictions(
         CNNModel, image, filter_size, stride)
 
-    probability_thresholds = [(1 / (nb_bins + 1)) * i for i in range(1, nb_bins + 1)]
+    probability_thresholds = getProbabilityThresholds(nb_bins)
     histogram_scores = [np.zeros(nb_bins, dtype=int) for _ in range(nb_classes)]
 
     # Evaluate images
@@ -516,8 +621,26 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
     return histogram_scores
 
 ###############################################################
-# Create images for each antecedant highlighting the important areas
+
 def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
+    """
+    Highlights important areas in an image based on the rule's antecedents using the CNN model.
+
+    Parameters:
+    - CNNModel: The trained CNN model used to make predictions on filtered areas of the image.
+    - image: The input image (2D grayscale or 3D RGB) to be processed and highlighted.
+    - filter_size: A tuple representing the size (height, width) of the filter applied on the image.
+    - stride: The stride value used to slide the filter across the image.
+    - rule: An object containing antecedents which specify conditions (class ID and prediction threshold)
+            for highlighting areas based on CNN predictions.
+    - classes: A list or dictionary that maps class IDs to class names for better interpretability.
+
+    Returns:
+    - fig: The matplotlib figure containing subplots with:
+        1. The original image.
+        2. The image with all filters applied based on the rule's antecedents.
+        3. Individual images showing the highlighted areas for each antecedent separately.
+    """
     filtered_images, predictions, positions = generate_filtered_images_and_predictions(
     CNNModel, image, filter_size, stride)
 
@@ -534,12 +657,11 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
     combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
     combined_red_intensity = np.zeros((image.shape[0], image.shape[1]))
 
-    pattern = r'^P_(\d+)>=([\d\.]+)$'
     individual_maps = []
 
     for antecedent in rule.antecedents: # For each antecedent
         # Get the class id and prediction threshold of this antecedent
-        match = re.match(pattern, antecedent.attribute)
+        match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
         if match:
             pred_threshold = float(match.group(2))
             class_id = int(match.group(1))
@@ -635,7 +757,7 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
         individual_image = individual_image.astype(np.uint8)
 
         # Show an image for each individual antecedant
-        match = re.match(pattern, antecedent.attribute)
+        match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
         if match:
             class_id = int(match.group(1))
             pred_threshold = match.group(2)
@@ -655,6 +777,8 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
 
     plt.tight_layout() # Adjust spacing
     plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    plt.close(fig)
 
     return fig
 
