@@ -1,0 +1,10 @@
+{
+    "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources/",
+    "data_files": [
+        "temp/train_data.csv"
+    ],
+    "normalization_indices": "[3,43,48,50,54,73,77]",
+    "nb_attributes": 78,
+    "nb_classes": 2,
+    "missing_values": "NaN"
+}

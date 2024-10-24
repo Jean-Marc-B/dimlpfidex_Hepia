@@ -1,5 +1,5 @@
 from dimlpfidex.fidex import fidexGlo, fidexGloRules
-from dimlpfidex.dimlp import dimlpBT, dimlpPred
+from dimlpfidex.dimlp import dimlpBT, densCls
 from trainings import normalization
 from datetime import datetime
 import data_helper as dh
@@ -23,47 +23,21 @@ def update_config_file(filename: str, params: dict) -> None:
 def update_config_files(root_folder, nb_features, nb_classes):
     confpath = "config/"
     logpath = "output/logs/"
+    programs = ["dimlpbt", "denscls", "fidexglo", "fidexglorules"]
+    
 
-    dimlpbt_config_filename = confpath + "dimlpbt.json"
-    dimlpbt_config = dict()
-    dimlpbt_config["root_folder"] = root_folder
-    dimlpbt_config["nb_attributes"] = nb_features
-    dimlpbt_config["nb_classes"] = nb_classes
-    dimlpbt_config["console_file"] = (
-        f"{logpath + datetime.today().strftime('%Y%m%d%H%M%S')}_dimlpbt.log"
-    )
+    for program in programs:
+        config_filename = confpath + f"{program}.json"
+        config = dict()
+        config["root_folder"] = root_folder
+        config["nb_attributes"] = nb_features
+        config["nb_classes"] = nb_classes
+        # config["train_data_file"] = "train_data"
+        config["console_file"] = (
+            f"{logpath + datetime.today().strftime('%Y%m%d%H%M%S')}_{program}.log"
+        )
 
-    dimlppred_config_filename = confpath + "dimlppred.json"
-    dimlppred_config = dict()
-    dimlppred_config["root_folder"] = root_folder
-    dimlppred_config["nb_attributes"] = nb_features
-    dimlppred_config["nb_classes"] = nb_classes
-    dimlppred_config["console_file"] = (
-        f"{logpath + datetime.today().strftime('%Y%m%d%H%M%S')}_dimlppred.log"
-    )
-
-    fidexglorules_config_filename = confpath + "fidexglorules.json"
-    fidexglorules_config = dict()
-    fidexglorules_config["root_folder"] = root_folder
-    fidexglorules_config["nb_attributes"] = nb_features
-    fidexglorules_config["nb_classes"] = nb_classes
-    fidexglorules_config["console_file"] = (
-        f"{logpath + datetime.today().strftime('%Y%m%d%H%M%S')}_fidexglorules.log"
-    )
-
-    fidexglo_config_filename = confpath + "fidexglo.json"
-    fidexglo_config = dict()
-    fidexglo_config["root_folder"] = root_folder
-    fidexglo_config["nb_attributes"] = nb_features
-    fidexglo_config["nb_classes"] = nb_classes
-    fidexglo_config["console_file"] = (
-        f"{logpath + datetime.today().strftime('%Y%m%d%H%M%S')}_fidexglo.log"
-    )
-
-    update_config_file(dimlppred_config_filename, dimlppred_config)
-    update_config_file(dimlpbt_config_filename, dimlpbt_config)
-    update_config_file(fidexglorules_config_filename, fidexglorules_config)
-    update_config_file(fidexglo_config_filename, fidexglo_config)
+        update_config_file(config_filename, config)
 
 
 def write_single_sample(data: pd.DataFrame, labels: pd.DataFrame, n: int) -> None:
@@ -71,12 +45,11 @@ def write_single_sample(data: pd.DataFrame, labels: pd.DataFrame, n: int) -> Non
         data.iloc[n].to_frame().T
     )  # to_frame.T to avoid sample being written vertically
 
-    sample_class = labels.iloc[n]
-
+    sample_data=sample_data.assign(Lymphodema_NO=[1])
+    sample_data=sample_data.assign(Lymphodema_YES=[0])
     sample_data.to_csv("input/test_sample_data.csv", header=False, index=False)
-
-    with open("input/test_sample_class.csv", "w") as fp:
-        fp.write(str(sample_class))
+    
+    return labels.index[n]
 
 
 def preprocess_data(
@@ -110,21 +83,27 @@ def preprocess_data(
 
 
 def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
+    labels = pd.get_dummies(labels).astype('uint')
     data.to_csv("temp/train_data.csv", sep=",", header=False, index=False)
     labels.to_csv("temp/train_classes.csv", sep=",", header=False, index=False)
 
+
+def read_json_file(path: str) -> dict:
+    with open(path) as fp:
+        return json.load(fp)
+    
 
 def get_inequality(b: bool) -> str:
     return ">=" if b else "<"
 
 
-def write_results(labels: pd.DataFrame, data: dict, nb_features: int) -> None:
+def write_results(sample_ids: list[str], data: dict, nb_features: int) -> None:
     data = []
 
     for sample in sampleRules["samples"]:
         for rule in sample["rules"]:
             line = [""] * nb_features
-            line[0] = labels.index[sample["sampleId"]]
+            line[0] = sample_ids[sample["sampleId"]]
             line[1] = "idrule"  # TODO: define rule IDs
             line[2] = "risk"  # TODO: probability given by dimlpBT 1st neuron
             line[3] = (
@@ -154,28 +133,27 @@ if __name__ == "__main__":
     data, labels = preprocess_data(
         data, labels
     )  # This should ensure data are well shaped (according to Guido's directives)
+    write_train_data(data, labels)
+    # TODO: find a way to write normalized data
+    normalization("--json_config_file config/normalization.json")
 
     nb_classes = 2
     nb_features = data.shape[1]
 
-    write_train_data(data, labels)
-    write_single_sample(data, labels, 10)
+    sample_id = write_single_sample(data, labels, 10)
     update_config_files(abspath, nb_features, nb_classes)
+    
 
-    # normalization("--json_config_file config/normalization.json")
-    # dimlpBT("--json_config_file config/dimlpbt.json")
+    # dimlpBT("--json_config_file config/dimlpbt.json") # TODO: re-add 10 for the second hidden layer
     # fidexGloRules("--json_config_file config/fidexglorules.json")
-    # densCls("--json_config_file config/dimlppred.json") # TODO: adapt this to densCls
-    # fidexGlo("--json_config_file config/fidexglo.json")
+    densCls("--json_config_file config/denscls.json") 
+    fidexGlo("--json_config_file config/fidexglo.json")
+    
+    #TODO denormalize rules
+    sampleRules = read_json_file("temp/explanation.json")
+    # TODO set rules ids
+    # globalRules = read_json_file("temp/global_rules.json")
+    write_results([sample_id], sampleRules, nb_features)
+    
+    print('OK')
 
-    with open("temp/explanation.json") as fp:
-        sampleRules = json.load(fp)
-
-    with open("temp/global_rules.json") as fp:
-        globalRules = json.load(fp)
-
-    write_results(labels, sampleRules, nb_features)
-
-    # globalRulesSet = set(globalRules.values())
-
-    # TODO normalization file to be generated (ask JM) (for BT and GloRules)

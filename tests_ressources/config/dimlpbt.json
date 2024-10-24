@@ -1,18 +1,15 @@
 {
     "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources/",
-    "train_data_file": "temp/train_data.csv",
+    "train_data_file": "temp/train_data_normalized.csv",
     "train_class_file": "temp/train_classes.csv",
     "train_pred_outfile": "temp/dimlpBTTrain.out",
     "test_pred_outfile": "temp/dimlpBTTest.out",
     "weights_outfile": "temp/dimlpBT.wts",
-    "console_file": "output/logs/20241023152409_dimlpbt.log",
+    "console_file": "output/logs/20241024153415_dimlpbt.log",
     "hidden_layers_outfile": "temp/hidden_layers.out",
     "stats_file": "temp/dimlpBT_stats.out",
     "nb_attributes": 78,
     "nb_classes": 2,
     "nb_dimlp_nets": 30,
-    "hidden_layers": [
-        10
-    ],
     "nb_epochs": 300
 }
