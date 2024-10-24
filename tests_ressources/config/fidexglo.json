@@ -7,7 +7,7 @@
     "test_pred_file": "input/test_sample_pred.csv",
     "weights_file": "temp/dimlpBT.wts",
     "global_rules_file": "temp/global_rules.json",
-    "console_file": "output/logs/20241023152409_fidexglo.log",
+    "console_file": "output/logs/20241024153415_fidexglo.log",
     "nb_attributes": 78,
     "nb_classes": 2,
     "explanation_file": "temp/explanation.json",
