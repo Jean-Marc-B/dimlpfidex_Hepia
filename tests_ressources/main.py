@@ -98,26 +98,22 @@ def get_inequality(b: bool) -> str:
 
 
 def write_results(sample_ids: list[str], data: dict, nb_features: int) -> None:
-    data = []
+    res = []
 
-    for sample in sampleRules["samples"]:
+    for sample in data["samples"]:
         for rule in sample["rules"]:
-            line = [""] * nb_features
+            line = [""] * (nb_features + 5)
             line[0] = sample_ids[sample["sampleId"]]
             line[1] = "idrule"  # TODO: define rule IDs
             line[2] = "risk"  # TODO: probability given by dimlpBT 1st neuron
-            line[3] = (
-                "confidence interval"  # TODO: std. dev. of dimlpCls (ask JM) (each dimlpBT network is used in dimlpCls)
-            )
+            line[3] = "confidence interval"  # TODO: std. dev. of dimlpCls (ask JM) (each dimlpBT network is used in dimlpCls)
             line[4] = rule["coveringSize"]
             for antecedant in rule["antecedents"]:
-                line[antecedant["attribute"] + 4] = get_inequality(
-                    antecedant["inequality"]
-                ) + str(antecedant["value"])
+                line[antecedant["attribute"] + 5] = get_inequality(antecedant["inequality"]) + str(antecedant["value"])
 
-            data.append(line)
+            res.append(line)
 
-    write_csv(data)
+    write_csv(res)
 
 
 def write_csv(data: list[list]) -> None:
@@ -125,35 +121,50 @@ def write_csv(data: list[list]) -> None:
         wr = csv.writer(fp, quoting=csv.QUOTE_ALL)
         wr.writerows(data)
 
+def global_rule_id(rule):
+    global_rules = read_json_file("temp/global_rules_denormalized.json")
+
+    for i,global_rule in enumerate(global_rules["rules"]):
+        if global_rule == rule:
+            print("match")
+            return i
+        
+    return -1
 
 if __name__ == "__main__":
     abspath = os.path.abspath(os.path.dirname(__file__)) + "/"
     data, labels = dh.obtain_data("dataset/clinical_complete_rev1.csv")
+    # TODO: compute and add BMI (height & weight, beware of units)
 
     data, labels = preprocess_data(
         data, labels
     )  # This should ensure data are well shaped (according to Guido's directives)
+    
     write_train_data(data, labels)
-    # TODO: find a way to write normalized data
     normalization("--json_config_file config/normalization.json")
 
     nb_classes = 2
     nb_features = data.shape[1]
 
+    # TODO: there will be missing values in the real samples
     sample_id = write_single_sample(data, labels, 10)
     update_config_files(abspath, nb_features, nb_classes)
     
 
     # dimlpBT("--json_config_file config/dimlpbt.json") # TODO: re-add 10 for the second hidden layer
     # fidexGloRules("--json_config_file config/fidexglorules.json")
-    densCls("--json_config_file config/denscls.json") 
-    fidexGlo("--json_config_file config/fidexglo.json")
+    # densCls("--json_config_file config/denscls.json") 
+    # fidexGlo("--json_config_file config/fidexglo.json")
+
+    normalization("--json_config_file config/denormalization.json")
     
     #TODO denormalize rules
-    sampleRules = read_json_file("temp/explanation.json")
-    # TODO set rules ids
-    # globalRules = read_json_file("temp/global_rules.json")
-    write_results([sample_id], sampleRules, nb_features)
-    
-    print('OK')
+    samples_rules = read_json_file("temp/explanation.json")
 
+    for sample in samples_rules["samples"]:
+        for rule in sample["rules"]:
+            global_rule_id(rule)
+
+    # write_results([sample_id], samples_rules, nb_features)
+
+    print('OK')

@@ -3,6 +3,7 @@
     "data_files": [
         "temp/train_data.csv"
     ],
+    "output_normalization_file": "temp/normalization_stats.txt",
     "normalization_indices": "[3,43,48,50,54,73,77]",
     "nb_attributes": 78,
     "nb_classes": 2,
