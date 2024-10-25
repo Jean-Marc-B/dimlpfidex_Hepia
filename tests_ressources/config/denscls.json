@@ -1,6 +1,6 @@
 {
     "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources/",
-    "train_data_file": "temp/train_data.csv",
+    "train_data_file": "temp/train_data_normalized.csv",
     "train_class_file": "temp/train_classes.csv",
     "test_data_file": "input/test_sample_data.csv",
     "weights_file": "temp/dimlpBT.wts",
@@ -9,5 +9,5 @@
     "nb_attributes": 78,
     "nb_classes": 2,
     "test_pred_outfile": "input/test_sample_pred.csv",
-    "console_file": "output/logs/20241024153415_denscls.log"
+    "console_file": "output/logs/20241025153501_denscls.log"
 }
