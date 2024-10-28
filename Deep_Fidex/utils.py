@@ -652,8 +652,8 @@ def compute_histograms(nb_samples, data, size1D, nb_channels, CNNModel, nb_class
     - nb_channels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - CNNModel: The CNN model used for making predictions.
     - nb_classes: The number of classes for classification.
-    - filter_size: The size of the filter applied to the image.
-    - stride: The stride value for moving the filter across the image.
+    - filter_size: The size of the filter applied to the image (height, width), can be an array of tuples if we apply several filters.
+    - stride: The stride value for moving the filter across the image (verticaly, horizontaly).
     - nb_bins: The number of bins used for computing the histogram.
 
     Returns:
@@ -684,8 +684,8 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     Parameters:
     - CNNModel: The CNN model used for predicting the filtered images.
     - image: The input image to be processed (2D grayscale or 3D RGB).
-    - filter_size: The size of the filter applied to the image (height, width).
-    - stride: The stride value for moving the filter across the image.
+    - filter_size: The size of the filter applied to the image (height, width), can be an array of tuples if we apply several filters.
+    - stride: The stride value for moving the filter across the image (verticaly, horizontaly).
 
     Returns:
     - filtered_images: An array of filtered images created by applying the filter at different positions.
@@ -696,30 +696,35 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     image_size = [image.shape[0], image.shape[1]]
     filtered_images = []
     positions = []  # To keep the position of each filter
+    nb_areas_per_filter = [] # Keep track of the number of areas for each filter
 
-    current_pixel = [0, 0]
-    while current_pixel[0] + filter_size[0] <= image_size[0]:
-        while current_pixel[1] + filter_size[1] <= image_size[1]:
-            # Create filtered image
-            filtered_img = np.zeros_like(image)
-            filtered_img[current_pixel[0]:current_pixel[0]+filter_size[0],
-                         current_pixel[1]:current_pixel[1]+filter_size[1]] = \
-                image[current_pixel[0]:current_pixel[0]+filter_size[0],
-                      current_pixel[1]:current_pixel[1]+filter_size[1]]
-            filtered_images.append(filtered_img)
-            positions.append((current_pixel[0], current_pixel[1]))
+    for filter_sz, strd in zip(filter_size, stride):
+        nb_areas = 0
+        current_pixel = [0, 0]
+        while current_pixel[0] + filter_sz[0] <= image_size[0]:
+            while current_pixel[1] + filter_sz[1] <= image_size[1]:
+                # Create filtered image
+                filtered_img = np.zeros_like(image)
+                filtered_img[current_pixel[0]:current_pixel[0]+filter_sz[0],
+                            current_pixel[1]:current_pixel[1]+filter_sz[1]] = \
+                    image[current_pixel[0]:current_pixel[0]+filter_sz[0],
+                        current_pixel[1]:current_pixel[1]+filter_sz[1]]
+                filtered_images.append(filtered_img)
+                positions.append((current_pixel[0], current_pixel[1]))
+                nb_areas += 1
 
-            current_pixel[1] += stride  # Move horizontally
+                current_pixel[1] += strd[1]  # Move horizontally
 
-        current_pixel[1] = 0  # reset the column
-        current_pixel[0] += stride  # Move vertically
+            current_pixel[1] = 0  # reset the column
+            current_pixel[0] += strd[0]  # Move vertically
+        nb_areas_per_filter.append(nb_areas)
 
     filtered_images = np.array(filtered_images)
 
     # Get predictions
     predictions = CNNModel.predict(filtered_images, verbose=0)
 
-    return filtered_images, predictions, positions
+    return filtered_images, predictions, positions, nb_areas_per_filter
 
 ###############################################################
 # get probability thresholds
@@ -748,8 +753,8 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
     - CNNModel: The CNN model used for predicting filtered images.
     - image: The input image to be processed.
     - nb_classes: The number of classes for classification.
-    - filter_size: The size of the filter applied to the image (height, width).
-    - stride: The stride value for moving the filter across the image.
+    - filter_size: The size of the filter applied to the image (height, width), can be an array of tuples if we apply several filters.
+    - stride: The stride value for moving the filter across the image (verticaly, horizontaly).
     - nb_bins: The number of bins used for computing the histogram.
 
     Returns:
@@ -757,7 +762,7 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
       falling into each bin.
     """
 
-    filtered_images, predictions, _ = generate_filtered_images_and_predictions(
+    filtered_images, predictions, _, _ = generate_filtered_images_and_predictions(
         CNNModel, image, filter_size, stride)
 
     probability_thresholds = getProbabilityThresholds(nb_bins)
@@ -784,8 +789,8 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
     Parameters:
     - CNNModel: The trained CNN model used to make predictions on filtered areas of the image.
     - image: The input image (2D grayscale or 3D RGB) to be processed and highlighted.
-    - filter_size: A tuple representing the size (height, width) of the filter applied on the image.
-    - stride: The stride value used to slide the filter across the image.
+    - filter_size: A tuple or a list of tuples representing the size (height, width) of the filter applied on the image.
+    - stride: The stride value used to slide the filter across the image (verticaly, horizontaly).
     - rule: An object containing antecedents which specify conditions (class ID and prediction threshold)
             for highlighting areas based on CNN predictions.
     - classes: A list or dictionary that maps class IDs to class names for better interpretability.
@@ -796,7 +801,7 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
         2. The image with all filters applied based on the rule's antecedents.
         3. Individual images showing the highlighted areas for each antecedent separately.
     """
-    filtered_images, predictions, positions = generate_filtered_images_and_predictions(
+    filtered_images, predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
     CNNModel, image, filter_size, stride)
 
     # Convert to RGB if necessary
@@ -814,6 +819,11 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
 
     individual_maps = []
 
+    # Identify current filter size
+    filter_index = 0
+    filter_start_idx = 0
+    current_filter_size = filter_size[filter_index]
+
     for antecedent in rule.antecedents: # For each antecedent
         # Get the class id and prediction threshold of this antecedent
         match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
@@ -825,14 +835,20 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
 
         individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
 
-        # For each area
-        for (prediction, position) in zip(predictions, positions):
+        # For each area (it's prediction, position and filter size)
+        for i, (prediction, position) in enumerate(zip(predictions, positions)):
+            # Update filter size if we exceed current limit
+            if i >= filter_start_idx + nb_areas_per_filter[filter_index]:
+                filter_start_idx += nb_areas_per_filter[filter_index]
+                filter_index += 1
+                current_filter_size = filter_size[filter_index]
+
             class_prob = prediction[class_id] # Prediction of the area
 
             # Check if the prediction with this area satisfies the antecedent
             if (class_prob >= pred_threshold):
                 top_left = position
-                bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
+                bottom_right = (position[0] + current_filter_size[0], position[1] + current_filter_size[1])
 
                 # Accumulate the intensity of the activation in the individual color map
                 individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
@@ -917,10 +933,7 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
             class_id = int(match.group(1))
             pred_threshold = match.group(2)
             class_name = classes[class_id]  # Get the class name
-        if antecedent.inequality:
-            ineq = ">="
-        else:
-            ineq = "<"
+        ineq = ">=" if antecedent.inequality else "<"
 
         axes[i].imshow(individual_image)
         axes[i].set_title(f"Filter for P_{class_name}>={pred_threshold}{ineq}{antecedent.value}")

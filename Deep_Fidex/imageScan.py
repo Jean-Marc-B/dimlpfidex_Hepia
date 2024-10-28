@@ -123,8 +123,15 @@ resnet = False
 nbIt = 4
 
 # For histogram computation
-filter_size = [7,7] # Size of filter applied to the image
-stride = 1 # shift between each filter
+filter_size = [[3,3],[7,7],[9,9]] # Size of filter(s) applied to the image
+if np.asarray(filter_size).ndim == 1:
+    filter_size = [filter_size]
+# Exemples : 7x7 : [7,7] 5x5 and 7x7 : [[5,5],[7,7]]
+stride = [[1,1],[1,1],[1,1]] # shift between each filter (need to specify one per filter size)
+if np.asarray(stride).ndim == 1:
+    stride = [stride]
+if len(stride) != len(filter_size):
+    raise ValueError("Error : There is not the same amout of strides and filter sizes.")
 nb_bins = 9 # Number of bins wanted (ex: NProb>=0.1, NProb>=0.2, etc.)
 nb_histogram_attributes = nb_classes*nb_bins
 
@@ -280,7 +287,8 @@ if get_images:
     os.makedirs(rules_folder)
 
     # For each rule we get filter images for train samples covering the rule
-    for id,rule in enumerate(global_rules[0:10]):
+    for id,rule in enumerate(global_rules):
+
         rule.include_X = False
         for ant in rule.antecedents:
             ant.attribute = attributes[ant.attribute] # Get true name of attribute
@@ -310,7 +318,7 @@ if get_images:
             file.write(str(rule_to_print))
 
         # Create full image with all filters and save it
-        for img_id in rule.covered_samples:
+        for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule, classes)
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
