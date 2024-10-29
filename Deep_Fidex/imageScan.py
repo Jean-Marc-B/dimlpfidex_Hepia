@@ -26,7 +26,7 @@ import shutil
 import re
 import copy
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
-from utils import trainCNN, compute_histograms, output_data, getRules, highlight_area, getProbabilityThresholds
+from utils import trainCNN, compute_histograms, output_data, getRules, highlight_area, getProbabilityThresholds, get_heat_maps
 
 np.random.seed(seed=None)
 
@@ -42,10 +42,11 @@ start_time = time.time()
 
 # What to launch
 with_train_cnn = False
-with_hist_computation = True
-with_train_second_model = True
-with_global_rules = True
-get_images = True
+with_hist_computation = False
+with_train_second_model = False
+with_global_rules = False
+get_images = False
+simple_heat_map = True # Only evaluation on patches
 
 
 ##############################################################################
@@ -92,7 +93,7 @@ elif dataset == "CIFAR":     # for Cifar images
         9: "truck",
     }
 
-scan_folder = "Scan/"
+scan_folder = "ScanFull/"
 
 ##############################################################################
 
@@ -146,7 +147,8 @@ dropout_dim = 0.9
 # Folder for output images
 rules_folder = base_folder + scan_folder + "Rules"
 
-
+# Folder for heat maps
+heat_maps_folder = base_folder + scan_folder + "Heat_maps"
 ##############################################################################
 
 # Get data
@@ -323,6 +325,19 @@ if get_images:
             img = X_train[img_id]
             highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule, classes)
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
+
+
+if simple_heat_map: # Only for one filter !
+
+    # Create heat map folder
+    if os.path.exists(heat_maps_folder):
+        shutil.rmtree(heat_maps_folder)
+    os.makedirs(heat_maps_folder)
+
+    for id,img in enumerate(X_test[0:100]):
+        heat_maps_img = get_heat_maps(CNNModel, img, filter_size, stride, probability_thresholds, classes)
+        heat_maps_img.savefig(f"{heat_maps_folder}/sample_{id}.png")
+
 
 end_time = time.time()
 full_time = end_time - start_time
