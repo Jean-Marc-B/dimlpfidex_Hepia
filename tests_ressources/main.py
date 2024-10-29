@@ -4,7 +4,7 @@ from trainings import normalization
 from datetime import datetime
 import data_helper as dh
 import pandas as pd
-import hashlib as hash
+import math
 import json
 import csv
 import os
@@ -137,6 +137,23 @@ def write_results(
     write_csv(res)
 
 
+def compute_confidence_interval() -> tuple[float, float]:
+    dimlpBT_config_path = os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), "config/dimlpbt.json"
+    )
+
+    dimlpBT_config = read_json_file(dimlpBT_config_path)
+
+    std = -1  # TODO
+    avg = -1  # TODO
+    nb_nets = dimlpBT_config["nb_dimlp_nets"]
+
+    upper = avg - (1.96 / math.sqrt(nb_nets)) * std
+    lower = avg + (1.96 / math.sqrt(nb_nets)) * std
+
+    return (lower, upper)
+
+
 def write_csv(data: list[list]) -> None:
     with open("output/result.csv", "w") as fp:
         wr = csv.writer(fp, quoting=csv.QUOTE_ALL)
@@ -195,7 +212,7 @@ if __name__ == "__main__":
 
     samples_rules = read_json_file("temp/explanation.json")
 
-    # TODO: do we add generated rules with the global rules ? 
+    # TODO: do we add generated rules with the global rules ?
     used_rules_id = [
         global_rule_id(rule)
         for sample in samples_rules["samples"]
@@ -204,6 +221,7 @@ if __name__ == "__main__":
 
     normalization("--json_config_file config/denormalization.json")
 
+    # read prediction ()
     write_results(used_rules_id, samples_id, samples_rules, nb_features)
 
     print("OK")
