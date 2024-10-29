@@ -5,7 +5,7 @@
     ],
     "output_normalization_file": "temp/normalization_stats.txt",
     "normalization_indices": "[3,43,48,50,54,73,77]",
-    "nb_attributes": 78,
+    "nb_attributes": 79,
     "nb_classes": 2,
     "missing_values": "NaN"
 }

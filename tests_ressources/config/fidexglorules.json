@@ -1,10 +1,10 @@
 {
-    "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources/",
+    "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources",
     "train_data_file": "temp/train_data_normalized.csv",
     "train_pred_file": "temp/dimlpBTTrain.out",
     "train_class_file": "temp/train_classes.csv",
-    "console_file": "output/logs/20241025153501_fidexglorules.log",
-    "nb_attributes": 78,
+    "console_file": "output/logs20241029115312_fidexglorules.log",
+    "nb_attributes": 79,
     "nb_classes": 2,
     "weights_file": "temp/dimlpBT.wts",
     "global_rules_outfile": "temp/global_rules.json",
