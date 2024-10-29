@@ -92,6 +92,7 @@ elif dataset == "CIFAR":     # for Cifar images
         9: "truck",
     }
 
+scan_folder = "Scan/"
 
 ##############################################################################
 
@@ -102,23 +103,23 @@ train_data_file = base_folder + "trainData.txt"
 train_class_file = base_folder + "trainClass.txt"
 test_data_file = base_folder + "testData.txt"
 test_class_file = base_folder + "testClass.txt"
-model_file = base_folder + "Scan/scanModel.keras"
-train_pred_file = base_folder + "Scan/train_pred.out"
-test_pred_file = base_folder + "Scan/test_pred.out"
-train_histogram_file = base_folder + "Scan/train_hist.txt"
-test_histogram_file = base_folder + "Scan/test_hist.txt"
+model_file = base_folder + scan_folder + "scanModel.keras"
+train_pred_file = base_folder + scan_folder + "train_pred.out"
+test_pred_file = base_folder + scan_folder + "test_pred.out"
+train_histogram_file = base_folder + scan_folder + "train_hist.txt"
+test_histogram_file = base_folder + scan_folder + "test_hist.txt"
 
-second_model_stats = base_folder + "Scan/second_model_stats.txt"
-second_model_train_pred = base_folder + "Scan/second_model_train_pred.txt"
-second_model_test_pred = base_folder + "Scan/second_model_test_pred.txt"
-second_model_output_rules = base_folder + "Scan/second_model_rules.rls"
+second_model_stats = base_folder + scan_folder + "second_model_stats.txt"
+second_model_train_pred = base_folder + scan_folder + "second_model_train_pred.txt"
+second_model_test_pred = base_folder + scan_folder + "second_model_test_pred.txt"
+second_model_output_rules = base_folder + scan_folder + "second_model_rules.rls"
 
-global_rules_file = base_folder + "Scan/globalRules.json"
-attributes_file = base_folder + "Scan/attributes.txt"
+global_rules_file = base_folder + scan_folder + "globalRules.json"
+attributes_file = base_folder + scan_folder + "attributes.txt"
 
 # If we train :
-model_checkpoint_weights = base_folder + "Scan/weightsModel.weights.h5"
-model_stats = base_folder + "Scan/stats_model.txt"
+model_checkpoint_weights = base_folder + scan_folder + "weightsModel.weights.h5"
+model_stats = base_folder + scan_folder + "stats_model.txt"
 resnet = False
 nbIt = 4
 
@@ -143,7 +144,7 @@ dropout_hyp = 0.9
 dropout_dim = 0.9
 
 # Folder for output images
-rules_folder = base_folder + "Scan/Rules"
+rules_folder = base_folder + scan_folder + "Rules"
 
 
 ##############################################################################
