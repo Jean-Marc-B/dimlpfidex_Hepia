@@ -184,23 +184,43 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index)
   int k;
   const float *ptrOut;
 
-  for (k = 0; k < NbOut; k++)
+  // 2d Array saving all classes outputs for each network
+  std::vector<std::vector<float>> classesOutputPerNetwork(NbDimlpNets, std::vector<float>(NbOut));
+  std::vector<float> stds(NbOut, 0);
+
+  for (k = 0; k < NbOut; k++) {
     GlobalOut[k] = 0;
+  }
 
   // Perform forward pass for each Dimlp network in the ensemble
   for (int n = 0; n < NbDimlpNets; n++) {
     VectDimlp[n]->ForwardOneExample1(data, index);
-
     ptrOut = (VectDimlp[n]->GetLayer(NbLayers - 2))->GetUp();
 
     // Accumulate the outputs of each network
-    for (k = 0; k < NbOut; k++)
+    for (k = 0; k < NbOut; k++) {
       GlobalOut[k] += ptrOut[k];
+      classesOutputPerNetwork[n][k] = ptrOut[k];
+      std::cout << classesOutputPerNetwork[n][k] << " ";
+    }
+
+    std::cout << std::endl;
   }
 
   // Average the accumulated outputs to get the final global output
-  for (k = 0; k < NbOut; k++)
+  for (k = 0; k < NbOut; k++) {
     GlobalOut[k] = GlobalOut[k] / (float)NbDimlpNets;
+  }
+
+  // compute stds
+  for (int class_index = 0; class_index < NbOut; class_index++) {
+    for (int dimlp_net_index = 0; dimlp_net_index < NbDimlpNets; dimlp_net_index++) {
+      stds[class_index] += pow(classesOutputPerNetwork[dimlp_net_index][class_index] - GlobalOut[k], 2);
+    }
+
+    stds[class_index] = sqrt(stds[class_index] * (1.0 / NbDimlpNets));
+    std::cout << "Standard deviation for class #" << class_index << " is " << stds[class_index] << std::endl;
+  }
 }
 
 ///////////////////////////////////////////////////////////////////
