@@ -594,7 +594,7 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
         model.add(Dense(256, activation='sigmoid'))
         model.add(Dropout(0.3))
 
-        model.add(Dense(nb_classes, activation='sigmoid'))
+        model.add(Dense(nb_classes, activation='softmax'))
 
         model.summary()
 
