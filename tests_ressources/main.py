@@ -117,16 +117,17 @@ def write_results(
 ) -> None:
     res = []
 
+    lower_interval, upper_interval = load_confidence_interval()
+
     for sample in data["samples"]:
         for i, rule in enumerate(sample["rules"]):
             line = [""] * (nb_features + 5)
             line[0] = sample_ids[sample["sampleId"]]
             line[1] = used_rules_id[i]
             line[2] = "risk"  # TODO: probability given by dimlpBT 1st neuron
-            line[3] = (
-                "confidence interval"  # TODO: std. dev. of dimlpCls (ask JM) (each dimlpBT network is used in dimlpCls)
-            )
-            line[4] = rule["coveringSize"]
+            line[3] = lower_interval
+            line[4] = upper_interval
+            line[5] = rule["coveringSize"]
             for antecedant in rule["antecedents"]:
                 line[antecedant["attribute"] + 5] = get_inequality(
                     antecedant["inequality"]
@@ -137,21 +138,9 @@ def write_results(
     write_csv(res)
 
 
-def compute_confidence_interval() -> tuple[float, float]:
-    dimlpBT_config_path = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), "config/dimlpbt.json"
-    )
-
-    dimlpBT_config = read_json_file(dimlpBT_config_path)
-
-    std = -1  # TODO
-    avg = -1  # TODO
-    nb_nets = dimlpBT_config["nb_dimlp_nets"]
-
-    upper = avg - (1.96 / math.sqrt(nb_nets)) * std
-    lower = avg + (1.96 / math.sqrt(nb_nets)) * std
-
-    return (lower, upper)
+def load_confidence_interval() -> tuple[float, float]:
+    data = read_json_file(os.path.join(os.path.abspath(os.path.dirname(__file__)), "stds.json"))
+    return data
 
 
 def write_csv(data: list[list]) -> None:
