@@ -213,14 +213,31 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index)
   }
 
   // compute stds
+  Json jsonData;
+
   for (int class_index = 0; class_index < NbOut; class_index++) {
+    float current_class_avg = GlobalOut[class_index];
+
     for (int dimlp_net_index = 0; dimlp_net_index < NbDimlpNets; dimlp_net_index++) {
-      stds[class_index] += pow(classesOutputPerNetwork[dimlp_net_index][class_index] - GlobalOut[k], 2);
+      float currentNetworkOutput = classesOutputPerNetwork[dimlp_net_index][class_index];
+      stds[class_index] += pow(currentNetworkOutput - current_class_avg, 2);
     }
 
-    stds[class_index] = sqrt(stds[class_index] * (1.0 / NbDimlpNets));
+    stds[class_index] = sqrt(stds[class_index] * (1.0f / (float)NbDimlpNets));
+
+    jsonData[class_index] = stds[class_index];
+
     std::cout << "Standard deviation for class #" << class_index << " is " << stds[class_index] << std::endl;
   }
+
+  std::string filename = "stds.json";
+  std::ofstream ofs(filename);
+
+  if (!ofs.is_open() || ofs.fail()) {
+    throw FileNotFoundError("JSON file to be written named '" + filename + "' couldn't be opened, cannot proceed.");
+  }
+
+  ofs << std::setw(4) << jsonData << std::endl;
 }
 
 ///////////////////////////////////////////////////////////////////

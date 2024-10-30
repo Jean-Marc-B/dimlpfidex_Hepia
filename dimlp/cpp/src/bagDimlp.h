@@ -3,6 +3,10 @@
 
 #include "dimlp.h"
 #include "virtHyp.h"
+#include "../../../json/single_include/nlohmann/json.hpp"
+
+using Json = nlohmann::json;
+
 
 /**
  * @brief Implements a bagging ensemble of Dimlp neural networks.
