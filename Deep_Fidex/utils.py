@@ -676,7 +676,18 @@ def compute_histograms(nb_samples, data, size1D, nb_channels, CNNModel, nb_class
 
 ###############################################################
 
-def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride):
+def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride):
+    sums = np.zeros((nb_samples, nb_stats_attributes))
+    for sample_id in range(nb_samples):
+        image = data[sample_id]
+        image = image.reshape(size1D, size1D, nb_channels)
+        activations = generate_filtered_images_and_predictions(
+        CNNModel, image, filter_size, stride, intermediate_model)
+        sums[sample_id] = np.sum(activations, axis=0)
+
+    return sums
+
+def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride, intermediate_model=None):
 
     """
     Generates filtered versions of an image by applying a sliding filter and predicts each filtered image using the CNN model.
@@ -722,9 +733,13 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     filtered_images = np.array(filtered_images)
 
     # Get predictions
-    predictions = CNNModel.predict(filtered_images, verbose=0)
+    if intermediate_model is not None:
+        predictions = intermediate_model.predict(filtered_images, verbose=0)
+        return predictions
 
-    return filtered_images, predictions, positions, nb_areas_per_filter
+    else:
+        predictions = CNNModel.predict(filtered_images, verbose=0)
+        return filtered_images, predictions, positions, nb_areas_per_filter
 
 ###############################################################
 # get probability thresholds

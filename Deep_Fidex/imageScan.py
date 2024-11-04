@@ -25,8 +25,9 @@ import numpy as np
 import shutil
 import re
 import copy
+from tensorflow.keras import Model
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
-from utils import trainCNN, compute_histograms, output_data, getRules, highlight_area, getProbabilityThresholds, get_heat_maps
+from utils import trainCNN, compute_histograms, compute_activation_sums, output_data, getRules, highlight_area, getProbabilityThresholds, get_heat_maps
 
 np.random.seed(seed=None)
 
@@ -41,12 +42,30 @@ start_time = time.time()
 
 
 # What to launch
+
+# Training CNN:
 with_train_cnn = False
-with_hist_computation = False
+
+# Stats computation and second model training:
+histogram_stats = True
+activation_layer_stats = False
+
+if histogram_stats == activation_layer_stats:
+    raise ValueError("Error, you need to specify one of histogram_stats and activation_layer_stats.")
+
+
+with_stats_computation = False
 with_train_second_model = False
+
+
+
+
+# Rule computation:
 with_global_rules = False
-get_images = False
-simple_heat_map = True # Only evaluation on patches
+
+# Image generation:
+get_images = True # With histograms
+simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
@@ -93,7 +112,11 @@ elif dataset == "CIFAR":     # for Cifar images
         9: "truck",
     }
 
-scan_folder = "ScanFull/"
+scan_folder = "Scan/"
+if histogram_stats:
+    scan_folder += "Histograms/"
+elif activation_layer_stats:
+    scan_folder += "Activations_Sum/"
 
 ##############################################################################
 
@@ -107,8 +130,13 @@ test_class_file = base_folder + "testClass.txt"
 model_file = base_folder + scan_folder + "scanModel.keras"
 train_pred_file = base_folder + scan_folder + "train_pred.out"
 test_pred_file = base_folder + scan_folder + "test_pred.out"
-train_histogram_file = base_folder + scan_folder + "train_hist.txt"
-test_histogram_file = base_folder + scan_folder + "test_hist.txt"
+
+if histogram_stats:
+    train_stats_file = base_folder + scan_folder + "train_hist.txt"
+    test_stats_file = base_folder + scan_folder + "test_hist.txt"
+elif activation_layer_stats:
+    train_stats_file = base_folder + scan_folder + "train_activation_sum.txt"
+    test_stats_file = base_folder + scan_folder + "test_activation_sum.txt"
 
 second_model_stats = base_folder + scan_folder + "second_model_stats.txt"
 second_model_train_pred = base_folder + scan_folder + "second_model_train_pred.txt"
@@ -124,18 +152,20 @@ model_stats = base_folder + scan_folder + "stats_model.txt"
 resnet = False
 nbIt = 4
 
-# For histogram computation
-filter_size = [[3,3],[7,7],[9,9]] # Size of filter(s) applied to the image
+# For stats computation
+filter_size = [[7,7]] # Size of filter(s) applied to the image
 if np.asarray(filter_size).ndim == 1:
     filter_size = [filter_size]
 # Exemples : 7x7 : [7,7] 5x5 and 7x7 : [[5,5],[7,7]]
-stride = [[1,1],[1,1],[1,1]] # shift between each filter (need to specify one per filter size)
+stride = [[1,1]] # shift between each filter (need to specify one per filter size)
 if np.asarray(stride).ndim == 1:
     stride = [stride]
 if len(stride) != len(filter_size):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
-nb_bins = 9 # Number of bins wanted (ex: NProb>=0.1, NProb>=0.2, etc.)
-nb_histogram_attributes = nb_classes*nb_bins
+
+if histogram_stats:
+    nb_bins = 9 # Number of bins wanted (ex: NProb>=0.1, NProb>=0.2, etc.)
+    nb_stats_attributes = nb_classes*nb_bins
 
 # For Fidex
 hiknot = 5
@@ -187,37 +217,72 @@ if with_train_cnn:
 
 
 CNNModel = keras.saving.load_model(model_file)
+if activation_layer_stats:
+    input_channels = 3 if resnet else nb_channels
+    dummy_input = np.zeros((1, size1D, size1D, input_channels))
+    _ = CNNModel(dummy_input)
+    flatten_layer_output = CNNModel.get_layer("flatten").output
+    intermediate_model = Model(inputs=CNNModel.inputs, outputs=flatten_layer_output)
+    nb_stats_attributes = intermediate_model.output_shape[1]
 
 
 ##############################################################################
 # Compute histograms
+if with_stats_computation:
+    if histogram_stats:
+        print("\nComputing train histograms...")
 
-if with_hist_computation:
+        # Get histograms for each train sample
+        #nb_train_samples = Y_train.shape[0]
+        nb_train_samples = 100
 
-    print("\nComputing train histograms...")
+        train_histograms = compute_histograms(nb_train_samples, X_train, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
+        print("\nTrain histograms computed.\n")
 
-    # Get histograms for each train sample
-    #nb_train_samples = Y_train.shape[0]
-    nb_train_samples = 100
+        print("Computing test histograms...")
 
-    train_histograms = compute_histograms(nb_train_samples, X_train, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
-    print("\nTrain histograms computed.\n")
+        # Get histograms for each test sample
+        #nb_test_samples = Y_test.shape[0]
+        nb_test_samples = 100
+        test_histograms = compute_histograms(nb_test_samples, X_test, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
 
-    print("Computing test histograms...")
+        print("\nTest histograms computed.")
+        # Save in histograms in .npy file
+        print("\nSaving histograms...")
+        train_histograms = train_histograms.reshape(nb_train_samples, nb_stats_attributes)
+        test_histograms = test_histograms.reshape(nb_test_samples, nb_stats_attributes)
+        output_data(train_histograms, train_stats_file)
+        output_data(test_histograms, test_stats_file)
+        print("Histograms saved.")
 
-    # Get histograms for each test sample
-    #nb_test_samples = Y_test.shape[0]
-    nb_test_samples = 100
-    test_histograms = compute_histograms(nb_test_samples, X_test, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
+    elif activation_layer_stats:
 
-    print("\nTest histograms computed.")
-    # Save in histograms in .npy file
-    print("\nSaving histograms...")
-    train_histograms = train_histograms.reshape(nb_train_samples, nb_histogram_attributes)
-    test_histograms = test_histograms.reshape(nb_test_samples, nb_histogram_attributes)
-    output_data(train_histograms, train_histogram_file)
-    output_data(test_histograms, test_histogram_file)
-    print("Histograms saved.")
+        print("\nComputing train sums of activation layer patches...")
+        # Get sums for each train sample
+        #nb_train_samples = Y_train.shape[0]
+        nb_train_samples = 100
+        train_sums = compute_activation_sums(nb_train_samples, X_train, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
+        # Normalization
+        mean = np.mean(train_sums, axis=0)
+        std = np.std(train_sums, axis=0)
+        train_sums = (train_sums - mean) / std
+        print("\nTrain sum of activation layer patches computed.\n")
+
+        print("\nComputing test sums of activation layer patches...")
+        # Get sums for each test sample
+        #nb_test_samples = Y_test.shape[0]
+        nb_test_samples = 100
+        test_sums = compute_activation_sums(nb_test_samples, X_test, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
+        # Normalization
+        test_sums = (test_sums - mean) / std
+        print("\nTest sum of activation layer patches computed.\n")
+
+        print("\nSaving sums...")
+        #train_sums = train_sums.reshape(nb_train_samples, nb_stats_attributes)
+        #test_sums = test_sums.reshape(nb_test_samples, nb_stats_attributes)
+        output_data(train_sums, train_stats_file)
+        output_data(test_sums, test_stats_file)
+        print("Sums saved.")
 
 ##############################################################################
 # Train second model with histograms
@@ -229,15 +294,15 @@ if with_train_second_model:
 
     # Train model
     command = (
-        f'--train_data_file {train_histogram_file} '
+        f'--train_data_file {train_stats_file} '
         f'--train_class_file {train_class_file_temp} '
-        f'--test_data_file {test_histogram_file} '
+        f'--test_data_file {test_stats_file} '
         f'--test_class_file {test_class_file_temp} '
         f'--stats_file {second_model_stats} '
         f'--train_pred_outfile {second_model_train_pred} '
         f'--test_pred_outfile {second_model_test_pred} '
         f'--rules_outfile {second_model_output_rules} '
-        f'--nb_attributes {nb_histogram_attributes} '
+        f'--nb_attributes {nb_stats_attributes} '
         f'--nb_classes {nb_classes} '
         )
 
@@ -247,12 +312,13 @@ if with_train_second_model:
 
     print("\nSecond model trained.")
 
-# Define attributes file for histograms
-probability_thresholds = getProbabilityThresholds(nb_bins)
-with open(attributes_file, "w") as myFile:
-    for i in range(nb_classes):
-        for j in probability_thresholds:
-            myFile.write(f"P_{i}>={j:.6g}\n")
+if histogram_stats:
+    # Define attributes file for histograms
+    probability_thresholds = getProbabilityThresholds(nb_bins)
+    with open(attributes_file, "w") as myFile:
+        for i in range(nb_classes):
+            for j in probability_thresholds:
+                myFile.write(f"P_{i}>={j:.6g}\n")
 
 
 ##############################################################################
@@ -260,10 +326,10 @@ with open(attributes_file, "w") as myFile:
 
 if with_global_rules:
     command = (
-        f'--train_data_file {train_histogram_file} '
+        f'--train_data_file {train_stats_file} '
         f'--train_pred_file {second_model_train_pred} '
         f'--train_class_file {train_class_file_temp} '
-        f'--nb_attributes {nb_histogram_attributes} '
+        f'--nb_attributes {nb_stats_attributes} '
         f'--nb_classes {nb_classes} '
         f'--rules_file {second_model_output_rules} '
         f'--global_rules_outfile {global_rules_file} '
@@ -279,10 +345,10 @@ if with_global_rules:
 ##############################################################################
 # Get images explaining and illustrating the samples and rules
 
-if get_images:
+if histogram_stats and get_images:
     # Get rules and attributes
     global_rules = getRules(global_rules_file)
-    attributes = get_attribute_file(attributes_file, nb_histogram_attributes)[0]
+    attributes = get_attribute_file(attributes_file, nb_stats_attributes)[0]
 
     # Create folder for all rules
     if os.path.exists(rules_folder):
