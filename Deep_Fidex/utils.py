@@ -677,6 +677,27 @@ def compute_histograms(nb_samples, data, size1D, nb_channels, CNNModel, nb_class
 ###############################################################
 
 def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride):
+    """
+    Computes the sum of activations from an intermediate layer for each sample in the dataset using a sliding filter.
+
+    This function applies a sliding filter across each image in the dataset and uses a CNN model to extract feature activations
+    from an intermediate layer. The activations for each patch are then summed to produce a global activation sum for each sample.
+    This method helps analyze the CNN model’s response over different areas of the image.
+
+    Parameters:
+    - nb_samples: The number of samples in the dataset.
+    - data: The dataset containing images to be processed.
+    - size1D: The size of one dimension of the input image (image is size1D x size1D).
+    - nb_channels: The number of channels in the input images (1 for grayscale, 3 for RGB).
+    - CNNModel: The full CNN model used for making predictions.
+    - intermediate_model: A model stopping at the specific intermediate layer (e.g., Flatten layer) to capture activations.
+    - nb_stats_attributes: The number of statistical attributes to store for each sample (dimensionality of the intermediate layer).
+    - filter_size: The size of the filter applied to the image (height, width), can be an array of tuples if applying multiple filters.
+    - stride: The stride value for moving the filter across the image (vertically, horizontally).
+
+    Returns:
+    - sums: A numpy array containing the activation sums for each sample, with shape (nb_samples, nb_stats_attributes).
+    """
     sums = np.zeros((nb_samples, nb_stats_attributes))
     for sample_id in range(nb_samples):
         image = data[sample_id]
@@ -684,6 +705,10 @@ def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, int
         activations = generate_filtered_images_and_predictions(
         CNNModel, image, filter_size, stride, intermediate_model)
         sums[sample_id] = np.sum(activations, axis=0)
+        if (sample_id+1) % 100 == 0 or sample_id+1 == nb_samples:
+            progress = ((sample_id+1) / nb_samples) * 100
+            progress_message = f"Progress : {progress:.2f}% ({sample_id+1}/{nb_samples})"
+            print(f"\r{progress_message}", end='', flush=True)
 
     return sums
 
