@@ -728,6 +728,9 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     - predictions: Predictions from the CNN model for each filtered image.
     - positions: A list of (row, column) tuples indicating the top-left position of each filter applied.
     """
+    if (image.shape[2] == 1 and CNNModel.input_shape[-1] == 3):
+        # B&W to RGB
+        image = np.repeat(image, 3, axis=-1)
 
     image_size = [image.shape[0], image.shape[1]]
     filtered_images = []

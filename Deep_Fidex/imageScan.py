@@ -45,7 +45,7 @@ start_time = time.time()
 # What to launch
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -70,8 +70,8 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
@@ -223,7 +223,7 @@ if with_train_cnn:
 
 CNNModel = keras.saving.load_model(model_file)
 if activation_layer_stats:
-    input_channels = 3 if resnet else nb_channels
+    input_channels = CNNModel.input_shape[-1]
     dummy_input = np.zeros((1, size1D, size1D, input_channels))
     _ = CNNModel(dummy_input)
     flatten_layer_output = CNNModel.get_layer("flatten").output
@@ -349,6 +349,9 @@ if with_global_rules:
         f'--nb_attributes {nb_stats_attributes} '
         f'--heuristic 1 '
         f'--nb_threads 4 '
+        f'--nb_quant_levels {nbQuantLevels} '
+        f'--dropout_dim {dropout_dim} '
+        f'--dropout_hyp {dropout_hyp} '
     )
     if histogram_stats:
         command += f'--attributes_file {attributes_file} '
@@ -376,7 +379,7 @@ if histogram_stats and get_images:
     os.makedirs(rules_folder)
 
     # For each rule we get filter images for train samples covering the rule
-    for id,rule in enumerate(global_rules):
+    for id,rule in enumerate(global_rules[0:50]):
 
         rule.include_X = False
         for ant in rule.antecedents:
