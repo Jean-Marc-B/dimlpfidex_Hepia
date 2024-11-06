@@ -55,12 +55,12 @@ if histogram_stats == activation_layer_stats:
     raise ValueError("Error, you need to specify one of histogram_stats and activation_layer_stats.")
 
 
-with_stats_computation = False
+with_stats_computation = True
 with_train_second_model = True
-
+using_decision_tree_model = True
 
 # Rule computation:
-with_global_rules = False
+with_global_rules = True
 
 # Image generation:
 get_images = False # With histograms
@@ -70,8 +70,8 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
@@ -111,7 +111,7 @@ elif dataset == "CIFAR":     # for Cifar images
         9: "truck",
     }
 
-scan_folder = "ScanFull/"
+scan_folder = "Scan/"
 if histogram_stats:
     scan_folder += "Histograms/"
 elif activation_layer_stats:
@@ -140,7 +140,10 @@ elif activation_layer_stats:
 second_model_stats = base_folder + scan_folder + "second_model_stats.txt"
 second_model_train_pred = base_folder + scan_folder + "second_model_train_pred.txt"
 second_model_test_pred = base_folder + scan_folder + "second_model_test_pred.txt"
-second_model_output_rules = base_folder + scan_folder + "second_model_rules.rls"
+if using_decision_tree_model:
+    second_model_output_rules = base_folder + scan_folder + "second_model_rules.rls"
+else:
+    second_model_output_rules = base_folder + scan_folder + "second_model_weights.wts"
 
 global_rules_file = base_folder + scan_folder + "globalRules.json"
 attributes_file = base_folder + scan_folder + "attributes.txt"
@@ -261,8 +264,8 @@ if with_stats_computation:
 
         print("\nComputing train sums of activation layer patches...")
         # Get sums for each train sample
-        nb_train_samples = Y_train.shape[0]
-        #nb_train_samples = 100
+        #nb_train_samples = Y_train.shape[0]
+        nb_train_samples = 100
         train_sums = compute_activation_sums(nb_train_samples, X_train, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
         # Normalization
         mean = np.mean(train_sums, axis=0)
@@ -272,8 +275,8 @@ if with_stats_computation:
 
         print("\nComputing test sums of activation layer patches...")
         # Get sums for each test sample
-        nb_test_samples = Y_test.shape[0]
-        #nb_test_samples = 100
+        #nb_test_samples = Y_test.shape[0]
+        nb_test_samples = 100
         test_sums = compute_activation_sums(nb_test_samples, X_test, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
         # Normalization
         test_sums = (test_sums - mean) / std
@@ -297,26 +300,31 @@ if with_train_second_model:
     # Train model
     command = (
         f'--train_data_file {train_stats_file} '
-        f'--train_class_file {train_class_file} '
+        f'--train_class_file {train_class_file_temp} '
         f'--test_data_file {test_stats_file} '
-        f'--test_class_file {test_class_file} '
+        f'--test_class_file {test_class_file_temp} '
         f'--stats_file {second_model_stats} '
         f'--train_pred_outfile {second_model_train_pred} '
         f'--test_pred_outfile {second_model_test_pred} '
-        f'--weights_outfile {second_model_output_rules} '
         f'--nb_attributes {nb_stats_attributes} '
         f'--nb_classes {nb_classes} '
-        f'--hidden_layers [25] '
+        #f'--hidden_layers [25] '
         f'--root_folder . '
-        f'--nb_dimlp_nets 16 '
+        #f'--nb_dimlp_nets 2 '
+        #f'--nb_epochs 10 '
         )
+
+    if using_decision_tree_model:
+        command += f'--rules_outfile {second_model_output_rules} '
+    else:
+        command += f'--weights_outfile {second_model_output_rules} '
 
     print("\nTraining second model...\n")
 
-    #randForestsTrn(command)
-    #gradBoostTrn(command)
+    status = randForestsTrn(command)
+    #status = gradBoostTrn(command)
     #status = dimlp.dimlpTrn(command)
-    status = dimlp.dimlpBT(command)
+    #status = dimlp.dimlpBT(command)
     if status != -1:
         print("\nSecond model trained.")
 
@@ -337,7 +345,6 @@ if with_global_rules:
         f'--train_pred_file {second_model_train_pred} '
         f'--train_class_file {train_class_file_temp} '
         f'--nb_classes {nb_classes} '
-        f'--rules_file {second_model_output_rules} '
         f'--global_rules_outfile {global_rules_file} '
         f'--nb_attributes {nb_stats_attributes} '
         f'--heuristic 1 '
@@ -345,6 +352,10 @@ if with_global_rules:
     )
     if histogram_stats:
         command += f'--attributes_file {attributes_file} '
+    if using_decision_tree_model:
+        command += f'--rules_file {second_model_output_rules} '
+    else:
+        command += f'--weights_file {second_model_output_rules} '
 
     print("\nComputing global rules...\n")
     status = fidex.fidexGloRules(command)
