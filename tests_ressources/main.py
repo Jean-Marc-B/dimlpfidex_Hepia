@@ -4,6 +4,8 @@ from trainings import normalization
 from datetime import datetime
 import data_helper as dh
 import pandas as pd
+import numpy as np
+import argparse
 import math
 import json
 import csv
@@ -23,7 +25,7 @@ def update_config_file(filename: str, params: dict) -> None:
 
 def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
     confpath = os.path.join(root_folder, "config")
-    logpath = "output/logs"
+    logpath = "logs/"
 
     programs = ["dimlpbt", "denscls", "fidexglo", "fidexglorules"]
 
@@ -34,7 +36,7 @@ def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
         config["nb_attributes"] = nb_features
         config["nb_classes"] = nb_classes
         config["console_file"] = (
-            f"{logpath + datetime.today().strftime('%Y%m%d%H%M%S')}_{program}.log"
+            f"{logpath + datetime.today().strftime('%Y%m%d%H%M')}_{program}.log"
         )
 
         update_config_file(config_filename, config)
@@ -47,19 +49,19 @@ def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
     )
 
 
-# This has a random behaviour yet until we get real data
+# This get random samples until we get real data
 def write_test_samples(nsamples: int) -> None:
-    data = pd.read_csv("temp/train_data_normalized.csv")
+    data = pd.read_csv("temp/train_data_normalized.csv", sep=" ")
 
-    samples_data = data.sample(
-        nsamples
-    )  # to_frame.T to avoid sample being written vertically
+    samples_data = data.sample(nsamples)
 
     # one hotting classes (useless but must be done, )
     samples_data = samples_data.assign(Lymphodema_NO=lambda x: 1)
     samples_data = samples_data.assign(Lymphodema_YES=lambda x: 0)
 
-    samples_data.to_csv("input/test_sample_data.csv", header=False, index=False)
+    samples_data.to_csv(
+        "input/test_sample_data.csv", header=False, index=False, sep=","
+    )
 
     return samples_data.index
 
@@ -99,6 +101,7 @@ def preprocess_data(
 
 def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
     labels = pd.get_dummies(labels).astype("uint")
+    # TODO: write attributes files
     data.to_csv("temp/train_data.csv", sep=",", header=False, index=False)
     labels.to_csv("temp/train_classes.csv", sep=",", header=False, index=False)
 
@@ -117,14 +120,15 @@ def write_results(
 ) -> None:
     res = []
 
-    lower_interval, upper_interval = load_confidence_interval()
+    lower_interval, upper_interval = get_metrics()
+    risks = get_risk()
 
-    for sample in data["samples"]:
+    for sample, risk in zip(data["samples"], risks):
         for i, rule in enumerate(sample["rules"]):
             line = [""] * (nb_features + 5)
             line[0] = sample_ids[sample["sampleId"]]
             line[1] = used_rules_id[i]
-            line[2] = "risk"  # TODO: probability given by dimlpBT 1st neuron
+            line[2] = risk
             line[3] = lower_interval
             line[4] = upper_interval
             line[5] = rule["coveringSize"]
@@ -138,9 +142,31 @@ def write_results(
     write_csv(res)
 
 
-def load_confidence_interval() -> tuple[float, float]:
-    data = read_json_file(os.path.join(os.path.abspath(os.path.dirname(__file__)), "stds.json"))
-    return data
+def get_risk() -> list[float]:
+    abspath = os.path.abspath(os.path.dirname(__file__))
+    preds_filepath = os.path.join(abspath, "input", "test_sample_pred.csv")
+
+    return np.loadtxt(preds_filepath)[:, 1]
+
+
+def get_metrics() -> tuple[float, float]:
+    data = read_json_file(
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), "stds.json")
+    )
+    nb_nets = data["nbNets"]
+
+    lower_conf_interval = (
+        data["avgs"][1] - (1.96 / math.sqrt(nb_nets)) * data["stds"][1]
+    )
+    upper_conf_interval = (
+        data["avgs"][1] + (1.96 / math.sqrt(nb_nets)) * data["stds"][1]
+    )
+
+    nb_decimals = 4
+    return (
+        round(lower_conf_interval, nb_decimals),
+        round(upper_conf_interval, nb_decimals),
+    )
 
 
 def write_csv(data: list[list]) -> None:
@@ -159,58 +185,94 @@ def print_rule(rule):
         - fidelity: {rule["fidelity"]}"""
     )
 
-
-def global_rule_id(rule):
+def get_rule_id(rule):
     global_rules = read_json_file("temp/global_rules.json")
 
-    print(len(global_rules))
-    print("Searing for: ")
-    print_rule(rule)
-    print()
-
     for i, global_rule in enumerate(global_rules["rules"]):
-        print("Trying to match with: ")
-        print_rule(global_rule)
         if global_rule == rule:
-            print(f"ID = {i}")
-            print("*" * 30)
             return i
 
     return -1
 
+# def save_rule():
+#     global_rules = read_json_file("temp/global_rules.json")
+#     global_rules["rules"]
+
+
+
+def clean_dir(dirname):
+    nremoved = 0
+    abspath = os.path.abspath(os.path.dirname(__file__))
+    temppath = os.path.join(
+        abspath,
+        dirname,
+    )
+
+    print(f"Cleaning {temppath} directory...")
+
+    for file in os.listdir(temppath):
+        filepath = os.path.join(temppath, file)
+        try:
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+                nremoved += 1
+        except OSError as ose:
+            print(f"Error occured while trying to delete {file}. Error: {ose}")
+
+    print(f"{temppath} cleaned, {nremoved} files deleted.")
+
+
+def init_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--train", action="store_true")
+    parser.add_argument("-c", "--clean", action="store_true")
+    parser.add_argument("--cleanall", action="store_true")
+
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
+    args = init_args()
     abspath = os.path.abspath(os.path.dirname(__file__))
-    data, labels = dh.obtain_data("dataset/clinical_complete_rev1.csv")
 
+    if args.cleanall:
+        clean_dir("temp")
+        clean_dir("logs")
+        clean_dir("output")
+
+    if args.clean:
+        clean_dir("temp")
+
+    data, labels = dh.obtain_data("dataset/clinical_complete_rev1.csv")
     data, labels = preprocess_data(data, labels)
-    nb_classes = 2
+
     nb_features = data.shape[1]
+    nb_classes = 2
 
     write_train_data(data, labels)
     update_config_files(abspath, nb_features, nb_classes)
     normalization("--json_config_file config/normalization.json")
 
     # TODO: there will be missing values in the real samples
-    samples_id = write_test_samples(10)
+    samples_ids = write_test_samples(5)
 
-    # dimlpBT("--json_config_file config/dimlpbt.json")
-    # fidexGloRules("--json_config_file config/fidexglorules.json")
-    # densCls("--json_config_file config/denscls.json")
-    # fidexGlo("--json_config_file config/fidexglo.json")
+    if args.train:
+        dimlpBT("--json_config_file config/dimlpbt.json")
+        fidexGloRules("--json_config_file config/fidexglorules.json")
+
+    densCls("--json_config_file config/denscls.json")
+    fidexGlo("--json_config_file config/fidexglo.json")
 
     samples_rules = read_json_file("temp/explanation.json")
 
     # TODO: do we add generated rules with the global rules ?
     used_rules_id = [
-        global_rule_id(rule)
+        get_rule_id(rule)
         for sample in samples_rules["samples"]
         for rule in sample["rules"]
     ]
 
     normalization("--json_config_file config/denormalization.json")
-
-    # read prediction ()
-    write_results(used_rules_id, samples_id, samples_rules, nb_features)
+    write_results(used_rules_id, samples_ids, samples_rules, nb_features)
 
     print("OK")
