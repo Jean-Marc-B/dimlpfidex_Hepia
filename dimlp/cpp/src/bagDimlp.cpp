@@ -201,10 +201,7 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index)
     for (k = 0; k < NbOut; k++) {
       GlobalOut[k] += ptrOut[k];
       classesOutputPerNetwork[n][k] = ptrOut[k];
-      std::cout << classesOutputPerNetwork[n][k] << " ";
     }
-
-    std::cout << std::endl;
   }
 
   // Average the accumulated outputs to get the final global output
@@ -213,7 +210,6 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index)
   }
 
   // compute stds
-  Json jsonData;
 
   for (int class_index = 0; class_index < NbOut; class_index++) {
     float current_class_avg = GlobalOut[class_index];
@@ -224,14 +220,17 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index)
     }
 
     stds[class_index] = sqrt(stds[class_index] * (1.0f / (float)NbDimlpNets));
-
-    jsonData[class_index] = stds[class_index];
-
-    std::cout << "Standard deviation for class #" << class_index << " is " << stds[class_index] << std::endl;
   }
 
-  std::string filename = "stds.json";
+  Json jsonData;
+
+  std::string filename = "stds-avg.json";
   std::ofstream ofs(filename);
+
+
+  jsonData["nbNets"] = NbDimlpNets;
+  jsonData["avgs"] = GlobalOut;
+  jsonData["stds"] = stds;
 
   if (!ofs.is_open() || ofs.fail()) {
     throw FileNotFoundError("JSON file to be written named '" + filename + "' couldn't be opened, cannot proceed.");

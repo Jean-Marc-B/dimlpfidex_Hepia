@@ -3,13 +3,15 @@
     "train_data_file": "temp/train_data_normalized.csv",
     "train_pred_file": "temp/dimlpBTTrain.out",
     "train_class_file": "temp/train_classes.csv",
-    "console_file": "output/logs20241029115312_fidexglorules.log",
+    "console_file": "logs/202411041649_fidexglorules.log",
     "nb_attributes": 79,
     "nb_classes": 2,
     "weights_file": "temp/dimlpBT.wts",
     "global_rules_outfile": "temp/global_rules.json",
     "heuristic": 1,
     "nb_threads": 6,
-    "dropout_dim": 0.5,
-    "dropout_hyp": 0.5
+    "dropout_dim": 0.9,
+    "dropout_hyp": 0.9,
+    "decision_threshold": 0.075,
+    "positive_class_index": 1
 }

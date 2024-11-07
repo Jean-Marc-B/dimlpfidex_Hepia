@@ -1,0 +1,1 @@
+0 15 * * * fidex python3 ~/test-unicancer/fidex.py &> ~/test-unicancer/output/output.txt
