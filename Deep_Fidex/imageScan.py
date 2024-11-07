@@ -27,7 +27,7 @@ import re
 import copy
 from tensorflow.keras import Model
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
-from utils import trainCNN, compute_histograms, compute_activation_sums, output_data, getRules, highlight_area, getProbabilityThresholds, get_heat_maps
+from utils import trainCNN, compute_histograms, compute_activation_sums, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, getProbabilityThresholds, get_heat_maps
 
 np.random.seed(seed=None)
 
@@ -63,7 +63,7 @@ using_decision_tree_model = True
 with_global_rules = True
 
 # Image generation:
-get_images = False # With histograms
+get_images = True # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
@@ -349,6 +349,7 @@ if with_global_rules:
         f'--nb_attributes {nb_stats_attributes} '
         f'--heuristic 1 '
         f'--nb_threads 4 '
+        f'--max_iterations 25 '
         f'--nb_quant_levels {nbQuantLevels} '
         f'--dropout_dim {dropout_dim} '
         f'--dropout_hyp {dropout_hyp} '
@@ -368,10 +369,11 @@ if with_global_rules:
 ##############################################################################
 # Get images explaining and illustrating the samples and rules
 
-if histogram_stats and get_images:
+if get_images:
     # Get rules and attributes
     global_rules = getRules(global_rules_file)
-    attributes = get_attribute_file(attributes_file, nb_stats_attributes)[0]
+    if histogram_stats:
+        attributes = get_attribute_file(attributes_file, nb_stats_attributes)[0]
 
     # Create folder for all rules
     if os.path.exists(rules_folder):
@@ -381,9 +383,10 @@ if histogram_stats and get_images:
     # For each rule we get filter images for train samples covering the rule
     for id,rule in enumerate(global_rules[0:50]):
 
-        rule.include_X = False
-        for ant in rule.antecedents:
-            ant.attribute = attributes[ant.attribute] # Get true name of attribute
+        if histogram_stats:
+            rule.include_X = False
+            for ant in rule.antecedents:
+                ant.attribute = attributes[ant.attribute] # Get true name of attribute
 
         # Create folder for this rule
         rule_folder = f"{rules_folder}/rule_{id}_class_{classes[rule.target_class]}"
@@ -394,16 +397,18 @@ if histogram_stats and get_images:
         # Add a readme containing the rule
         readme_file = rule_folder+'/Readme.md'
         rule_to_print = copy.deepcopy(rule)
-        # Change antecedent with real class names
-        for antecedent in rule_to_print.antecedents:
-            match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
-            if match:
-                class_id = int(match.group(1))
-                pred_threshold = match.group(2)
-                class_name = classes[class_id]  # Get the class name
-                antecedent.attribute = f"P_{class_name}>={pred_threshold}"
-            else:
-                raise ValueError("Wrong antecedent...")
+
+        if histogram_stats:
+            # Change antecedent with real class names
+            for antecedent in rule_to_print.antecedents:
+                match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
+                if match:
+                    class_id = int(match.group(1))
+                    pred_threshold = match.group(2)
+                    class_name = classes[class_id]  # Get the class name
+                    antecedent.attribute = f"P_{class_name}>={pred_threshold}"
+                else:
+                    raise ValueError("Wrong antecedent...")
         if os.path.exists(readme_file):
             os.remove(readme_file)
         with open(readme_file, 'w') as file:
@@ -412,9 +417,15 @@ if histogram_stats and get_images:
         # Create full image with all filters and save it
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
-            highlighted_image = highlight_area(CNNModel, img, filter_size, stride, rule, classes)
-            highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
+            if histogram_stats:
+                highlighted_image = highlight_area_histograms(CNNModel, img, filter_size, stride, rule, classes)
+            elif activation_layer_stats:
+                highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
+            #highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
+
+##############################################################################
+# Get images explaining and illustrating the samples without rules or training twice
 
 if simple_heat_map: # Only for one filter !
 

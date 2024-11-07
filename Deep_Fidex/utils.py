@@ -585,7 +585,7 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
         model.add(Dropout(0.3))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        model.add(DepthwiseConv2D((5, 5), activation='relu'))
+        model.add(DepthwiseConv2D((5, 5), activation='leaky_relu'))
         model.add(Dropout(0.3))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
@@ -702,7 +702,7 @@ def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, int
     for sample_id in range(nb_samples):
         image = data[sample_id]
         image = image.reshape(size1D, size1D, nb_channels)
-        activations = generate_filtered_images_and_predictions(
+        activations, _ = generate_filtered_images_and_predictions(
         CNNModel, image, filter_size, stride, intermediate_model)
         sums[sample_id] = np.sum(activations, axis=0)
         if (sample_id+1) % 100 == 0 or sample_id+1 == nb_samples:
@@ -763,7 +763,8 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     # Get predictions
     if intermediate_model is not None:
         predictions = intermediate_model.predict(filtered_images, verbose=0)
-        return predictions
+        print(predictions[200])
+        return predictions, positions
 
     else:
         predictions = CNNModel.predict(filtered_images, verbose=0)
@@ -825,7 +826,7 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
 
 ###############################################################
 
-def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
+def highlight_area_histograms(CNNModel, image, filter_size, stride, rule, classes):
     """
     Highlights important areas in an image based on the rule's antecedents using the CNN model.
 
@@ -992,6 +993,91 @@ def highlight_area(CNNModel, image, filter_size, stride, rule, classes):
     plt.close(fig)
 
     return fig
+
+###############################################################
+
+def get_top_ids(array, X=10, largest=True):
+    """
+    Returns the indices of the X largest or smallest values in an array (not sorted).
+
+    Parameters:
+    - array (np.ndarray): One-dimensional array of values.
+    - X (int): Number of indices to return.
+    - largest (bool): If True, returns the indices of the largest values; otherwise, the smallest.
+
+    Returns:
+    - np.ndarray: Indices of the X largest or smallest values.
+    """
+
+    if largest:
+        return np.argpartition(array, -X)[-X:] # Get X greater indices (not sorted)
+    else:
+        return np.argpartition(array, X)[:X] # Get X smaller indices (not sorted)
+
+###############################################################
+
+def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
+
+    activations, positions = generate_filtered_images_and_predictions( #nb_filters x nb_activations
+            CNNModel, image, filter_size, stride, intermediate_model)
+
+    # Convert to RGB if necessary
+    if len(image.shape) == 2:
+        original_image_rgb = np.stack((image,) * 3, axis=-1)
+    elif len(image.shape) == 3 and image.shape[2] == 1:
+        original_image_rgb = np.squeeze(image, axis=2)  # Remove the supplementary dimension
+        original_image_rgb = np.stack((original_image_rgb,) * 3, axis=-1)
+    else:
+        original_image_rgb = image.copy()
+
+    # Initialize the combined intensity maps for green and red
+    combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
+    combined_red_intensity = np.zeros((image.shape[0], image.shape[1]))
+
+    individual_maps = []
+
+    for antecedent in rule.antecedents:
+        # On ne veut pas les sommes mais les activations, puis chercher dans les activations les ids qui nous intéressent...
+        # Get top X ids of patches on this activation
+        if antecedent.inequality: #>=
+            patches_idx = get_top_ids(activations[:,antecedent.attribute], 100) # The attribute is the id of the activation
+            print("big", activations[patches_idx,antecedent.attribute])
+        else: #<
+            patches_idx = get_top_ids(activations[:,antecedent.attribute], 100, False)
+            print("small", activations[patches_idx,antecedent.attribute])
+
+# VEFIFIER AU DESSUS IL Y A SUREMENT DES FAUTES les valeurs sont normalisées entre -1 et 1 donc le min ne peut pas être 0...
+# Prendre que les plus grands du coup? rouge-vert...
+
+        individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
+
+"""
+        # On sait quels patchs on veut et donc sa position en fonction de l'id j'imagine (avec un seul filter_size du moins, si yen a plusieurs il faudra réfléchir pour cette information car un id )
+
+        # For each area (it's prediction, position and filter size)
+        for i, position in enumerate(positions):
+            # Update filter size if we exceed current limit
+            if i >= filter_start_idx + nb_areas_per_filter[filter_index]:
+                filter_start_idx += nb_areas_per_filter[filter_index]
+                filter_index += 1
+                current_filter_size = filter_size[filter_index]
+
+            if (class_prob >= pred_threshold):
+                top_left = position
+                bottom_right = (position[0] + current_filter_size[0], position[1] + current_filter_size[1])
+
+                # Accumulate the intensity of the activation in the individual color map
+                individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+
+                # Accumulate the intensity in the combined map for each activations
+                if antecedent.inequality:
+                    combined_green_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+                else:
+                    combined_red_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+
+        individual_maps.append((individual_intensity_map, antecedent))
+
+"""
 
 ###############################################################
 
