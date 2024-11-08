@@ -19,7 +19,7 @@ import os
 import sys
 import time
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+#os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import keras
 import numpy as np
 import shutil
@@ -43,6 +43,9 @@ start_time = time.time()
 
 
 # What to launch
+test_version = False # Whether to launch with minimal data
+
+
 
 # Training CNN:
 with_train_cnn = True
@@ -57,27 +60,26 @@ if histogram_stats == activation_layer_stats:
 
 with_stats_computation = True
 with_train_second_model = True
-using_decision_tree_model = True
 
 # Rule computation:
 with_global_rules = True
 
 # Image generation:
-get_images = True # With histograms
+get_images = False # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nb_channels         = 1
     nb_classes = 10
-    base_folder = "Mnist/"
+    base_folder = "MnistLeakyReluResnet/"
     data_type = "integer"
     classes = {
         0:"0",
@@ -96,7 +98,7 @@ elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
     nb_classes = 10
-    base_folder = "Cifar/"
+    base_folder = "CifarLeakyReluResnet/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -111,16 +113,20 @@ elif dataset == "CIFAR":     # for Cifar images
         9: "truck",
     }
 
-scan_folder = "Scan/"
-if histogram_stats:
-    scan_folder += "Histograms/"
-elif activation_layer_stats:
-    scan_folder += "Activations_Sum/"
 
 ##############################################################################
 
 # Parameters
 
+#----------------------------
+# Folders
+scan_folder = "ScanFull/"
+if histogram_stats:
+    scan_folder += "Histograms/"
+elif activation_layer_stats:
+    scan_folder += "Activations_Sum/"
+
+#----------------------------
 # Files
 train_data_file = base_folder + "trainData.txt"
 train_class_file = base_folder + "trainClass.txt"
@@ -130,6 +136,22 @@ model_file = base_folder + scan_folder + "scanModel.keras"
 train_pred_file = base_folder + scan_folder + "train_pred.out"
 test_pred_file = base_folder + scan_folder + "test_pred.out"
 
+attributes_file = base_folder + scan_folder + "attributes.txt"
+
+#----------------------------
+# If we train :
+model_checkpoint_weights = base_folder + scan_folder + "weightsModel.weights.h5"
+model_stats = base_folder + scan_folder + "stats_model.txt"
+if test_version:
+    resnet=False
+    nbIt = 4
+else:
+    resnet = True
+    nbIt = 80
+
+#----------------------------
+# For stats computation
+
 if histogram_stats:
     train_stats_file = base_folder + scan_folder + "train_hist.txt"
     test_stats_file = base_folder + scan_folder + "test_hist.txt"
@@ -137,24 +159,6 @@ elif activation_layer_stats:
     train_stats_file = base_folder + scan_folder + "train_activation_sum.txt"
     test_stats_file = base_folder + scan_folder + "test_activation_sum.txt"
 
-second_model_stats = base_folder + scan_folder + "second_model_stats.txt"
-second_model_train_pred = base_folder + scan_folder + "second_model_train_pred.txt"
-second_model_test_pred = base_folder + scan_folder + "second_model_test_pred.txt"
-if using_decision_tree_model:
-    second_model_output_rules = base_folder + scan_folder + "second_model_rules.rls"
-else:
-    second_model_output_rules = base_folder + scan_folder + "second_model_weights.wts"
-
-global_rules_file = base_folder + scan_folder + "globalRules.json"
-attributes_file = base_folder + scan_folder + "attributes.txt"
-
-# If we train :
-model_checkpoint_weights = base_folder + scan_folder + "weightsModel.weights.h5"
-model_stats = base_folder + scan_folder + "stats_model.txt"
-resnet = True
-nbIt = 3
-
-# For stats computation
 filter_size = [[7,7]] # Size of filter(s) applied to the image
 if np.asarray(filter_size).ndim == 1:
     filter_size = [filter_size]
@@ -165,20 +169,39 @@ if np.asarray(stride).ndim == 1:
 if len(stride) != len(filter_size):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
 
-
 nb_bins = 9 # Number of bins wanted (ex: NProb>=0.1, NProb>=0.2, etc.)
 probability_thresholds = getProbabilityThresholds(nb_bins)
 if histogram_stats:
     nb_stats_attributes = nb_classes*nb_bins
 
+#----------------------------
+# For second model training
+# second_model = "randomForests"
+# second_model = "gradientBoosting"
+# second_model = "dimlpTrn"
+second_model = "dimlpBT"
 
+if second_model in {"randomForests", "gradientBoosting"}:
+    using_decision_tree_model = True
+
+second_model_stats = base_folder + scan_folder + "second_model_stats.txt"
+second_model_train_pred = base_folder + scan_folder + "second_model_train_pred.txt"
+second_model_test_pred = base_folder + scan_folder + "second_model_test_pred.txt"
+if using_decision_tree_model:
+    second_model_output_rules = base_folder + scan_folder + "second_model_rules.rls"
+else:
+    second_model_output_rules = base_folder + scan_folder + "second_model_weights.wts"
+
+#----------------------------
 # For Fidex
+global_rules_file = base_folder + scan_folder + "globalRules.json"
 hiknot = 5
 nbQuantLevels = 100
 K_val = 1.0
 dropout_hyp = 0.9
 dropout_dim = 0.9
 
+#----------------------------
 # Folder for output images
 rules_folder = base_folder + scan_folder + "Rules"
 
@@ -222,7 +245,7 @@ if with_train_cnn:
 
 
 CNNModel = keras.saving.load_model(model_file)
-if activation_layer_stats:
+if activation_layer_stats: # Get intermediate model
     input_channels = CNNModel.input_shape[-1]
     dummy_input = np.zeros((1, size1D, size1D, input_channels))
     _ = CNNModel(dummy_input)
@@ -238,8 +261,10 @@ if with_stats_computation:
         print("\nComputing train histograms...")
 
         # Get histograms for each train sample
-        #nb_train_samples = Y_train.shape[0]
-        nb_train_samples = 100
+        if test_version:
+            nb_train_samples = 100
+        else:
+            nb_train_samples = Y_train.shape[0]
 
         train_histograms = compute_histograms(nb_train_samples, X_train, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
         print("\nTrain histograms computed.\n")
@@ -247,8 +272,10 @@ if with_stats_computation:
         print("Computing test histograms...")
 
         # Get histograms for each test sample
-        #nb_test_samples = Y_test.shape[0]
-        nb_test_samples = 100
+        if test_version:
+            nb_test_samples = 100
+        else:
+            nb_test_samples = Y_test.shape[0]
         test_histograms = compute_histograms(nb_test_samples, X_test, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
 
         print("\nTest histograms computed.")
@@ -264,8 +291,11 @@ if with_stats_computation:
 
         print("\nComputing train sums of activation layer patches...")
         # Get sums for each train sample
-        #nb_train_samples = Y_train.shape[0]
-        nb_train_samples = 100
+        if test_version:
+            nb_train_samples = 100
+        else:
+            nb_train_samples = Y_train.shape[0]
+
         train_sums = compute_activation_sums(nb_train_samples, X_train, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
         # Normalization
         mean = np.mean(train_sums, axis=0)
@@ -275,8 +305,11 @@ if with_stats_computation:
 
         print("\nComputing test sums of activation layer patches...")
         # Get sums for each test sample
-        #nb_test_samples = Y_test.shape[0]
-        nb_test_samples = 100
+        if test_version:
+            nb_test_samples = 100
+        else:
+            nb_test_samples = Y_test.shape[0]
+
         test_sums = compute_activation_sums(nb_test_samples, X_test, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
         # Normalization
         test_sums = (test_sums - mean) / std
@@ -292,26 +325,24 @@ if with_stats_computation:
 ##############################################################################
 # Train second model with histograms
 
-train_class_file_temp = base_folder + "trainClass_temp.txt"
-test_class_file_temp = base_folder + "testClass_temp.txt"
+if test_version:
+    train_class_file = base_folder + "trainClass_temp.txt"
+    test_class_file = base_folder + "testClass_temp.txt"
 
 if with_train_second_model:
 
     # Train model
     command = (
         f'--train_data_file {train_stats_file} '
-        f'--train_class_file {train_class_file_temp} '
+        f'--train_class_file {train_class_file} '
         f'--test_data_file {test_stats_file} '
-        f'--test_class_file {test_class_file_temp} '
+        f'--test_class_file {test_class_file} '
         f'--stats_file {second_model_stats} '
         f'--train_pred_outfile {second_model_train_pred} '
         f'--test_pred_outfile {second_model_test_pred} '
         f'--nb_attributes {nb_stats_attributes} '
         f'--nb_classes {nb_classes} '
-        #f'--hidden_layers [25] '
         f'--root_folder . '
-        #f'--nb_dimlp_nets 2 '
-        #f'--nb_epochs 10 '
         )
 
     if using_decision_tree_model:
@@ -321,10 +352,20 @@ if with_train_second_model:
 
     print("\nTraining second model...\n")
 
-    status = randForestsTrn(command)
-    #status = gradBoostTrn(command)
-    #status = dimlp.dimlpTrn(command)
-    #status = dimlp.dimlpBT(command)
+    match second_model:
+        case "randomForests":
+            status = randForestsTrn(command)
+        case "gradientBoosting":
+            status = gradBoostTrn(command)
+        case "dimlpTrn":
+            status = dimlp.dimlpTrn(command)
+        case "dimlpBT":
+            command += '--nb_dimlp_nets 15 '
+            command += '--hidden_layers [25] '
+            if test_version:
+                command += '--nb_epochs 10 '
+            status = dimlp.dimlpBT(command)
+
     if status != -1:
         print("\nSecond model trained.")
 
@@ -343,12 +384,12 @@ if with_global_rules:
     command = (
         f'--train_data_file {train_stats_file} '
         f'--train_pred_file {second_model_train_pred} '
-        f'--train_class_file {train_class_file_temp} '
+        f'--train_class_file {train_class_file} '
         f'--nb_classes {nb_classes} '
         f'--global_rules_outfile {global_rules_file} '
         f'--nb_attributes {nb_stats_attributes} '
         f'--heuristic 1 '
-        f'--nb_threads 4 '
+        f'--nb_threads 12 '
         f'--max_iterations 25 '
         f'--nb_quant_levels {nbQuantLevels} '
         f'--dropout_dim {dropout_dim} '

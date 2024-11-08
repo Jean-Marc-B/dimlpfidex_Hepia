@@ -4,10 +4,11 @@ import tensorflow as tf
 from stairObj import StairObj
 from keras import backend as K
 from keras.models     import Sequential
-from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D
+from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU
 from keras.layers     import BatchNormalization
 from keras.applications     import ResNet50
 from keras.optimizers import Adam
+from tensorflow.keras.models import Model
 
 from keras.callbacks  import ModelCheckpoint
 from rule import Rule
@@ -515,6 +516,69 @@ def get_image(rule, baseimage, image_path, nb_rows, nb_cols, nb_channels, normal
 
 
 ###############################################################
+# Replace relu by leaky-relu in resnet
+
+# def replace_ReLU_with_LeakyReLU(layer):
+#     # Check if the layer is an instance of ReLU
+#     if isinstance(layer, tf.keras.layers.ReLU):
+#         # Create a new LeakyReLU layer with the desired alpha
+#         return tf.keras.layers.LeakyReLU(alpha=0.3)
+#     # If it's not a ReLU layer, return it as is
+#     return layer
+
+
+# Clone the model and replace ReLU layers with LeakyReLU layers
+def clone_and_replace(model):
+    # Serialize the model to get its configuration
+    config = model.get_config()
+
+    # Recursively replace ReLU activations with LeakyReLU in the config
+    def replace_activation(layer_config):
+        # Check if the layer is an Activation layer with relu activation
+        if layer_config.get('class_name') == 'Activation':
+            if layer_config.get('config', {}).get('activation') == 'relu':
+                print(f"CHANGEMENT Activation Layer: {layer_config.get('name')}")
+                # Replace Activation layer with LeakyReLU layer
+                layer_config['class_name'] = 'LeakyReLU'
+                # Remove 'activation' from config
+                layer_config['config'].pop('activation', None)
+                # Add 'alpha' parameter for LeakyReLU
+                layer_config['config']['alpha'] = 0.3
+
+        # Check if the layer is a ReLU layer
+        elif layer_config.get('class_name') == 'ReLU':
+            print(f"CHANGEMENT ReLU Layer: {layer_config.get('name')}")
+            layer_config['class_name'] = 'LeakyReLU'
+            # Update 'alpha' parameter for LeakyReLU
+            layer_config['config']['alpha'] = 0.3
+
+        # Check if the layer has 'activation' parameter set to 'relu'
+        elif 'activation' in layer_config.get('config', {}) and layer_config['config']['activation'] == 'relu':
+            print(f"CHANGEMENT activation in Layer: {layer_config.get('name')}")
+            # Set activation to None
+            layer_config['config']['activation'] = None
+            # We will need to handle adding a LeakyReLU layer after this layer separately
+            # For now, you can leave it as is or modify the model architecture accordingly
+
+        # Recursively process nested configurations
+        if 'config' in layer_config:
+            for key, value in layer_config['config'].items():
+                if isinstance(value, dict):
+                    replace_activation(value)
+                elif isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, dict):
+                            replace_activation(item)
+        return layer_config
+
+    new_config = replace_activation(config)
+    # Reconstruct the model from the modified config
+    new_model = tf.keras.Model.from_config(new_config)
+    # Load weights from the original model
+    new_model.set_weights(model.get_weights())
+    return new_model
+
+###############################################################
 # Train a CNN with a Resnet or with a small model
 
 def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats):
@@ -562,19 +626,60 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
 
     ##############################################################################
     if resnet:
+
+        # Load the ResNet50 model with pretrained weights
         input_tensor = Input(shape=(size1D, size1D, 3))
-        model_base = ResNet50(include_top=False, weights="imagenet", input_tensor=input_tensor)
-        model = Sequential()
-        model.add(model_base)
-        model.add(Flatten())
-        model.add(Dropout(0.5))
-        model.add(BatchNormalization())
-        model.add(Dense(nb_classes, activation='softmax'))
+        model_base = ResNet50(include_top=False, weights='imagenet', input_tensor=input_tensor)
 
-        model.build((None, size1D, size1D, 3))  # Build the model with the input shape
+        # Name of the last ReLU activation
+        last_activation_layer_name = 'conv5_block3_out'
 
-        model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
-        model.summary()
+        # Find index of this layer
+        last_activation_layer_index = None
+        for idx, layer in enumerate(model_base.layers):
+            if layer.name == last_activation_layer_name:
+                last_activation_layer_index = idx
+                break
+
+        if last_activation_layer_index is None:
+            print(f"Layer {last_activation_layer_name} not found in the model.")
+
+
+
+        if last_activation_layer_index is not None:
+            # Get output of previous layer
+            last_conv_layer_output = model_base.layers[last_activation_layer_index - 1].output
+
+            # Apply LeakyReLU instead of ReLU
+            x = LeakyReLU(alpha=0.3, name='conv5_block3_out')(last_conv_layer_output)
+
+            x = Flatten()(x)
+            x = Dropout(0.5)(x)
+            x = BatchNormalization()(x)
+            outputs = Dense(nb_classes, activation='softmax')(x)
+
+            model = Model(inputs=model_base.input, outputs=outputs)
+
+            model.compile(optimizer=Adam(learning_rate=0.00001),
+                        loss='categorical_crossentropy',
+                        metrics=['acc'])
+
+            model.summary()
+
+    # if resnet:
+    #     input_tensor = Input(shape=(size1D, size1D, 3))
+    #     model_base = ResNet50(include_top=False, weights="imagenet", input_tensor=input_tensor)
+    #     model = Sequential()
+    #     model.add(model_base)
+    #     model.add(Flatten())
+    #     model.add(Dropout(0.5))
+    #     model.add(BatchNormalization())
+    #     model.add(Dense(nb_classes, activation='softmax'))
+
+    #     model.build((None, size1D, size1D, 3))  # Build the model with the input shape
+
+    #     model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
+    #     model.summary()
 
     else:
         model = Sequential()
@@ -763,7 +868,6 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     # Get predictions
     if intermediate_model is not None:
         predictions = intermediate_model.predict(filtered_images, verbose=0)
-        print(predictions[200])
         return predictions, positions
 
     else:
@@ -1041,10 +1145,11 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
         # Get top X ids of patches on this activation
         if antecedent.inequality: #>=
             patches_idx = get_top_ids(activations[:,antecedent.attribute], 100) # The attribute is the id of the activation
-            print("big", activations[patches_idx,antecedent.attribute])
+            #print("big", activations[patches_idx,antecedent.attribute])
+            # NE PAS PRENDRE LES 0 !!!!
         else: #<
             patches_idx = get_top_ids(activations[:,antecedent.attribute], 100, False)
-            print("small", activations[patches_idx,antecedent.attribute])
+            #print("small", activations[patches_idx,antecedent.attribute])
 
 # VEFIFIER AU DESSUS IL Y A SUREMENT DES FAUTES les valeurs sont normalisées entre -1 et 1 donc le min ne peut pas être 0...
 # Prendre que les plus grands du coup? rouge-vert...
