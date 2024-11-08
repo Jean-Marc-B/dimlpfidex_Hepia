@@ -10,8 +10,10 @@
     "global_rules_outfile": "temp/global_rules.json",
     "heuristic": 1,
     "nb_threads": 6,
-    "dropout_dim": 0.9,
-    "dropout_hyp": 0.9,
-    "decision_threshold": 0.075,
+    "min_covering": 10,
+    "max_iterations": 20,
+    "dropout_dim": 0.0,
+    "dropout_hyp": 0.0,
+    "decision_threshold": 0.06,
     "positive_class_index": 1
 }

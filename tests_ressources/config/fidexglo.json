@@ -14,8 +14,10 @@
     "with_minimal_version": true,
     "with_fidex": true,
     "min_fidelity": 1.0,
-    "lowest_min_fidelity": 0.9,
-    "nb_fidex_rules": 3,
+    "lowest_min_fidelity": 1.0,
+    "min_covering": 6,
+    "max_iterations": 20,
+    "nb_fidex_rules": 1,
     "dropout_dim": 0.5,
     "dropout_hyp": 0.5
 }
