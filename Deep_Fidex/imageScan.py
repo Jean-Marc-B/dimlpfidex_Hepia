@@ -352,19 +352,32 @@ if with_train_second_model:
 
     print("\nTraining second model...\n")
 
-    match second_model:
-        case "randomForests":
-            status = randForestsTrn(command)
-        case "gradientBoosting":
-            status = gradBoostTrn(command)
-        case "dimlpTrn":
-            status = dimlp.dimlpTrn(command)
-        case "dimlpBT":
-            command += '--nb_dimlp_nets 15 '
-            command += '--hidden_layers [25] '
-            if test_version:
-                command += '--nb_epochs 10 '
-            status = dimlp.dimlpBT(command)
+    # match second_model:
+    #     case "randomForests":
+    #         status = randForestsTrn(command)
+    #     case "gradientBoosting":
+    #         status = gradBoostTrn(command)
+    #     case "dimlpTrn":
+    #         status = dimlp.dimlpTrn(command)
+    #     case "dimlpBT":
+    #         command += '--nb_dimlp_nets 15 '
+    #         command += '--hidden_layers [25] '
+    #         if test_version:
+    #             command += '--nb_epochs 10 '
+    #         status = dimlp.dimlpBT(command)
+
+    if second_model == "randomForests":
+        status = randForestsTrn(command)
+    elif second_model == "gradientBoosting":
+        status = gradBoostTrn(command)
+    elif second_model == "dimlpTrn":
+        status = dimlp.dimlpTrn(command)
+    elif second_model == "dimlpBT":
+        command += '--nb_dimlp_nets 15 '
+        command += '--hidden_layers [25] '
+        if test_version:
+            command += '--nb_epochs 10 '
+        status = dimlp.dimlpBT(command)
 
     if status != -1:
         print("\nSecond model trained.")
