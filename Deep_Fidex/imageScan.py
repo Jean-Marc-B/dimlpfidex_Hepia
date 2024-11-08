@@ -183,6 +183,8 @@ second_model = "dimlpBT"
 
 if second_model in {"randomForests", "gradientBoosting"}:
     using_decision_tree_model = True
+else:
+    using_decision_tree_model = False
 
 second_model_stats = base_folder + scan_folder + "second_model_stats.txt"
 second_model_train_pred = base_folder + scan_folder + "second_model_train_pred.txt"
