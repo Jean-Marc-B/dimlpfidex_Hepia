@@ -262,6 +262,7 @@ if __name__ == "__main__":
 
     densCls("--json_config_file config/denscls.json")
     fidexGlo("--json_config_file config/fidexglo.json")
+    # TODO if fidex failed generating rules: upgrade dropouts
 
     samples_rules = read_json_file("temp/explanation.json")
 
