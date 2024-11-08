@@ -151,8 +151,8 @@ attributes_file = base_folder + scan_folder + "attributes.txt"
 # If we train :
 model_checkpoint_weights = base_folder + scan_folder + "weightsModel.weights.h5"
 model_stats = base_folder + scan_folder + "stats_model.txt"
-resnet = False
-nbIt = 4
+resnet = True
+nbIt = 3
 
 # For stats computation
 filter_size = [[7,7]] # Size of filter(s) applied to the image
