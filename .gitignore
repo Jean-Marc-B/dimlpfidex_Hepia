@@ -192,3 +192,4 @@ docs/modules
 Deep_Fidex/Cifar/
 Deep_Fidex/Mnist/
 Deep_Fidex/Cifar80/
+Deep_Fidex/CifarLeakyReluResnet/

@@ -43,7 +43,7 @@ start_time = time.time()
 
 
 # What to launch
-test_version = False # Whether to launch with minimal data
+test_version = True # Whether to launch with minimal data
 
 
 
@@ -72,14 +72,14 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nb_channels         = 1
     nb_classes = 10
-    base_folder = "MnistLeakyReluResnet/"
+    base_folder = "Mnist/"
     data_type = "integer"
     classes = {
         0:"0",
@@ -98,7 +98,7 @@ elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
     nb_classes = 10
-    base_folder = "CifarLeakyReluResnet/"
+    base_folder = "Cifar/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -120,7 +120,7 @@ elif dataset == "CIFAR":     # for Cifar images
 
 #----------------------------
 # Folders
-scan_folder = "ScanFull/"
+scan_folder = "Scan/"
 if histogram_stats:
     scan_folder += "Histograms/"
 elif activation_layer_stats:
@@ -177,9 +177,9 @@ if histogram_stats:
 #----------------------------
 # For second model training
 # second_model = "randomForests"
-# second_model = "gradientBoosting"
+second_model = "gradientBoosting"
 # second_model = "dimlpTrn"
-second_model = "dimlpBT"
+# second_model = "dimlpBT"
 
 if second_model in {"randomForests", "gradientBoosting"}:
     using_decision_tree_model = True
