@@ -5,7 +5,7 @@
     "train_pred_outfile": "temp/dimlpBTTrain.out",
     "test_pred_outfile": "temp/dimlpBTTest.out",
     "weights_outfile": "temp/dimlpBT.wts",
-    "console_file": "logs/202411041649_dimlpbt.log",
+    "console_file": "logs/202411081442_dimlpbt.log",
     "hidden_layers_outfile": "temp/hidden_layers.out",
     "stats_file": "temp/dimlpBT_stats.out",
     "nb_attributes": 79,

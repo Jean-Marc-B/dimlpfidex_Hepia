@@ -3,7 +3,7 @@
     "train_data_file": "temp/train_data_normalized.csv",
     "train_pred_file": "temp/dimlpBTTrain.out",
     "train_class_file": "temp/train_classes.csv",
-    "console_file": "logs/202411041649_fidexglorules.log",
+    "console_file": "logs/202411081442_fidexglorules.log",
     "nb_attributes": 79,
     "nb_classes": 2,
     "weights_file": "temp/dimlpBT.wts",

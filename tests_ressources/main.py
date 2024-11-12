@@ -35,6 +35,7 @@ def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
         config["root_folder"] = root_folder
         config["nb_attributes"] = nb_features
         config["nb_classes"] = nb_classes
+        # TODO: config["attributes_file"] = ...
         config["console_file"] = (
             f"{logpath + datetime.today().strftime('%Y%m%d%H%M')}_{program}.log"
         )
@@ -101,7 +102,10 @@ def preprocess_data(
 
 def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
     labels = pd.get_dummies(labels).astype("uint")
-    # TODO: write attributes files
+
+    with open("temp/attributes.txt", "w") as f:
+        f.writelines(data.columns + "\n")
+
     data.to_csv("temp/train_data.csv", sep=",", header=False, index=False)
     labels.to_csv("temp/train_classes.csv", sep=",", header=False, index=False)
 
@@ -109,6 +113,10 @@ def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
 def read_json_file(path: str) -> dict:
     with open(path) as fp:
         return json.load(fp)
+
+def write_json_file(path: str, data: dict, mode: str = "w") -> None:
+    with open(path, mode) as fp:
+        json.dump(data, fp, indent=4)
 
 
 def get_inequality(b: bool) -> str:
@@ -185,6 +193,7 @@ def print_rule(rule):
         - fidelity: {rule["fidelity"]}"""
     )
 
+
 def get_rule_id(rule):
     global_rules = read_json_file("temp/global_rules.json")
 
@@ -194,10 +203,13 @@ def get_rule_id(rule):
 
     return -1
 
-# def save_rule():
-#     global_rules = read_json_file("temp/global_rules.json")
-#     global_rules["rules"]
 
+def save_rule(rule: dict) -> None:
+    path = "temp/global_rules.json"
+    global_rules = read_json_file(path)
+    global_rules["rules"] | rule
+    print(global_rules)
+    write_json_file(path, global_rules)
 
 
 def clean_dir(dirname):
@@ -239,6 +251,7 @@ if __name__ == "__main__":
         clean_dir("temp")
         clean_dir("logs")
         clean_dir("output")
+        args.train = True
 
     if args.clean:
         clean_dir("temp")
@@ -267,13 +280,13 @@ if __name__ == "__main__":
     samples_rules = read_json_file("temp/explanation.json")
 
     # TODO: do we add generated rules with the global rules ?
-    used_rules_id = [
+    selected_rules_id = [
         get_rule_id(rule)
         for sample in samples_rules["samples"]
         for rule in sample["rules"]
     ]
 
     normalization("--json_config_file config/denormalization.json")
-    write_results(used_rules_id, samples_ids, samples_rules, nb_features)
+    write_results(selected_rules_id, samples_ids, samples_rules, nb_features)
 
     print("OK")
