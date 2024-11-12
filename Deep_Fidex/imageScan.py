@@ -43,12 +43,12 @@ start_time = time.time()
 
 
 # What to launch
-test_version = True # Whether to launch with minimal data
+test_version = False # Whether to launch with minimal data
 
 
 
 # Training CNN:
-with_train_cnn = True
+with_train_cnn = False
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -58,28 +58,28 @@ if histogram_stats == activation_layer_stats:
     raise ValueError("Error, you need to specify one of histogram_stats and activation_layer_stats.")
 
 
-with_stats_computation = True
-with_train_second_model = True
+with_stats_computation = False
+with_train_second_model = False
 
 # Rule computation:
-with_global_rules = True
+with_global_rules = False
 
 # Image generation:
-get_images = False # With histograms
+get_images = True # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nb_channels         = 1
     nb_classes = 10
-    base_folder = "Mnist/"
+    base_folder = "MnistLeakyReluResnet/"
     data_type = "integer"
     classes = {
         0:"0",
@@ -98,7 +98,7 @@ elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
     nb_classes = 10
-    base_folder = "Cifar/"
+    base_folder = "CifarLeakyReluResnet/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -120,7 +120,7 @@ elif dataset == "CIFAR":     # for Cifar images
 
 #----------------------------
 # Folders
-scan_folder = "Scan/"
+scan_folder = "ScanFull/"
 if histogram_stats:
     scan_folder += "Histograms/"
 elif activation_layer_stats:
@@ -404,7 +404,7 @@ if with_global_rules:
         f'--global_rules_outfile {global_rules_file} '
         f'--nb_attributes {nb_stats_attributes} '
         f'--heuristic 1 '
-        f'--nb_threads 12 '
+        f'--nb_threads 4 '
         f'--max_iterations 25 '
         f'--nb_quant_levels {nbQuantLevels} '
         f'--dropout_dim {dropout_dim} '
@@ -477,7 +477,7 @@ if get_images:
                 highlighted_image = highlight_area_histograms(CNNModel, img, filter_size, stride, rule, classes)
             elif activation_layer_stats:
                 highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
-            #highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
+            highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 
 ##############################################################################

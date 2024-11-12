@@ -1122,8 +1122,12 @@ def get_top_ids(array, X=10, largest=True):
 
 def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
 
+    nb_top_filters = 20
+
     activations, positions = generate_filtered_images_and_predictions( #nb_filters x nb_activations
             CNNModel, image, filter_size, stride, intermediate_model)
+
+    filter_size = filter_size[0]
 
     # Convert to RGB if necessary
     if len(image.shape) == 2:
@@ -1141,48 +1145,121 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
     individual_maps = []
 
     for antecedent in rule.antecedents:
-        # On ne veut pas les sommes mais les activations, puis chercher dans les activations les ids qui nous intéressent...
+        # WARNING : Depending on the activation before the flatten layer, all smaller values are 0 which cannot be well interpreted
         # Get top X ids of patches on this activation
         if antecedent.inequality: #>=
-            patches_idx = get_top_ids(activations[:,antecedent.attribute], 100) # The attribute is the id of the activation
+            patches_idx = get_top_ids(activations[:,antecedent.attribute], nb_top_filters) # The attribute is the id of the activation
             #print("big", activations[patches_idx,antecedent.attribute])
-            # NE PAS PRENDRE LES 0 !!!!
         else: #<
-            patches_idx = get_top_ids(activations[:,antecedent.attribute], 100, False)
+            patches_idx = get_top_ids(activations[:,antecedent.attribute], nb_top_filters, False)
             #print("small", activations[patches_idx,antecedent.attribute])
 
-# VEFIFIER AU DESSUS IL Y A SUREMENT DES FAUTES les valeurs sont normalisées entre -1 et 1 donc le min ne peut pas être 0...
-# Prendre que les plus grands du coup? rouge-vert...
+        for i in patches_idx:
+            position = positions[i]
+            top_left = position
+            bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
 
-        individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
+            individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
 
-"""
-        # On sait quels patchs on veut et donc sa position en fonction de l'id j'imagine (avec un seul filter_size du moins, si yen a plusieurs il faudra réfléchir pour cette information car un id )
+            #Calculate intensity based on activation values
+            activation_values = activations[patches_idx, antecedent.attribute]
+            min_val, max_val = activation_values.min(), activation_values.max()
+            normalized_intensities = (activation_values - min_val) / (max_val - min_val + 1e-5)
 
-        # For each area (it's prediction, position and filter size)
-        for i, position in enumerate(positions):
-            # Update filter size if we exceed current limit
-            if i >= filter_start_idx + nb_areas_per_filter[filter_index]:
-                filter_start_idx += nb_areas_per_filter[filter_index]
-                filter_index += 1
-                current_filter_size = filter_size[filter_index]
-
-            if (class_prob >= pred_threshold):
+            # Apply intensity to patches
+            for i, idx in enumerate(patches_idx):  # Utilisation directe de l'index dans patches_idx
+                position = positions[idx]
+                intensity = normalized_intensities[i]
                 top_left = position
-                bottom_right = (position[0] + current_filter_size[0], position[1] + current_filter_size[1])
+                bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
 
-                # Accumulate the intensity of the activation in the individual color map
-                individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+                if antecedent.inequality:  # Apply green filter
+                    combined_green_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
+                    individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
+                else:  # Apply red filter
+                    combined_red_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
+                    individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
 
-                # Accumulate the intensity in the combined map for each activations
-                if antecedent.inequality:
-                    combined_green_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
-                else:
-                    combined_red_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+        individual_maps.append(individual_intensity_map)
 
-        individual_maps.append((individual_intensity_map, antecedent))
+    # Renormalization of intensities for each channel
+    if np.max(combined_green_intensity) > 0:
+        combined_green_intensity = np.clip(combined_green_intensity / np.max(combined_green_intensity), 0, 1)
+    else:
+        combined_green_intensity = np.zeros_like(combined_green_intensity)  # Laisser l'intensité à zéro si aucune valeur
 
-"""
+    if np.max(combined_red_intensity) > 0:
+        combined_red_intensity = np.clip(combined_red_intensity / np.max(combined_red_intensity), 0, 1)
+    else:
+        combined_red_intensity = np.zeros_like(combined_red_intensity)  # Laisser l'intensité à zéro si aucune valeur
+
+    # Combine green and red intensities into a single image
+    combined_image = original_image_rgb.copy()
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1] + combined_green_intensity * 255, 0, 255)  # Green channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + combined_red_intensity * 255, 0, 255)    # Red channel
+
+    # Plotting
+
+    # Determine the number of rows and columns for the subplots
+    num_antecedents = len(rule.antecedents)
+    total_images = num_antecedents + 2  # Original, combined, and individual filters
+
+    # We set a maximum number of columns per row for better visualization
+    max_columns = 4
+    num_columns = min(max_columns, total_images)
+    num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
+
+    # Create the matplotlib figure with dynamic rows and columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+
+    # If axes is a single AxesSubplot, convert it to a list for consistent indexing
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+
+    # Show the original image on top left
+    axes[0].imshow(original_image_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # Show combined image
+    axes[1].imshow(combined_image.astype(np.uint8))
+    axes[1].set_title("Combined Filters")
+    axes[1].axis('off')
+
+    # Show each antecedent image
+    for i, intensity_map in enumerate(individual_maps):
+        antecedent = rule.antecedents[i]
+        # Renormalize each intensity map
+        max_intensity = np.max(intensity_map)
+        if max_intensity > 0:  # Eviter la division par zéro
+            intensity_map = intensity_map / max_intensity
+
+        # Create filter image
+        filtered_image = original_image_rgb.copy()
+        if antecedent.inequality:
+            filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1] + intensity_map * 255, 0, 255)
+        else:
+            filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0] + intensity_map * 255, 0, 255)
+
+        filtered_image = filtered_image.astype(np.uint8)
+        ineq = ">=" if antecedent.inequality else "<"
+        axes[i+2].imshow(filtered_image)
+        axes[i+2].set_title(f"Top {nb_top_filters} Filter for Sum(A{antecedent.attribute}){ineq}{antecedent.value}")
+        axes[i+2].axis('off')
+
+    # Hide any remaining empty subplots if total_images < num_rows * num_columns
+    for j in range(total_images, len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout() # Adjust spacing
+    plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    plt.close(fig)
+
+    return fig
 
 ###############################################################
 
