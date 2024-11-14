@@ -53,6 +53,7 @@ void showDimlpBTParams()
   printOptionDescription("--flat <float [0,inf[>", "Back-propagation flat spot elimination parameter (default: 0.01)");
   printOptionDescription("--error_thresh <float [0,inf[>", "Error threshold to stop training");
   printOptionDescription("--acc_thresh <float ]0,1]>", "Accuracy threshold to stop training");
+  printOptionDescription("--extract_metrics <bool>", "Extract JSON file containing Nets output avgs and stds (default: false)");
   printOptionDescription("--abs_error_thresh <float [0,inf[>", "Absolute difference error threshold, 0 if not using this stopping criteria (default: 0)");
   printOptionDescription("--nb_epochs <int [1,inf[>", "Number of model training epochs (default: 1500)");
   printOptionDescription("--nb_epochs_error <int [1,inf[>", "Number of training epochs before showing error (default: 10)");
@@ -92,6 +93,7 @@ void checkDimlpBTParametersLogicValues(Parameters &p) {
   p.setDefaultDimlpTrn();
   p.setDefaultInt(NB_DIMLP_NETS, 25);
   p.setDefaultInt(NB_EX_PER_NET, 0);
+  p.setDefaultBool(EXTRACT_METRICS, false);
 
   // this sections check if values comply with program logic
 
@@ -212,7 +214,7 @@ int dimlpBT(const std::string &command) {
                                               TEST_DATA_FILE, TRAIN_CLASS_FILE, TEST_CLASS_FILE, CONSOLE_FILE, WEIGHTS_OUTFILE,
                                               TRAIN_PRED_OUTFILE, TEST_PRED_OUTFILE, STATS_FILE, FIRST_HIDDEN_LAYER, HIDDEN_LAYERS, HIDDEN_LAYERS_OUTFILE, WITH_RULE_EXTRACTION, GLOBAL_RULES_OUTFILE,
                                               LEARNING_RATE, MOMENTUM, FLAT, NB_QUANT_LEVELS, ERROR_THRESH, ACC_THRESH, ABS_ERROR_THRESH,
-                                              NB_EPOCHS, NB_EPOCHS_ERROR, NB_EX_PER_NET, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED};
+                                              NB_EPOCHS, NB_EPOCHS_ERROR, NB_EX_PER_NET, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, EXTRACT_METRICS, SEED};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -390,8 +392,12 @@ int dimlpBT(const std::string &command) {
         data.Del();
       }
     }
+
+
+    bool extractMetrics = params->getBool(EXTRACT_METRICS); 
+
     auto net = std::make_shared<BagDimlp>(eta, mu, flat, errThres, accThres, deltaErr,
-                                          quant, showErr, epochs, nbLayers, vecNbNeurons,
+                                          quant, showErr, epochs, nbLayers, extractMetrics,vecNbNeurons,
                                           nbDimlpNets, weightFile, seed);
 
     if (nbExInOne == 0)
