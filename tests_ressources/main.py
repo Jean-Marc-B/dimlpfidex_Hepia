@@ -67,39 +67,6 @@ def write_test_samples(nsamples: int) -> None:
     return samples_data.index
 
 
-def preprocess_data(
-    data: pd.DataFrame, labels: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    # enlève les données où les labels sont indéterminés
-    labels = labels[labels != 2]
-
-    # filtre les données selon les critères envoyés par Guido
-    data = data[
-        ((data["Clinical T-Stage_nan"] != 1) & (data["Clinical N-Stage_nan"] != 1))
-        & ~(
-            (data["Clinical N-Stage_N0"] == 1)
-            & (data["Clinical N-Stage_N1"] == 0)
-            & (data["Clinical T-Stage_T0"] == 1)
-            & (data["Clinical T-Stage_Tis"] == 0)
-        )
-        & (
-            (data["Planned axillary dissection"] == 1)
-            | (data["Sentinel node biopsy"] == 1)
-        )
-    ]
-
-    # enlève les lignes correspondantes aux labels indéterminés
-    data = data.loc[data.index.isin(labels.index)]
-
-    # harmonise en ne gardant que les indexs contenus dans Data
-    labels = labels.loc[labels.index.isin(data.index)]
-
-    # Ajoute le BMI
-    data = data.assign(BMI=lambda x: round(x.weight / (x.height / 100.0) ** 2, 3))
-
-    return data, labels
-
-
 def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
     labels = pd.get_dummies(labels).astype("uint")
 
@@ -243,6 +210,83 @@ def init_args():
     return parser.parse_args()
 
 
+#TODO
+# def test_with_gb(data, labels) -> None:
+#     import matplotlib.pyplot as plt
+#     from sklearn.model_selection import KFold
+#     from sklearn.metrics import roc_curve, RocCurveDisplay, auc
+#     from sklearn.preprocessing import LabelBinarizer
+#     from sklearn.ensemble import GradientBoostingClassifier
+
+#     tprs = []
+#     fprs = []
+#     scores = []
+#     auc_scores = []
+
+#     for epoch in range(10):
+#         print("="*20+f"EPOCH {epoch+1}"+"="*20)
+#         for i, (train_index, test_index) in enumerate(KFold(10, shuffle=True).split(allDataNorm)):
+#     #             directory = f"{args.results_directory}/{args.classifier}/epoch_{epoch}"
+    
+#             x_train = allDataNorm[train_index]
+#             x_test = allDataNorm[test_index]
+#             y_train = allDataVectClass[train_index]
+#             y_test = allDataVectClass[test_index]
+#             # classifier = LogisticRegression(max_iter=10000)
+#             classifier = GradientBoostingClassifier(n_estimators=150, max_depth=1)
+#             # classifier = RandomForestClassifier(n_estimators=100, max_depth=10)
+
+    
+#             classifier.fit(x_train, y_train)
+#             score = classifier.score(x_test, y_test)
+#             probs = classifier.predict_proba(x_test)
+#             preds = classifier.predict(x_test)
+    
+#             label_binarizer = LabelBinarizer().fit(y_train)
+#             y_one_hot_test = label_binarizer.transform(y_test)
+    
+#             print(f"KFold {i + 1} -> SCORE : {score}")
+#             scores.append(score)
+#             # fpr, tpr, tresholds = roc_curve(y_one_hot_test[:, 1], probs[:, 1])
+#             fpr, tpr, tresholds = roc_curve(y_one_hot_test, probs[:, 1])
+#                 # fpr, tpr, tresholds = roc_curve(y_one_hot_test[:, 0], probs[:, 0])
+#                 # fpr, tpr, tresholds = roc_curve(y_one_hot_test[:, 2], probs[:, 2])
+#             fprs.append(fpr)
+#             tprs.append(tpr)
+#             auc_scores.append(auc(fpr, tpr))
+
+#             viz = RocCurveDisplay(fpr=fpr,
+#                                     tpr=tpr,
+#                                     roc_auc=auc(fpr, tpr),
+#                                     estimator_name='---').plot(color="darkorange")
+#                                     #estimator_name=args.classifier).plot(color="darkorange", plot_chance_level=True)
+#                 # viz.figure_.savefig(f"{directory}/KFold_{i+1}.png")
+#             viz.figure_.savefig('theFig.png')
+#             plt.close()
+#                 # precisions.append(precision_score(y_test, preds, labels=[0, 1, 2]))
+#                 # recall.append(recall_score(y_test, preds, labels=[0, 1, 2]))
+#                 # f_score.append(f1_score(y_test, preds, labels=[0, 1, 2]))
+#             str1 = 'testClass.' + str(epoch+1) + '.' + str(i+1) 
+#             str2 = 'testOut.' + str(epoch+1) + '.' + str(i+1) 
+#             print(str1)
+#             np.savetxt(str1, y_test, fmt='%f')
+#             np.savetxt(str2, probs, fmt='%f')
+    
+#             del classifier
+#         print()
+    
+#     max_shape = max([len(a) for a in tprs])
+#     tprs = [np.append(t, [1 for _ in range(max_shape-len(t))]) for t in tprs]
+#     fprs = [np.append(f, [1 for _ in range(max_shape-len(f))]) for f in fprs]
+#     mean_tprs = np.array(tprs)
+#     mean_tprs = np.mean(mean_tprs, axis=0)
+#     mean_fprs = np.array(fprs)
+#     mean_fprs = np.mean(mean_fprs, axis=0)
+    
+#     mean_auc = 100.0*sum(auc_scores) / len(auc_scores)
+#     print(mean_auc)
+
+
 if __name__ == "__main__":
     args = init_args()
     abspath = os.path.abspath(os.path.dirname(__file__))
@@ -257,7 +301,9 @@ if __name__ == "__main__":
         clean_dir("temp")
 
     data, labels = dh.obtain_data("dataset/clinical_complete_rev1.csv")
-    data, labels = preprocess_data(data, labels)
+    data, labels = dh.filter_clinical(data, labels)
+    # Ajoute le BMI
+    data = data.assign(BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3))
 
     nb_features = data.shape[1]
     nb_classes = 2
@@ -275,11 +321,11 @@ if __name__ == "__main__":
 
     densCls("--json_config_file config/denscls.json")
     fidexGlo("--json_config_file config/fidexglo.json")
-    # TODO if fidex failed generating rules: upgrade dropouts
+    # TODO: pretty print fidex Rules 
 
     samples_rules = read_json_file("temp/explanation.json")
 
-    # TODO: do we add generated rules with the global rules ?
+    # TODO: add generated rules with the global rules 
     selected_rules_id = [
         get_rule_id(rule)
         for sample in samples_rules["samples"]
