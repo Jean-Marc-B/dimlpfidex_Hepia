@@ -1,6 +1,3 @@
-# FROM QUENTIN LEBLANC
-# https://githepia.hesge.ch/quentin.leblanc/pre-act/-/blob/main/src/utils/data_helper.py
-
 import re
 import os
 from collections import defaultdict
@@ -55,8 +52,10 @@ def get_labels(data: pd.DataFrame, *columns_names: str) -> np.array:
         # each 12M/24M/36 represents a 3 trits number
         # refers to (this table)[../../Ressources/trits.png] to understand the numbers below
         # 0 0 0 = 0 / 0 1 0 = 3 / 1 0 0 = 9
-        negs = [0, 2, 6]
-        nans = [8, 18, 20, 24, 26]
+        # negs = [0, 2, 6, 8]
+        # nans = [8, 18, 20, 24, 26]
+        negs = [0, 2]
+        nans = [6, 8]
         case = int("".join(map(str, x.values.astype(np.uint8).tolist())), 3)
         if case in negs:
             return 0
@@ -135,7 +134,7 @@ def one_hot_encoding_ext(data: pd.DataFrame, dummy_na: bool, *columns: str) -> p
     return res
 
 
-def infer_missing_values(data: pd.DataFrame, method: str = 'median', value: Optional[float] = None) -> pd.DataFrame:
+def infer_missing_values(data: pd.DataFrame, method: str = 'mean', value: Optional[float] = None) -> pd.DataFrame:
     """
     Replace NaN vales in the DataFrame with values from chosen method.
     :param data: explicit
@@ -177,7 +176,8 @@ def __obtain_clinical_data(file_path: str, training: bool=True) -> tuple[pd.Data
     :return: a pd.DataFrame with the data and a np.array with the labels.
     """
     data = read_file(file_path)
-    label_names = ['12m follow-up Arm Lymphedema', '24m follow-up Arm Lymphedema', '36m follow-up Arm Lymphedema']
+    # label_names = ['12m follow-up Arm Lymphedema', '24m follow-up Arm Lymphedema', '36m follow-up Arm Lymphedema']
+    label_names = ['12m follow-up Arm Lymphedema', '24m follow-up Arm Lymphedema']
     label_lymph = get_labels(data, *label_names)
 
     keywords = ["follow-up", "DB", "Post-RT", "Date", 'Baseline Telangiectasia', 'Baseline Edema',
@@ -192,6 +192,30 @@ def __obtain_clinical_data(file_path: str, training: bool=True) -> tuple[pd.Data
     attributes = one_hot_encoding_ext(attributes, True, *categorical_cols)
     attributes = infer_missing_values(attributes)
     label_lymph.rename("label", inplace=True)
+
+    # Adding missing columns if in clinical experiment case
+    if not training:
+        # clinical tests case
+        # we have to rename some columns, add some more to correspond to training data
+        # CF. ressources and file "precautionsDeCodage.pdf" for further information
+        # Wa add column smoker former and nan if not present
+        smoker = pd.DataFrame(np.zeros((attributes.shape[0], 2)), index=attributes.index,
+                              columns=["Smoker_nan", "Smoker_FORMER"])
+
+        # -> We add Pre Menopausal and Monopausal Nan if not present
+        menopausal = pd.DataFrame(np.zeros((attributes.shape[0], 2)), index=attributes.index,
+                              columns=["Menopausal_PRE-MENOPAUSAL", "Menopausal_nan"])
+        #           -> Rajouter T4C -> T4A/T4B
+        t4c = attributes['Clinical T-Stage_T4c']
+        t4at4b = attributes.filter(regex=r"^Clinical T-Stage_T4[a-b]$")
+        t4at4b = t4at4b.add(t4c, axis=0)
+        attributes = attributes.drop(('Clinical T-Stage_T4a', 'Clinical T-Stage_T4b', 'Clinical T-Stage_T4c'), axis=1)
+
+        # 3D - IMRT
+        # TODO I do not have acces on clinical trial file for now and I have som questions about it
+
+        # add new columns
+        attributes = pd.concat([attributes, smoker, menopausal, t4at4b], axis=1)
 
     # Management of T1-4
     def __manage_T_retroactively(attributes: pd.DataFrame) -> pd.DataFrame:
@@ -252,12 +276,12 @@ def __obtain_clinical_data(file_path: str, training: bool=True) -> tuple[pd.Data
         return attributes.sort_index(axis=1, ascending=True)
 
     attributes = __manage_N_retroactively(attributes)
+    # All capital letter
+    attributes.columns = [col.upper() for col in attributes.columns]
+    attributes = attributes.sort_index(axis=1, ascending=False)
 
-    if not training:
-        # clinical tests case
-        # we have to rename some columns, add some more to correspond to training data
-        # CF. ressources and file "precautionsDeCodage.pdf" for further information
-        pass
+    # replace NAN in column's name by UNKNOWN, spaces by _ and - by _
+    attributes.rename(columns=lambda col: col.strip().replace("NAN", "UNKNOWN").replace("-", "_").replace(" ", "_"), inplace=True)
 
     return attributes, label_lymph
 
@@ -410,4 +434,29 @@ def obtain_standalone_data(filename: Union[str, Any], sep: str = ";") -> (pd.Dat
     data = data.drop(['label'], axis=1)
     data.dropna(axis=0, how='all', inplace=True)
     data = infer_missing_values(data)
+    return data, labels
+
+def filter_clinical(data: pd.DataFrame, labels: pd.Series) -> (pd.DataFrame, pd.Series):
+    """
+    Filter Clinical data with the rules given from doctors.
+    Clinical T-Stage_nan != 1 AND Clinical N-Stage_nan != 1
+    AND
+    not (Clinical N-Stage_N0 == 1 AND Clinical N-Stage_N1 == 0 AND Clinical T-Stage_T0 == 1 AND Clinical T-Stage_Tis == 0)
+    AND
+    Planned axillary dissection == 1 OR Sentinel Node Biopsy == 1
+    :param data: the data to filter
+    :param labels: labels indexed by subject ids
+    :return: filtered data and corresponding labels
+    """
+    labels = labels[labels != 2]  # enlève les données où les labels sont indéterminés
+
+    data = data[((data["CLINICAL_T_STAGE_UNKNOWN"] != 1) & (data["CLINICAL_N_STAGE_UNKNOWN"] != 1)) &
+                ~((data["CLINICAL_N_STAGE_N0"] == 1) & (data["CLINICAL_N_STAGE_N1"] == 0) & (
+                            data["CLINICAL_T_STAGE_T0"] == 1) & (data["CLINICAL_T_STAGE_TIS"] == 0)) &
+                ((data["PLANNED_AXILLARY_DISSECTION"] == 1) | (data[
+                                                                   "SENTINEL_NODE_BIOPSY"] == 1))]  # filtre les données selon les critères envoyés par Guido
+
+    data = data.loc[data.index.isin(labels.index)]  # enlève les lignes correspondantes aux labels indéterminés
+    labels = labels.loc[labels.index.isin(data.index)]  # harmonise en ne gardant que les indexs contenus dans Data
+
     return data, labels

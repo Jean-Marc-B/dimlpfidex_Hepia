@@ -9,5 +9,5 @@
     "nb_attributes": 79,
     "nb_classes": 2,
     "test_pred_outfile": "input/test_sample_pred.csv",
-    "console_file": "logs/202411081442_denscls.log"
+    "console_file": "logs/202411141412_denscls.log"
 }
