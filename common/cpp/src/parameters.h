@@ -81,6 +81,7 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
   HIDDEN_LAYERS,
   HIDDEN_LAYERS_OUTFILE,
   HIDDEN_LAYERS_FILE,
+  EXTRACT_METRICS,
   _NB_PARAMETERS // internal use only, do not consider it as a usable parameter
 };
 
@@ -149,7 +150,9 @@ static const std::unordered_map<std::string, ParameterCode> parameterNames = {
     {"first_hidden_layer", FIRST_HIDDEN_LAYER},
     {"hidden_layers", HIDDEN_LAYERS},
     {"hidden_layers_outfile", HIDDEN_LAYERS_OUTFILE},
-    {"hidden_layers_file", HIDDEN_LAYERS_FILE}};
+    {"hidden_layers_file", HIDDEN_LAYERS_FILE},
+    {"extract_metrics", EXTRACT_METRICS},
+    };
 
 /**
  * @brief The Parameters class manages configuration parameters for each program.

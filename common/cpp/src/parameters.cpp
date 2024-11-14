@@ -379,6 +379,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setString(HIDDEN_LAYERS_FILE, arg);
     break;
 
+  case EXTRACT_METRICS:
+    setBool(EXTRACT_METRICS, arg);
+    break;
+
   default: // If we put another -X option
     throw CommandArgumentException("Illegal option : " + param);
   }

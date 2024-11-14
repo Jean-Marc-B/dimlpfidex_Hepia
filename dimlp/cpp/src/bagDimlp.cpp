@@ -222,21 +222,22 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index)
     stds[class_index] = sqrt(stds[class_index] * (1.0f / (float)NbDimlpNets));
   }
 
-  Json jsonData;
+  if (extractMetrics) {
+    Json jsonData;
 
-  std::string filename = "stds-avg.json";
-  std::ofstream ofs(filename);
+    std::string filename = "stds-avg.json";
+    std::ofstream ofs(filename);
 
+    jsonData["nbNets"] = NbDimlpNets;
+    jsonData["avgs"] = GlobalOut;
+    jsonData["stds"] = stds;
 
-  jsonData["nbNets"] = NbDimlpNets;
-  jsonData["avgs"] = GlobalOut;
-  jsonData["stds"] = stds;
+    if (!ofs.is_open() || ofs.fail()) {
+      throw FileNotFoundError("JSON file to be written named '" + filename + "' couldn't be opened, cannot proceed.");
+    }
 
-  if (!ofs.is_open() || ofs.fail()) {
-    throw FileNotFoundError("JSON file to be written named '" + filename + "' couldn't be opened, cannot proceed.");
+    ofs << std::setw(4) << jsonData << std::endl;
   }
-
-  ofs << std::setw(4) << jsonData << std::endl;
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -374,6 +375,7 @@ BagDimlp::BagDimlp(
     int showErrParam,
     int nbEpochsParam,
     int nbLayers,
+    bool extractMetrics,
     std::vector<int> nbNeurons,
     int nbDimlpNets,
     const std::string &weightFile,

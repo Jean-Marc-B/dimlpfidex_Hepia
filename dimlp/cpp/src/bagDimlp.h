@@ -25,6 +25,7 @@ class BagDimlp : public Dimlp {
   int ShowErrParam;              ///< Frequency of error display.
   int NbEpochsParam;             ///< Number of training epochs.
   int NbLayers;                  ///< Number of layers in the network.
+  bool extractMetrics;           ///< Used to extract stds, nb dimlp bags and avgs
   const std::string &WeightFile; ///< Path to the file for saving weights.
 
   std::vector<int> NbNeurons; ///< Number of neurons in each layer.
@@ -105,6 +106,7 @@ public:
       int showErrParam,
       int nbEpochsParam,
       int nbLayers,
+      bool extractMetrics,
       std::vector<int> nbNeurons,
       int nbDimlpNets,
       const std::string &weightFile,
