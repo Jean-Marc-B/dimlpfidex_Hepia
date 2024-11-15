@@ -581,7 +581,7 @@ def clone_and_replace(model):
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
-def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats):
+def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu):
     """
     Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
 
@@ -631,27 +631,28 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
         input_tensor = Input(shape=(size1D, size1D, 3))
         model_base = ResNet50(include_top=False, weights='imagenet', input_tensor=input_tensor)
 
-        # Name of the last ReLU activation
-        last_activation_layer_name = 'conv5_block3_out'
+        if with_leaky_relu:
+            # Name of the last ReLU activation
+            last_activation_layer_name = 'conv5_block3_out'
 
-        # Find index of this layer
-        last_activation_layer_index = None
-        for idx, layer in enumerate(model_base.layers):
-            if layer.name == last_activation_layer_name:
-                last_activation_layer_index = idx
-                break
+            # Find index of this layer
+            last_activation_layer_index = None
+            for idx, layer in enumerate(model_base.layers):
+                if layer.name == last_activation_layer_name:
+                    last_activation_layer_index = idx
+                    break
 
-        if last_activation_layer_index is None:
-            print(f"Layer {last_activation_layer_name} not found in the model.")
+            if last_activation_layer_index is None:
+                print(f"Layer {last_activation_layer_name} not found in the model, cannot use LeakyRelu.")
 
 
 
-        if last_activation_layer_index is not None:
-            # Get output of previous layer
-            last_conv_layer_output = model_base.layers[last_activation_layer_index - 1].output
+            if last_activation_layer_index is not None and with_leaky_relu:
+                # Get output of previous layer
+                last_conv_layer_output = model_base.layers[last_activation_layer_index - 1].output
 
-            # Apply LeakyReLU instead of ReLU
-            x = LeakyReLU(alpha=0.3, name='conv5_block3_out')(last_conv_layer_output)
+                # Apply LeakyReLU instead of ReLU
+                x = LeakyReLU(alpha=0.3, name='conv5_block3_out')(last_conv_layer_output)
 
             x = Flatten()(x)
             x = Dropout(0.5)(x)
@@ -690,7 +691,10 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
         model.add(Dropout(0.3))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        model.add(DepthwiseConv2D((5, 5), activation='leaky_relu'))
+        if with_leaky_relu:
+            model.add(DepthwiseConv2D((5, 5), activation='leaky_relu'))
+        else:
+            model.add(DepthwiseConv2D((5, 5), activation='relu'))
         model.add(Dropout(0.3))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
@@ -817,6 +821,21 @@ def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, int
 
     return sums
 
+def compute_proba_images(nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride):
+    my_filter_size = filter_size[0]
+    output_size = (size1D - my_filter_size[0] + 1, size1D - my_filter_size[1] + 1, nb_classes)
+    proba_images = np.zeros((nb_samples,) + output_size)
+
+    for sample_id in range(nb_samples):
+        image = data[sample_id]
+        image = image.reshape(size1D, size1D, nb_channels)
+        predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
+            CNNModel, image, filter_size, stride)
+        predictions = predictions.reshape(output_size)
+        proba_images[sample_id] = predictions
+
+    return proba_images
+
 def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride, intermediate_model=None):
 
     """
@@ -872,7 +891,7 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
 
     else:
         predictions = CNNModel.predict(filtered_images, verbose=0)
-        return filtered_images, predictions, positions, nb_areas_per_filter
+        return predictions, positions, nb_areas_per_filter
 
 ###############################################################
 # get probability thresholds
@@ -910,7 +929,7 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
       falling into each bin.
     """
 
-    filtered_images, predictions, _, _ = generate_filtered_images_and_predictions(
+    predictions, _, _ = generate_filtered_images_and_predictions(
         CNNModel, image, filter_size, stride)
 
     probability_thresholds = getProbabilityThresholds(nb_bins)
@@ -949,7 +968,7 @@ def highlight_area_histograms(CNNModel, image, filter_size, stride, rule, classe
         2. The image with all filters applied based on the rule's antecedents.
         3. Individual images showing the highlighted areas for each antecedent separately.
     """
-    filtered_images, predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
+    predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
     CNNModel, image, filter_size, stride)
 
     # Convert to RGB if necessary
@@ -1289,7 +1308,7 @@ def get_heat_maps(CNNModel, image, filter_size, stride, probability_thresholds, 
     fig : matplotlib.figure.Figure
         A matplotlib figure containing the original image and heat maps for each class, organized in a grid layout.
     """
-    filtered_images, predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
+    predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
     CNNModel, image, filter_size, stride)
 
     real_filter_size = filter_size[0]
