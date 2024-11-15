@@ -35,7 +35,6 @@ def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
         config["root_folder"] = root_folder
         config["nb_attributes"] = nb_features
         config["nb_classes"] = nb_classes
-        # TODO: config["attributes_file"] = ...
         config["console_file"] = (
             f"{logpath + datetime.today().strftime('%Y%m%d%H%M')}_{program}.log"
         )
@@ -43,10 +42,10 @@ def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
         update_config_file(config_filename, config)
 
     update_config_file(
-        os.path.join(confpath, "normalization.json"), {"nb_attributes": nb_features}
+        os.path.join(confpath, "normalization.json"), {"root_folder": root_folder, "nb_attributes": nb_features}
     )
     update_config_file(
-        os.path.join(confpath, "denormalization.json"), {"nb_attributes": nb_features}
+        os.path.join(confpath, "denormalization.json"), {"root_folder": root_folder, "nb_attributes": nb_features}
     )
 
 
