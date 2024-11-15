@@ -27,7 +27,7 @@ import re
 import copy
 from tensorflow.keras import Model
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
-from utils import trainCNN, compute_histograms, compute_activation_sums, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, getProbabilityThresholds, get_heat_maps
+from utils import trainCNN, compute_histograms, compute_activation_sums, compute_proba_images, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, getProbabilityThresholds, get_heat_maps
 
 np.random.seed(seed=None)
 
@@ -43,29 +43,30 @@ start_time = time.time()
 
 
 # What to launch
-test_version = False # Whether to launch with minimal data
+test_version = True # Whether to launch with minimal data
 
 
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
-histogram_stats = False
-activation_layer_stats = True
+histogram_stats = True
+activation_layer_stats = False
+probability_stats = False
 
-if histogram_stats == activation_layer_stats:
-    raise ValueError("Error, you need to specify one of histogram_stats and activation_layer_stats.")
+if histogram_stats + activation_layer_stats + probability_stats != 1:
+    raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = False
+with_stats_computation = True
 with_train_second_model = False
 
 # Rule computation:
 with_global_rules = False
 
 # Image generation:
-get_images = True # With histograms
+get_images = False # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
@@ -79,7 +80,7 @@ if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nb_channels         = 1
     nb_classes = 10
-    base_folder = "MnistLeakyReluResnet/"
+    base_folder = "Mnist/"
     data_type = "integer"
     classes = {
         0:"0",
@@ -98,7 +99,7 @@ elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
     nb_classes = 10
-    base_folder = "CifarLeakyReluResnet/"
+    base_folder = "Cifar/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -121,10 +122,14 @@ elif dataset == "CIFAR":     # for Cifar images
 #----------------------------
 # Folders
 scan_folder = "ScanFull/"
+if test_version:
+    scan_folder = "Scan/"
 if histogram_stats:
     scan_folder += "Histograms/"
 elif activation_layer_stats:
     scan_folder += "Activations_Sum/"
+elif probability_stats:
+    scan_folder += "Probability_Images/"
 
 #----------------------------
 # Files
@@ -149,6 +154,11 @@ else:
     resnet = True
     nbIt = 80
 
+if activation_layer_stats:
+    with_leaky_relu = True
+else:
+    with_leaky_relu = False
+
 #----------------------------
 # For stats computation
 
@@ -158,6 +168,9 @@ if histogram_stats:
 elif activation_layer_stats:
     train_stats_file = base_folder + scan_folder + "train_activation_sum.txt"
     test_stats_file = base_folder + scan_folder + "test_activation_sum.txt"
+elif probability_stats:
+    train_stats_file = base_folder + scan_folder + "train_probability_images.txt"
+    test_stats_file = base_folder + scan_folder + "test_probability_images.txt"
 
 filter_size = [[7,7]] # Size of filter(s) applied to the image
 if np.asarray(filter_size).ndim == 1:
@@ -243,7 +256,7 @@ print("Data loaded.\n")
 
 # Train CNN model
 if with_train_cnn:
-    trainCNN(size1D, nb_channels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats)
+    trainCNN(size1D, nb_channels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
 
 
 CNNModel = keras.saving.load_model(model_file)
@@ -285,6 +298,7 @@ if with_stats_computation:
         print("\nSaving histograms...")
         train_histograms = train_histograms.reshape(nb_train_samples, nb_stats_attributes)
         test_histograms = test_histograms.reshape(nb_test_samples, nb_stats_attributes)
+        print(train_histograms.shape)
         output_data(train_histograms, train_stats_file)
         output_data(test_histograms, test_stats_file)
         print("Histograms saved.")
@@ -318,11 +332,42 @@ if with_stats_computation:
         print("\nTest sum of activation layer patches computed.\n")
 
         print("\nSaving sums...")
-        #train_sums = train_sums.reshape(nb_train_samples, nb_stats_attributes)
-        #test_sums = test_sums.reshape(nb_test_samples, nb_stats_attributes)
         output_data(train_sums, train_stats_file)
         output_data(test_sums, test_stats_file)
         print("Sums saved.")
+
+    elif probability_stats:
+        print("\nComputing train probability images of patches...\n")
+        # Get sums for each train sample
+        if test_version:
+            nb_train_samples = 100
+        else:
+            nb_train_samples = Y_train.shape[0]
+
+        train_probas = compute_proba_images(nb_train_samples, X_train, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride)
+        print(train_probas.shape)
+        print("\nComputed train probability images of patches.")
+
+        print("\nComputing test probability images of patches...\n")
+        # Get sums for each train sample
+        if test_version:
+            nb_test_samples = 100
+        else:
+            nb_test_samples = Y_test.shape[0]
+
+        test_probas = compute_proba_images(nb_test_samples, X_test, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride)
+        print(test_probas.shape)
+        print("\nComputed test probability images of patches.")
+
+        print("\nSaving probability images...")
+
+        # PROBLEME DANS LE OUTPUT_DATA(gère que la 2D, nous on a du (nb_samples x size1D - filter_size[0] + 1 x size1D - filter_size[1] + 1 x nb_classes)
+        # De plus il faut vérifier comment feed ça à fidexGloRules plus tard... Normalement il prend du 2D (nb_samples x nb_attributes) -> il faudrait plutot l'enregistrer en 2D
+        # et le changer en 4D que pour l'entrainement.
+
+        output_data(train_probas, train_stats_file)
+        output_data(test_probas, test_stats_file)
+        print("Probability images saved.")
 
 ##############################################################################
 # Train second model with histograms
