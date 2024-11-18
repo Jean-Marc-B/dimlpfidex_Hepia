@@ -581,12 +581,13 @@ def clone_and_replace(model):
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
-def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu):
+def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu, with_probability=False):
     """
     Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
 
     Parameters:
-    - size1D: The size of one dimension of the input image (image is size1D x size1D).
+    - sizeX: The size of the first dimension of the input image (image is sizeX x sizeY).
+    - sizeY: The size of the second dimension of the input image (image is sizeX x sizeY).
     - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - nb_classes: The number of classes for classification.
     - resnet: Boolean indicating whether to use a ResNet architecture (True) or a smaller custom model (False).
@@ -617,7 +618,7 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
     print(f"Validation set: {x_val.shape}, {y_val.shape}")
     print(f"Test set: {X_test.shape}, {Y_test.shape}")
 
-    if (nbChannels == 1 and resnet):
+    if (nbChannels == 1 and resnet and not with_probability):
         # B&W to RGB
         x_train = np.repeat(x_train, 3, axis=-1)
         X_test = np.repeat(X_test, 3, axis=-1)
@@ -625,10 +626,12 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
         nbChannels = 3
 
     ##############################################################################
-    if resnet:
+    if with_probability:
+        print("On est là")
+    elif resnet:
 
         # Load the ResNet50 model with pretrained weights
-        input_tensor = Input(shape=(size1D, size1D, 3))
+        input_tensor = Input(shape=(sizeX, sizeY, 3))
         model_base = ResNet50(include_top=False, weights='imagenet', input_tensor=input_tensor)
 
         if with_leaky_relu:
@@ -668,7 +671,7 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
             model.summary()
 
     # if resnet:
-    #     input_tensor = Input(shape=(size1D, size1D, 3))
+    #     input_tensor = Input(shape=(sizeX, sizeY, 3))
     #     model_base = ResNet50(include_top=False, weights="imagenet", input_tensor=input_tensor)
     #     model = Sequential()
     #     model.add(model_base)
@@ -677,7 +680,7 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
     #     model.add(BatchNormalization())
     #     model.add(Dense(nb_classes, activation='softmax'))
 
-    #     model.build((None, size1D, size1D, 3))  # Build the model with the input shape
+    #     model.build((None, sizeX, sizeY, 3))  # Build the model with the input shape
 
     #     model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
     #     model.summary()
@@ -685,7 +688,7 @@ def trainCNN(size1D, nbChannels, nb_classes, resnet, nbIt, model_file, model_che
     else:
         model = Sequential()
 
-        model.add(Input(shape=(size1D, size1D, nbChannels)))
+        model.add(Input(shape=(sizeX, sizeY, nbChannels)))
 
         model.add(Convolution2D(32, (5, 5), activation='relu'))
         model.add(Dropout(0.3))
@@ -823,17 +826,20 @@ def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, int
 
 def compute_proba_images(nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride):
     my_filter_size = filter_size[0]
-    output_size = (size1D - my_filter_size[0] + 1, size1D - my_filter_size[1] + 1, nb_classes)
-    proba_images = np.zeros((nb_samples,) + output_size)
+    output_size = ((size1D - my_filter_size[0] + 1)*(size1D - my_filter_size[1] + 1)*nb_classes)
+    #print(output_size) # (4840)
+    proba_images = np.zeros((nb_samples,output_size))
 
     for sample_id in range(nb_samples):
         image = data[sample_id]
         image = image.reshape(size1D, size1D, nb_channels)
         predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
             CNNModel, image, filter_size, stride)
+        #print(predictions.shape)  # (484, 10)
         predictions = predictions.reshape(output_size)
+        # print(predictions.shape) # (4840,)
         proba_images[sample_id] = predictions
-
+    #print(proba_images.shape)  # (100, 4840)
     return proba_images
 
 def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride, intermediate_model=None):
