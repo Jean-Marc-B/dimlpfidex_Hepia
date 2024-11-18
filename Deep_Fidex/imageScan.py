@@ -48,18 +48,18 @@ test_version = True # Whether to launch with minimal data
 
 
 # Training CNN:
-with_train_cnn = True
+with_train_cnn = False
 
 # Stats computation and second model training:
-histogram_stats = True
+histogram_stats = False
 activation_layer_stats = False
-probability_stats = False
+probability_stats = True
 
 if histogram_stats + activation_layer_stats + probability_stats != 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = True
+with_stats_computation = False
 with_train_second_model = False
 
 # Rule computation:
@@ -73,8 +73,8 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
@@ -256,7 +256,7 @@ print("Data loaded.\n")
 
 # Train CNN model
 if with_train_cnn:
-    trainCNN(size1D, nb_channels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
+    trainCNN(size1D, size1D, nb_channels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
 
 
 CNNModel = keras.saving.load_model(model_file)
@@ -270,16 +270,19 @@ if activation_layer_stats: # Get intermediate model
 
 
 ##############################################################################
+if test_version:
+    nb_train_samples = 100
+    nb_test_samples = 100
+else:
+    nb_train_samples = Y_train.shape[0]
+    nb_test_samples = Y_test.shape[0]
+
 # Compute histograms
 if with_stats_computation:
     if histogram_stats:
         print("\nComputing train histograms...")
 
         # Get histograms for each train sample
-        if test_version:
-            nb_train_samples = 100
-        else:
-            nb_train_samples = Y_train.shape[0]
 
         train_histograms = compute_histograms(nb_train_samples, X_train, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
         print("\nTrain histograms computed.\n")
@@ -287,10 +290,6 @@ if with_stats_computation:
         print("Computing test histograms...")
 
         # Get histograms for each test sample
-        if test_version:
-            nb_test_samples = 100
-        else:
-            nb_test_samples = Y_test.shape[0]
         test_histograms = compute_histograms(nb_test_samples, X_test, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
 
         print("\nTest histograms computed.")
@@ -303,14 +302,12 @@ if with_stats_computation:
         output_data(test_histograms, test_stats_file)
         print("Histograms saved.")
 
+
+
     elif activation_layer_stats:
 
         print("\nComputing train sums of activation layer patches...")
         # Get sums for each train sample
-        if test_version:
-            nb_train_samples = 100
-        else:
-            nb_train_samples = Y_train.shape[0]
 
         train_sums = compute_activation_sums(nb_train_samples, X_train, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
         # Normalization
@@ -321,10 +318,6 @@ if with_stats_computation:
 
         print("\nComputing test sums of activation layer patches...")
         # Get sums for each test sample
-        if test_version:
-            nb_test_samples = 100
-        else:
-            nb_test_samples = Y_test.shape[0]
 
         test_sums = compute_activation_sums(nb_test_samples, X_test, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
         # Normalization
@@ -339,10 +332,6 @@ if with_stats_computation:
     elif probability_stats:
         print("\nComputing train probability images of patches...\n")
         # Get sums for each train sample
-        if test_version:
-            nb_train_samples = 100
-        else:
-            nb_train_samples = Y_train.shape[0]
 
         train_probas = compute_proba_images(nb_train_samples, X_train, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride)
         print(train_probas.shape)
@@ -350,10 +339,6 @@ if with_stats_computation:
 
         print("\nComputing test probability images of patches...\n")
         # Get sums for each train sample
-        if test_version:
-            nb_test_samples = 100
-        else:
-            nb_test_samples = Y_test.shape[0]
 
         test_probas = compute_proba_images(nb_test_samples, X_test, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride)
         print(test_probas.shape)
@@ -361,16 +346,37 @@ if with_stats_computation:
 
         print("\nSaving probability images...")
 
-        # PROBLEME DANS LE OUTPUT_DATA(gère que la 2D, nous on a du (nb_samples x size1D - filter_size[0] + 1 x size1D - filter_size[1] + 1 x nb_classes)
-        # De plus il faut vérifier comment feed ça à fidexGloRules plus tard... Normalement il prend du 2D (nb_samples x nb_attributes) -> il faudrait plutot l'enregistrer en 2D
-        # et le changer en 4D que pour l'entrainement.
-
         output_data(train_probas, train_stats_file)
         output_data(test_probas, test_stats_file)
         print("Probability images saved.")
 
 ##############################################################################
-# Train second model with histograms
+# Train second model with stats
+
+if probability_stats:
+    if not activation_layer_stats:
+        train_probas = np.loadtxt(train_stats_file)
+        train_probas = train_probas.astype('float32')
+        test_probas = np.loadtxt(test_stats_file)
+        test_probas = test_probas.astype('float32')
+    print(train_probas.shape) # (100, 4840)
+    print(test_probas.shape) # (100, 4840)
+    sizeX = size1D - filter_size[0][0] + 1
+    sizeY = size1D - filter_size[0][1] + 1
+    output_size = (sizeX, sizeY, nb_classes)
+    train_probas = train_probas.reshape((nb_train_samples,)+output_size)
+    test_probas = train_probas.reshape((nb_test_samples,)+output_size)
+    print(train_probas.shape)  # (100, 22, 22, 10)
+    print(test_probas.shape)  # (100, 22, 22, 10)
+    second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
+    second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
+
+    trainCNN(sizeX, sizeY, nb_classes, nb_classes, False, nbIt, second_model_file, second_model_checkpoint_weights, train_probas, Y_train[0:nb_train_samples], test_probas, Y_test[0:nb_test_samples], train_pred_file, test_pred_file, second_model_stats, False, True)
+
+    #output_size = (size1D - my_filter_size[0] + 1, size1D - my_filter_size[1] + 1, nb_classes)
+    #predictions = predictions.reshape(output_size)
+    #proba_images[sample_id] = predictions
+    # On veut (nbSamples, output_size) (100, 22, 22, 10)
 
 if test_version:
     train_class_file = base_folder + "trainClass_temp.txt"
