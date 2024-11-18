@@ -1,52 +1,13 @@
 from dimlpfidex.fidex import fidexGlo, fidexGloRules
 from dimlpfidex.dimlp import dimlpBT, densCls
 from trainings import normalization
-from datetime import datetime
-import data_helper as dh
+import tests_ressources.src.data_helper as dh
+from tests_ressources.src.utils import *
+from tests_ressources.src.rule import *
 import pandas as pd
 import numpy as np
-import argparse
 import math
-import json
-import csv
 import os
-
-
-def update_config_file(filename: str, params: dict) -> None:
-    with open(filename, "r+") as f:
-        config = json.load(f)
-        for key, param in params.items():
-            config[key] = param
-
-        f.seek(0)
-        json.dump(config, f, indent=4)
-        f.truncate()
-
-
-def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
-    confpath = os.path.join(root_folder, "config")
-    logpath = "logs/"
-
-    programs = ["dimlpbt", "denscls", "fidexglo", "fidexglorules"]
-
-    for program in programs:
-        config_filename = os.path.join(confpath, f"{program}.json")
-        config = dict()
-        config["root_folder"] = root_folder
-        config["nb_attributes"] = nb_features
-        config["nb_classes"] = nb_classes
-        config["console_file"] = (
-            f"{logpath + datetime.today().strftime('%Y%m%d%H%M')}_{program}.log"
-        )
-
-        update_config_file(config_filename, config)
-
-    update_config_file(
-        os.path.join(confpath, "normalization.json"), {"root_folder": root_folder, "nb_attributes": nb_features}
-    )
-    update_config_file(
-        os.path.join(confpath, "denormalization.json"), {"root_folder": root_folder, "nb_attributes": nb_features}
-    )
 
 
 # This get random samples until we get real data
@@ -55,7 +16,7 @@ def write_test_samples(nsamples: int) -> None:
 
     samples_data = data.sample(nsamples)
 
-    # one hotting classes (useless but must be done, )
+    # one hotting classes (useless but must be done)
     samples_data = samples_data.assign(Lymphodema_NO=lambda x: 1)
     samples_data = samples_data.assign(Lymphodema_YES=lambda x: 0)
 
@@ -76,35 +37,25 @@ def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
     labels.to_csv("temp/train_classes.csv", sep=",", header=False, index=False)
 
 
-def read_json_file(path: str) -> dict:
-    with open(path) as fp:
-        return json.load(fp)
-
-def write_json_file(path: str, data: dict, mode: str = "w") -> None:
-    with open(path, mode) as fp:
-        json.dump(data, fp, indent=4)
-
-
-def get_inequality(b: bool) -> str:
-    return ">=" if b else "<"
-
-
 def write_results(
-    used_rules_id: list[int], sample_ids: list[str], data: dict, nb_features: int
+    used_rules_id: list[int], sample_ids: list[str], nb_features: int
 ) -> None:
     res = []
+    g_rules = read_json_file("temp/global_rules_denormalized.json")
 
     lower_interval, upper_interval = get_metrics()
     risks = get_risk()
+
+    # add STUDYID, SITEIDN, SITENAME, SUBJID, VISIT
 
     for sample, risk in zip(data["samples"], risks):
         for i, rule in enumerate(sample["rules"]):
             line = [""] * (nb_features + 5)
             line[0] = sample_ids[sample["sampleId"]]
             line[1] = used_rules_id[i]
-            line[2] = risk
-            line[3] = lower_interval
-            line[4] = upper_interval
+            line[2] = f"{risk * 100.0:.3f}"
+            line[3] = f"{lower_interval: .3f}"
+            line[4] = f"{upper_interval: .3f}"
             line[5] = rule["coveringSize"]
             for antecedant in rule["antecedents"]:
                 line[antecedant["attribute"] + 5] = get_inequality(
@@ -125,7 +76,7 @@ def get_risk() -> list[float]:
 
 def get_metrics() -> tuple[float, float]:
     data = read_json_file(
-        os.path.join(os.path.abspath(os.path.dirname(__file__)), "stds.json")
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), "temp", "stds-avg.json")
     )
     nb_nets = data["nbNets"]
 
@@ -143,147 +94,22 @@ def get_metrics() -> tuple[float, float]:
     )
 
 
-def write_csv(data: list[list]) -> None:
-    with open("output/result.csv", "w") as fp:
-        wr = csv.writer(fp, quoting=csv.QUOTE_ALL)
-        wr.writerows(data)
+
+def pretty_print_results(used_rules_id: list[int], sample_ids: list[str], data: dict):
+    lower_interval, upper_interval = get_metrics()
+    risks = get_risk()
+
+    for sample, risk in zip(data["samples"], risks):
+        print(f"Sample {sample_ids[sample['sampleId']]} activated rules:")
+        for i, rule in enumerate(sample["rules"]):
+            print(f"Rule ID {used_rules_id[i]}")
+            print(
+                f"Risk {risk} \n  lower interval: {lower_interval}\n  upper interval: {upper_interval}"
+            )
+            # print_rule(rule)
+            print("\n")
 
 
-def print_rule(rule):
-    print(
-        f"""Rule:
-        - accuracy: {rule["accuracy"]}
-        - antecedants: {rule["antecedents"]}
-        - confidence: {rule["confidence"]}
-        - samples covered: {rule["coveringSize"]}
-        - fidelity: {rule["fidelity"]}"""
-    )
-
-
-def get_rule_id(rule):
-    global_rules = read_json_file("temp/global_rules.json")
-
-    for i, global_rule in enumerate(global_rules["rules"]):
-        if global_rule == rule:
-            return i
-
-    return -1
-
-
-def save_rule(rule: dict) -> None:
-    path = "temp/global_rules.json"
-    global_rules = read_json_file(path)
-    global_rules["rules"] | rule
-    print(global_rules)
-    write_json_file(path, global_rules)
-
-
-def clean_dir(dirname):
-    nremoved = 0
-    abspath = os.path.abspath(os.path.dirname(__file__))
-    temppath = os.path.join(
-        abspath,
-        dirname,
-    )
-
-    print(f"Cleaning {temppath} directory...")
-
-    for file in os.listdir(temppath):
-        filepath = os.path.join(temppath, file)
-        try:
-            if os.path.isfile(filepath):
-                os.remove(filepath)
-                nremoved += 1
-        except OSError as ose:
-            print(f"Error occured while trying to delete {file}. Error: {ose}")
-
-    print(f"{temppath} cleaned, {nremoved} files deleted.")
-
-
-def init_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--train", action="store_true")
-    parser.add_argument("-c", "--clean", action="store_true")
-    parser.add_argument("--cleanall", action="store_true")
-
-    return parser.parse_args()
-
-
-#TODO
-# def test_with_gb(data, labels) -> None:
-#     import matplotlib.pyplot as plt
-#     from sklearn.model_selection import KFold
-#     from sklearn.metrics import roc_curve, RocCurveDisplay, auc
-#     from sklearn.preprocessing import LabelBinarizer
-#     from sklearn.ensemble import GradientBoostingClassifier
-
-#     tprs = []
-#     fprs = []
-#     scores = []
-#     auc_scores = []
-
-#     for epoch in range(10):
-#         print("="*20+f"EPOCH {epoch+1}"+"="*20)
-#         for i, (train_index, test_index) in enumerate(KFold(10, shuffle=True).split(allDataNorm)):
-#     #             directory = f"{args.results_directory}/{args.classifier}/epoch_{epoch}"
-    
-#             x_train = allDataNorm[train_index]
-#             x_test = allDataNorm[test_index]
-#             y_train = allDataVectClass[train_index]
-#             y_test = allDataVectClass[test_index]
-#             # classifier = LogisticRegression(max_iter=10000)
-#             classifier = GradientBoostingClassifier(n_estimators=150, max_depth=1)
-#             # classifier = RandomForestClassifier(n_estimators=100, max_depth=10)
-
-    
-#             classifier.fit(x_train, y_train)
-#             score = classifier.score(x_test, y_test)
-#             probs = classifier.predict_proba(x_test)
-#             preds = classifier.predict(x_test)
-    
-#             label_binarizer = LabelBinarizer().fit(y_train)
-#             y_one_hot_test = label_binarizer.transform(y_test)
-    
-#             print(f"KFold {i + 1} -> SCORE : {score}")
-#             scores.append(score)
-#             # fpr, tpr, tresholds = roc_curve(y_one_hot_test[:, 1], probs[:, 1])
-#             fpr, tpr, tresholds = roc_curve(y_one_hot_test, probs[:, 1])
-#                 # fpr, tpr, tresholds = roc_curve(y_one_hot_test[:, 0], probs[:, 0])
-#                 # fpr, tpr, tresholds = roc_curve(y_one_hot_test[:, 2], probs[:, 2])
-#             fprs.append(fpr)
-#             tprs.append(tpr)
-#             auc_scores.append(auc(fpr, tpr))
-
-#             viz = RocCurveDisplay(fpr=fpr,
-#                                     tpr=tpr,
-#                                     roc_auc=auc(fpr, tpr),
-#                                     estimator_name='---').plot(color="darkorange")
-#                                     #estimator_name=args.classifier).plot(color="darkorange", plot_chance_level=True)
-#                 # viz.figure_.savefig(f"{directory}/KFold_{i+1}.png")
-#             viz.figure_.savefig('theFig.png')
-#             plt.close()
-#                 # precisions.append(precision_score(y_test, preds, labels=[0, 1, 2]))
-#                 # recall.append(recall_score(y_test, preds, labels=[0, 1, 2]))
-#                 # f_score.append(f1_score(y_test, preds, labels=[0, 1, 2]))
-#             str1 = 'testClass.' + str(epoch+1) + '.' + str(i+1) 
-#             str2 = 'testOut.' + str(epoch+1) + '.' + str(i+1) 
-#             print(str1)
-#             np.savetxt(str1, y_test, fmt='%f')
-#             np.savetxt(str2, probs, fmt='%f')
-    
-#             del classifier
-#         print()
-    
-#     max_shape = max([len(a) for a in tprs])
-#     tprs = [np.append(t, [1 for _ in range(max_shape-len(t))]) for t in tprs]
-#     fprs = [np.append(f, [1 for _ in range(max_shape-len(f))]) for f in fprs]
-#     mean_tprs = np.array(tprs)
-#     mean_tprs = np.mean(mean_tprs, axis=0)
-#     mean_fprs = np.array(fprs)
-#     mean_fprs = np.mean(mean_fprs, axis=0)
-    
-#     mean_auc = 100.0*sum(auc_scores) / len(auc_scores)
-#     print(mean_auc)
 
 
 if __name__ == "__main__":
@@ -293,7 +119,6 @@ if __name__ == "__main__":
     if args.cleanall:
         clean_dir("temp")
         clean_dir("logs")
-        clean_dir("output")
         args.train = True
 
     if args.clean:
@@ -301,7 +126,8 @@ if __name__ == "__main__":
 
     data, labels = dh.obtain_data("dataset/clinical_complete_rev1.csv")
     data, labels = dh.filter_clinical(data, labels)
-    # Ajoute le BMI
+
+    # added BMI column
     data = data.assign(BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3))
 
     nb_features = data.shape[1]
@@ -320,18 +146,14 @@ if __name__ == "__main__":
 
     densCls("--json_config_file config/denscls.json")
     fidexGlo("--json_config_file config/fidexglo.json")
-    # TODO: pretty print fidex Rules 
-
-    samples_rules = read_json_file("temp/explanation.json")
-
-    # TODO: add generated rules with the global rules 
-    selected_rules_id = [
-        get_rule_id(rule)
-        for sample in samples_rules["samples"]
-        for rule in sample["rules"]
-    ]
-
     normalization("--json_config_file config/denormalization.json")
-    write_results(selected_rules_id, samples_ids, samples_rules, nb_features)
 
-    print("OK")
+    global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
+    patient_rules = read_json_file("temp/explanation.json")
+
+
+
+    # TODO: add generated rules with the global rules
+    # selected_rules = 
+
+    write_results(selected_rules_id, samples_ids, samples_rules, nb_features)
