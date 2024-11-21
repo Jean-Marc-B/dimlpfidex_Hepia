@@ -178,9 +178,7 @@ std::shared_ptr<VirtualHyp> BagDimlp::MakeGlobalVirt(int nbBins, int nbIn, int m
  * @param data The dataset.
  * @param index Index of the example.
  */
-void BagDimlp::ForwardOneExample1(DataSet &data, int index)
-
-{
+void BagDimlp::ForwardOneExample1(DataSet &data, int index) {
   int k;
   const float *ptrOut;
 
@@ -222,22 +220,18 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index)
     stds[class_index] = sqrt(stds[class_index] * (1.0f / (float)NbDimlpNets));
   }
 
-  if (extractMetrics) {
-    Json jsonData;
+  Json jsonData;
+  std::ofstream ofs(MetricsPath);
 
-    std::string filename = "stds-avg.json";
-    std::ofstream ofs(filename);
+  jsonData["nbNets"] = NbDimlpNets;
+  jsonData["avgs"] = GlobalOut;
+  jsonData["stds"] = stds;
 
-    jsonData["nbNets"] = NbDimlpNets;
-    jsonData["avgs"] = GlobalOut;
-    jsonData["stds"] = stds;
-
-    if (!ofs.is_open() || ofs.fail()) {
-      throw FileNotFoundError("JSON file to be written named '" + filename + "' couldn't be opened, cannot proceed.");
-    }
-
-    ofs << std::setw(4) << jsonData << std::endl;
+  if (!ofs.is_open() || ofs.fail()) {
+    throw FileNotFoundError(MetricsPath + " couldn't be written, cannot proceed.");
   }
+
+  ofs << std::setw(4) << jsonData << std::endl;
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -375,9 +369,9 @@ BagDimlp::BagDimlp(
     int showErrParam,
     int nbEpochsParam,
     int nbLayers,
-    bool extractMetrics,
     std::vector<int> nbNeurons,
     int nbDimlpNets,
+    const std::string &metricsPath,
     const std::string &weightFile,
     int seed) :
 
@@ -385,10 +379,9 @@ BagDimlp::BagDimlp(
                       discrLevels, showErrParam, nbEpochsParam, nbLayers, nbNeurons, weightFile, seed),
                 NbDimlpNets(nbDimlpNets), Eta(eta), Mu(mu), Flat(flat), ErrParam(errParam), AccuracyParam(accuracyParam),
                 DeltaErrParam(deltaErrParam), DiscrLevels(discrLevels), ShowErrParam(showErrParam),
-                NbEpochsParam(nbEpochsParam), NbLayers(nbLayers), WeightFile(weightFile)
+                NbEpochsParam(nbEpochsParam), NbLayers(nbLayers), MetricsPath(metricsPath), WeightFile(weightFile)
 
 {
-
   NbNeurons.assign(nbLayers, 0);
 
   for (int n = 0; n < nbLayers; n++)
@@ -424,11 +417,12 @@ BagDimlp::BagDimlp(
     int nbLayers,
     std::vector<int> nbNeurons,
     int nbDimlpNets,
+    const std::string &metricsPath,
     const std::string &weightFile,
     int seed) :
 
                 Dimlp(0, 0, 0, 0, 0, 0, discrLevels, 0, 0, nbLayers, nbNeurons, weightFile, seed),
-                NbDimlpNets(nbDimlpNets), DiscrLevels(discrLevels), NbLayers(nbLayers), WeightFile(weightFile)
+                NbDimlpNets(nbDimlpNets), DiscrLevels(discrLevels), NbLayers(nbLayers), MetricsPath(metricsPath), WeightFile(weightFile)
 
 {
   NbNeurons.assign(nbLayers, 0);

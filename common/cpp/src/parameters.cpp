@@ -95,6 +95,7 @@ void Parameters::checkFilesIntegrity() {
   sanitizePath(GLOBAL_RULES_OUTFILE, false);
   sanitizePath(EXPLANATION_FILE, false);
   sanitizePath(HIDDEN_LAYERS_OUTFILE, false);
+  sanitizePath(METRICS_FILE, false);
 }
 
 /**
@@ -379,8 +380,8 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setString(HIDDEN_LAYERS_FILE, arg);
     break;
 
-  case EXTRACT_METRICS:
-    setBool(EXTRACT_METRICS, arg);
+  case METRICS_FILE:
+    setString(METRICS_FILE, arg);
     break;
 
   default: // If we put another -X option
