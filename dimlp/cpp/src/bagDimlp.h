@@ -1,12 +1,11 @@
 #ifndef BAGDIMLP_H
 #define BAGDIMLP_H
 
+#include "../../../json/single_include/nlohmann/json.hpp"
 #include "dimlp.h"
 #include "virtHyp.h"
-#include "../../../json/single_include/nlohmann/json.hpp"
 
 using Json = nlohmann::json;
-
 
 /**
  * @brief Implements a bagging ensemble of Dimlp neural networks.
@@ -15,18 +14,18 @@ class BagDimlp : public Dimlp {
   int NbDimlpNets; ///< Number of Dimlp networks in the ensemble.
   int NbOut;       ///< Number of output neurons.
 
-  float Eta;                     ///< Learning rate.
-  float Mu;                      ///< Momentum.
-  float Flat;                    ///< Flat spot elimination parameter.
-  float ErrParam;                ///< Error threshold parameter.
-  float AccuracyParam;           ///< Accuracy threshold parameter.
-  float DeltaErrParam;           ///< Delta error threshold parameter.
-  int DiscrLevels;               ///< Number of discretization levels.
-  int ShowErrParam;              ///< Frequency of error display.
-  int NbEpochsParam;             ///< Number of training epochs.
-  int NbLayers;                  ///< Number of layers in the network.
-  bool extractMetrics;           ///< Used to extract stds, nb dimlp bags and avgs
-  const std::string &WeightFile; ///< Path to the file for saving weights.
+  float Eta;                      ///< Learning rate.
+  float Mu;                       ///< Momentum.
+  float Flat;                     ///< Flat spot elimination parameter.
+  float ErrParam;                 ///< Error threshold parameter.
+  float AccuracyParam;            ///< Accuracy threshold parameter.
+  float DeltaErrParam;            ///< Delta error threshold parameter.
+  int DiscrLevels;                ///< Number of discretization levels.
+  int ShowErrParam;               ///< Frequency of error display.
+  int NbEpochsParam;              ///< Number of training epochs.
+  int NbLayers;                   ///< Number of layers in the network.
+  const std::string &MetricsPath; ///< Used to extract stds, nb dimlp bags and avgs
+  const std::string &WeightFile;  ///< Path to the file for saving weights.
 
   std::vector<int> NbNeurons; ///< Number of neurons in each layer.
 
@@ -106,9 +105,9 @@ public:
       int showErrParam,
       int nbEpochsParam,
       int nbLayers,
-      bool extractMetrics,
       std::vector<int> nbNeurons,
       int nbDimlpNets,
+      const std::string &metricsPath,
       const std::string &weightFile,
       int seed = 0);
 
@@ -120,6 +119,7 @@ public:
       int nbLayers,
       std::vector<int> nbNeurons,
       int nbDimlpNets,
+      const std::string &metricsPath,
       const std::string &weightFile,
       int seed = 0);
 };

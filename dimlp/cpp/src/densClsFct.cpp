@@ -46,6 +46,7 @@ void showDensClsParams()
   printOptionDescription("--with_rule_extraction <bool>", "Whether to extract rules with dimlpBT algorithm (default: False)");
   printOptionDescription("--global_rules_outfile <str>", "Path to the file where the output rule(s) will be stored");
   printOptionDescription("--nb_quant_levels <int [3,inf[>", "Number of stairs in the staircase activation function (default: 50)");
+  printOptionDescription("--metrics_file <str>", "Path where to generate JSON file containing Nets output avgs and stds. Not generated if path is not set");
   printOptionDescription("--normalization_file <str>", "Path to the file containing the mean and standard deviation of some attributes. Used to denormalize the rules if specified");
   printOptionDescription("--mus <list<float ]-inf,inf[>>", "Mean or median of each attribute index to be denormalized in the rules");
   printOptionDescription("--sigmas <list<float ]-inf,inf[>>", "Standard deviation of each attribute index to be denormalized in the rules");
@@ -75,6 +76,7 @@ void checkDensClsParametersLogicValues(Parameters &p) {
   p.setDefaultBool(WITH_RULE_EXTRACTION, false);
   p.setDefaultString(TRAIN_PRED_OUTFILE, "densClsTrain.out", true);
   p.setDefaultString(TEST_PRED_OUTFILE, "densClsTest.out", true);
+  p.setDefaultString(METRICS_FILE, "metrics.json", true);
 
   // this sections check if values comply with program logic
 
@@ -180,7 +182,7 @@ int densCls(const std::string &command) {
     std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, WEIGHTS_FILE, NB_ATTRIBUTES, NB_CLASSES,
                                               ROOT_FOLDER, ATTRIBUTES_FILE, TEST_DATA_FILE, TRAIN_CLASS_FILE, TEST_CLASS_FILE,
                                               CONSOLE_FILE, TRAIN_PRED_OUTFILE, TEST_PRED_OUTFILE, STATS_FILE, HIDDEN_LAYERS_FILE, WITH_RULE_EXTRACTION,
-                                              GLOBAL_RULES_OUTFILE, NB_QUANT_LEVELS, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES};
+                                              GLOBAL_RULES_OUTFILE, NB_QUANT_LEVELS, NORMALIZATION_FILE, MUS, SIGMAS, METRICS_FILE, NORMALIZATION_INDICES};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -223,6 +225,7 @@ int densCls(const std::string &command) {
     std::string predTrainFile = params->getString(TRAIN_PRED_OUTFILE);
     std::string predTestFile = params->getString(TEST_PRED_OUTFILE);
     std::string weightFile = params->getString(WEIGHTS_FILE);
+    std::string metricsPath = params->getString(METRICS_FILE);
     int nbDimlpNets = countNetworksInFile(weightFile);
     int quant = params->getInt(NB_QUANT_LEVELS);
 
@@ -348,7 +351,7 @@ int densCls(const std::string &command) {
       }
     }
 
-    auto net = std::make_shared<BagDimlp>(quant, nbLayers, vecNbNeurons, nbDimlpNets, weightFileSave);
+    auto net = std::make_shared<BagDimlp>(quant, nbLayers, vecNbNeurons, nbDimlpNets, metricsPath, weightFileSave);
 
     net->DefNetsWithWeights(weightFile);
 
