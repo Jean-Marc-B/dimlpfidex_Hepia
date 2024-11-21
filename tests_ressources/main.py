@@ -92,9 +92,7 @@ def get_risk() -> list[float]:
 
 def get_metrics() -> tuple[float, float]:
     data = read_json_file(
-        os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), "temp", "metrics.json"
-        )
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), "temp", "metrics.json")
     )
     nb_nets = data["nbNets"]
 
@@ -133,9 +131,11 @@ if __name__ == "__main__":
     nb_features = data.shape[1]
     nb_classes = 2
 
-    attributes = []
-    with open("temp/attributes.txt") as fp:
-        attributes = fp.read().splitlines()
+    # writing attributes
+    attributes = data.columns.to_list() + ["NO", "YES"]
+    with open("temp/attributes.txt", "w") as fp:
+        for a in attributes:
+            fp.write(a + "\n")
 
     write_train_data(data, labels)
     update_config_files(abspath, nb_features, nb_classes)
