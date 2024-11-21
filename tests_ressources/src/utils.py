@@ -1,7 +1,7 @@
 import os
 import csv
 import json
-import datetime
+from datetime import date
 import argparse
 from pathlib import Path
 
@@ -30,7 +30,7 @@ def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
         config["nb_attributes"] = nb_features
         config["nb_classes"] = nb_classes
         config["console_file"] = (
-            f"{logpath + datetime.today().strftime('%Y%m%d%H%M')}_{program}.log"
+            f"{logpath + date.today().strftime('%Y%m%d%H%M')}_{program}.log"
         )
 
         update_config_file(config_filename, config)
@@ -97,3 +97,7 @@ def init_args():
     parser.add_argument("--cleanall", action="store_true")
 
     return parser.parse_args()
+
+
+
+# rm -rf bin build && mkdir build && cd build && cmake .. && cmake --build . -j 8 && cd .. && python3 -m build && pip uninstall dimlpfidex && pip install dist/dimlpfidex-0.0.6-cp310-cp310-linux_x86_64.whl

@@ -9,9 +9,13 @@ class Antecedant:
         self.value = value
 
     def __repr__(self) -> str:
-        return (
-            f"{self.attribute_id} {_get_inequality(self.inequality)} {self.value:.4f}"
-        )
+        # nodes_examined = nodes_removed
+        # TODO: sentinel_node_biopsy exlue planned_axillary_dissection
+        # TODO: age, weight, height, nodes_involved, tumor_size, KI_67, fractions, nodes_removed
+        # for these, if < then floor()
+        # elif >= then ceil()
+        ineq_str = ">=" if self.inequality else "<"
+        return f"{self.attribute_id} {ineq_str} {self.value:.4f}"
 
     def to_dict(self) -> dict:
         return {
@@ -20,17 +24,23 @@ class Antecedant:
             "value": self.value,
         }
 
+    def pretty_print(self, attributes: list[str]) -> None:
+        ineq_str = ">=" if self.inequality else "<"
+        attribute = attributes[self.attribute_id]
+
+        print(f"{attribute} {ineq_str} {self.value:.4f}", end=" ")
+
+    # designed for unicancer format
+    def to_string(self) -> str:
+        ineq_str = ">=" if self.inequality else "<"
+        return f"{ineq_str}{self.value:.4f}"
+
     @staticmethod
     def list_to_dict(antecedants_list: list[Antecedant]) -> dict:
         return [antecedant.to_dict() for antecedant in antecedants_list]
 
 
-def _get_inequality(b: bool) -> str:
-    return ">=" if b else "<"
-
-
 class Rule:
-
     def __init__(self, json_data: dict) -> None:
         try:
             self.id = -1
@@ -49,8 +59,56 @@ class Rule:
 
                 self.antecedants.append(Antecedant(attribute_id, inequality, value))
 
+            # properties to be set during rule extraction
+            self.risk = -1
+            self.low_interval = -1
+            self.high_interval = -1
+
         except KeyError as e:
             print(f"Rule creation from JSON error: {e}")
+
+    def __repr__(self) -> str:
+        antecedants_str = "".join(
+            [antecedant.__repr__() + " " for antecedant in self.antecedants]
+        )
+        return f"""
+Covering: {self.covering}
+Fidelity: {self.fidelity:.3f}
+Accuracy: {self.accuracy:.3f}
+Antecedants: {antecedants_str}
+Output: {self.output}"""
+
+    def set_metrics(
+        self, risk: float, low_interval: float, high_interval: float
+    ) -> None:
+        self.risk = risk
+        self.low_interval = low_interval
+        self.high_interval = high_interval
+
+    # designed for unicancer format
+    def to_str_list(self):
+        base_rule = [
+            self.id,
+            self.risk,
+            self.low_interval,
+            self.high_interval,
+            self.covering,
+        ]
+        antecedants = [antecedant.to_string() for antecedant in self.antecedants]
+        return base_rule + antecedants
+
+    def pretty_print(self, attributes: list[str]) -> None:
+        print(
+            f"""
+Covering: {self.covering}
+Fidelity: {self.fidelity:.3f}
+Accuracy: {self.accuracy:.3f}   
+Antecedants:"""
+        )
+        for antecedant in self.antecedants:
+            antecedant.pretty_print(attributes)
+
+        print(f"Output: {self.output}" "")
 
     @staticmethod
     def from_json_file(path: str) -> list[Rule]:
@@ -76,18 +134,7 @@ class Rule:
 
     @staticmethod
     def list_from_dict(data: dict) -> list[Rule]:
-        return [Rule(rule_data) for rule_data in data]
-
-    def __repr__(self) -> str:
-        antecedants_str = "".join(
-            [antecedant.__repr__() + " " for antecedant in self.antecedants]
-        )
-        return f"""
-Covering: {self.covering}
-Fidelity: {self.fidelity}
-Accuracy: {self.accuracy}
-Antecedants: {antecedants_str}
-Output: {self.output}"""
+        return [Rule(rule_data) for rule_data in data["rules"]]
 
 
 class GlobalRules:
@@ -117,7 +164,7 @@ class GlobalRules:
             data = json.load(fp)
 
         return GlobalRules(
-            rules=Rule.list_from_dict(),
+            rules=Rule.list_from_dict(data),
             positive_index_class=data.get("positive_index_class", None),
             threshold=data.get("positive_index_class", None),
         )
@@ -140,6 +187,10 @@ class GlobalRules:
         with open(path, "w") as fp:
             json.dump(json_data, fp, indent=4)
 
+    def set_rule_id(self):
+        for i, rule in enumerate(self.rules):
+            rule.id = i  # TODO check if this works
+
     def get_rule_id(self, target: Rule):
         for i, rule in enumerate(self.rules):
             if rule == target:
@@ -150,6 +201,31 @@ class GlobalRules:
     def add_rule(self, rule: Rule) -> int:
         self.rules.append(rule)
         return len(self.rules)
+
+    def __repr__(self) -> str:
+        res = f"""Global rule set:
+Positive index class: {self.positive_index_class}
+Threshold: {self.threshold}
+Rule set size: {len(self.rules)}
+Rules:"""
+
+        for i, rule in enumerate(self.rules):
+            res += f"Rule #{i+1}:" + rule.__repr__() + "\n\n"
+
+        return res
+
+    def pretty_print(self, attributes: list[str]) -> None:
+        print(
+            f"""Global rule set:
+Positive index class: {self.positive_index_class}
+Threshold: {self.threshold}
+Rule set size: {len(self.rules)}
+Rules:"""
+        )
+
+        for i, rule in enumerate(self.rules):
+            print(f"Rule #{i+1}:")
+            rule.pretty_print(attributes)
 
     def extract_selected_rules(self, list_rules: list[Rule]) -> dict[int, Rule]:
         res = {}
