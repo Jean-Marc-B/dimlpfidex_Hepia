@@ -1,6 +1,7 @@
 {
-    "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources/",
+    "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources",
     "normalization_file": "temp/normalization_stats.txt",
     "rule_files": "temp/global_rules.json",
+    "attributes_file": "temp/attributes.txt",
     "nb_attributes": 79
 }
