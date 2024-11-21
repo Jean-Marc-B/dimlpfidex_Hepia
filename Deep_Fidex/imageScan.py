@@ -27,7 +27,7 @@ import re
 import copy
 from tensorflow.keras import Model
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
-from utils import trainCNN, compute_histograms, compute_activation_sums, compute_proba_images, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, getProbabilityThresholds, get_heat_maps
+from utils import trainCNN, compute_histograms, compute_activation_sums, compute_proba_images, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, getProbabilityThresholds, get_heat_maps, compute_first_hidden_layer
 
 np.random.seed(seed=None)
 
@@ -66,7 +66,7 @@ with_train_second_model = False
 with_global_rules = False
 
 # Image generation:
-get_images = False # With histograms
+get_images = True # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
@@ -189,10 +189,13 @@ if histogram_stats:
 
 #----------------------------
 # For second model training
-# second_model = "randomForests"
-second_model = "gradientBoosting"
-# second_model = "dimlpTrn"
-# second_model = "dimlpBT"
+second_model = "cnn"
+if not probability_stats:
+    # second_model = "randomForests"
+    second_model = "gradientBoosting"
+    # second_model = "dimlpTrn"
+    # second_model = "dimlpBT"
+
 
 if second_model in {"randomForests", "gradientBoosting"}:
     using_decision_tree_model = True
@@ -216,6 +219,10 @@ K_val = 1.0
 dropout_hyp = 0.9
 dropout_dim = 0.9
 
+if probability_stats:
+    sizeX_proba_stat = size1D - filter_size[0][0] + 1
+    sizeY_proba_stat = size1D - filter_size[0][1] + 1
+    nb_stats_attributes = sizeX_proba_stat*sizeY_proba_stat*nb_classes
 #----------------------------
 # Folder for output images
 rules_folder = base_folder + scan_folder + "Rules"
@@ -256,8 +263,12 @@ print("Data loaded.\n")
 
 # Train CNN model
 if with_train_cnn:
+    start_time_train_cnn = time.time()
     trainCNN(size1D, size1D, nb_channels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
-
+    end_time_train_cnn = time.time()
+    full_time_train_cnn = end_time_train_cnn - start_time_train_cnn
+    full_time_train_cnn = "{:.6f}".format(full_time_train_cnn).rstrip("0").rstrip(".")
+    print(f"\nTrain first CNN time = {full_time_train_cnn} sec")
 
 CNNModel = keras.saving.load_model(model_file)
 if activation_layer_stats: # Get intermediate model
@@ -279,6 +290,7 @@ else:
 
 # Compute histograms
 if with_stats_computation:
+    start_time_stats_computation = time.time()
     if histogram_stats:
         print("\nComputing train histograms...")
 
@@ -350,90 +362,98 @@ if with_stats_computation:
         output_data(test_probas, test_stats_file)
         print("Probability images saved.")
 
+    end_time_stats_computation = time.time()
+    full_time_stats_computation = end_time_stats_computation - start_time_stats_computation
+    full_time_stats_computation = "{:.6f}".format(full_time_stats_computation).rstrip("0").rstrip(".")
+    print(f"\nStats computation time = {full_time_stats_computation} sec")
+
 ##############################################################################
 # Train second model with stats
-
-if probability_stats:
-    if not activation_layer_stats:
-        train_probas = np.loadtxt(train_stats_file)
-        train_probas = train_probas.astype('float32')
-        test_probas = np.loadtxt(test_stats_file)
-        test_probas = test_probas.astype('float32')
-    print(train_probas.shape) # (100, 4840)
-    print(test_probas.shape) # (100, 4840)
-    sizeX = size1D - filter_size[0][0] + 1
-    sizeY = size1D - filter_size[0][1] + 1
-    output_size = (sizeX, sizeY, nb_classes)
-    train_probas = train_probas.reshape((nb_train_samples,)+output_size)
-    test_probas = train_probas.reshape((nb_test_samples,)+output_size)
-    print(train_probas.shape)  # (100, 22, 22, 10)
-    print(test_probas.shape)  # (100, 22, 22, 10)
-    second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
-    second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
-
-    trainCNN(sizeX, sizeY, nb_classes, nb_classes, False, nbIt, second_model_file, second_model_checkpoint_weights, train_probas, Y_train[0:nb_train_samples], test_probas, Y_test[0:nb_test_samples], train_pred_file, test_pred_file, second_model_stats, False, True)
-
-    #output_size = (size1D - my_filter_size[0] + 1, size1D - my_filter_size[1] + 1, nb_classes)
-    #predictions = predictions.reshape(output_size)
-    #proba_images[sample_id] = predictions
-    # On veut (nbSamples, output_size) (100, 22, 22, 10)
 
 if test_version:
     train_class_file = base_folder + "trainClass_temp.txt"
     test_class_file = base_folder + "testClass_temp.txt"
 
 if with_train_second_model:
+    start_time_train_second_model = time.time()
 
-    # Train model
-    command = (
-        f'--train_data_file {train_stats_file} '
-        f'--train_class_file {train_class_file} '
-        f'--test_data_file {test_stats_file} '
-        f'--test_class_file {test_class_file} '
-        f'--stats_file {second_model_stats} '
-        f'--train_pred_outfile {second_model_train_pred} '
-        f'--test_pred_outfile {second_model_test_pred} '
-        f'--nb_attributes {nb_stats_attributes} '
-        f'--nb_classes {nb_classes} '
-        f'--root_folder . '
-        )
+    if probability_stats:
+        if not with_stats_computation:
+            train_probas = np.loadtxt(train_stats_file)
+            train_probas = train_probas.astype('float32')
+            test_probas = np.loadtxt(test_stats_file)
+            test_probas = test_probas.astype('float32')
+        #print(train_probas.shape) # (nb_train_samples, 4840)
+        #print(test_probas.shape) # (nb_test_samples, 4840)
+        train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_val, nbQuantLevels, hiknot, second_model_output_rules)
+        test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_val, nbQuantLevels, hiknot, mu=mu, sigma=sigma)
+        output_size = (sizeX_proba_stat, sizeY_proba_stat, nb_classes)
+        train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+output_size)
+        test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+output_size)
+        #print(train_probas.shape)  # (nb_train_samples, 22, 22, 10)
+        #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
+        second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
+        second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
 
-    if using_decision_tree_model:
-        command += f'--rules_outfile {second_model_output_rules} '
+        trainCNN(sizeX_proba_stat, sizeY_proba_stat, nb_classes, nb_classes, False, 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+
     else:
-        command += f'--weights_outfile {second_model_output_rules} '
 
-    print("\nTraining second model...\n")
+        # Train model
+        command = (
+            f'--train_data_file {train_stats_file} '
+            f'--train_class_file {train_class_file} '
+            f'--test_data_file {test_stats_file} '
+            f'--test_class_file {test_class_file} '
+            f'--stats_file {second_model_stats} '
+            f'--train_pred_outfile {second_model_train_pred} '
+            f'--test_pred_outfile {second_model_test_pred} '
+            f'--nb_attributes {nb_stats_attributes} '
+            f'--nb_classes {nb_classes} '
+            f'--root_folder . '
+            )
 
-    # match second_model:
-    #     case "randomForests":
-    #         status = randForestsTrn(command)
-    #     case "gradientBoosting":
-    #         status = gradBoostTrn(command)
-    #     case "dimlpTrn":
-    #         status = dimlp.dimlpTrn(command)
-    #     case "dimlpBT":
-    #         command += '--nb_dimlp_nets 15 '
-    #         command += '--hidden_layers [25] '
-    #         if test_version:
-    #             command += '--nb_epochs 10 '
-    #         status = dimlp.dimlpBT(command)
+        if using_decision_tree_model:
+            command += f'--rules_outfile {second_model_output_rules} '
+        else:
+            command += f'--weights_outfile {second_model_output_rules} '
 
-    if second_model == "randomForests":
-        status = randForestsTrn(command)
-    elif second_model == "gradientBoosting":
-        status = gradBoostTrn(command)
-    elif second_model == "dimlpTrn":
-        status = dimlp.dimlpTrn(command)
-    elif second_model == "dimlpBT":
-        command += '--nb_dimlp_nets 15 '
-        command += '--hidden_layers [25] '
-        if test_version:
-            command += '--nb_epochs 10 '
-        status = dimlp.dimlpBT(command)
+        print("\nTraining second model...\n")
 
-    if status != -1:
-        print("\nSecond model trained.")
+        # match second_model:
+        #     case "randomForests":
+        #         status = randForestsTrn(command)
+        #     case "gradientBoosting":
+        #         status = gradBoostTrn(command)
+        #     case "dimlpTrn":
+        #         status = dimlp.dimlpTrn(command)
+        #     case "dimlpBT":
+        #         command += '--nb_dimlp_nets 15 '
+        #         command += '--hidden_layers [25] '
+        #         if test_version:
+        #             command += '--nb_epochs 10 '
+        #         status = dimlp.dimlpBT(command)
+
+        if second_model == "randomForests":
+            status = randForestsTrn(command)
+        elif second_model == "gradientBoosting":
+            status = gradBoostTrn(command)
+        elif second_model == "dimlpTrn":
+            status = dimlp.dimlpTrn(command)
+        elif second_model == "dimlpBT":
+            command += '--nb_dimlp_nets 15 '
+            command += '--hidden_layers [25] '
+            if test_version:
+                command += '--nb_epochs 10 '
+            status = dimlp.dimlpBT(command)
+
+        if status != -1:
+            print("\nSecond model trained.")
+
+    end_time_train_second_model = time.time()
+    full_time_train_second_model = end_time_train_second_model - start_time_train_second_model
+    full_time_train_second_model = "{:.6f}".format(full_time_train_second_model).rstrip("0").rstrip(".")
+    print(f"\nTrain second model time = {full_time_train_second_model} sec")
 
 if histogram_stats:
     # Define attributes file for histograms
@@ -447,6 +467,7 @@ if histogram_stats:
 # Compute global rules
 
 if with_global_rules:
+    start_time_global_rules = time.time()
     command = (
         f'--train_data_file {train_stats_file} '
         f'--train_pred_file {second_model_train_pred} '
@@ -473,6 +494,11 @@ if with_global_rules:
     if status != -1:
         print("\nGlobal rules computed.")
 
+    end_time_global_rules = time.time()
+    full_time_global_rules = end_time_global_rules - start_time_global_rules
+    full_time_global_rules = "{:.6f}".format(full_time_global_rules).rstrip("0").rstrip(".")
+    print(f"\nGlobal rules time = {full_time_global_rules} sec")
+
 ##############################################################################
 # Get images explaining and illustrating the samples and rules
 
@@ -494,6 +520,8 @@ if get_images:
             rule.include_X = False
             for ant in rule.antecedents:
                 ant.attribute = attributes[ant.attribute] # Get true name of attribute
+        elif probability_stats:
+            rule.include_X = False
 
         # Create folder for this rule
         rule_folder = f"{rules_folder}/rule_{id}_class_{classes[rule.target_class]}"
@@ -516,6 +544,21 @@ if get_images:
                     antecedent.attribute = f"P_{class_name}>={pred_threshold}"
                 else:
                     raise ValueError("Wrong antecedent...")
+        elif probability_stats:
+            # Change antecedent with area and class involved
+            for antecedent in rule_to_print.antecedents:
+                output_size = (sizeX_proba_stat, sizeY_proba_stat, nb_classes)
+                # area_index (sizeX_proba_stat, sizeY_proba_stat) : 0 : (1,1), 1: (1,2), ...
+                # attribute_index = (area_index*nb_classes)+class_index
+                # area_index = floor(attribute_index/nb_classes)
+                # class_index = attribute_index modulo nb_classes
+
+                class_name = classes[antecedent.attribute % nb_classes]
+                area_number = antecedent.attribute // nb_classes
+                area_X = area_number // sizeY_proba_stat
+                area_Y = area_number % sizeX_proba_stat
+                antecedent.attribute = f"P_class_{class_name}_area_[{area_X}-{area_X+filter_size[0][0]-1}]x[{area_Y}-{area_Y+filter_size[0][1]-1}]"
+
         if os.path.exists(readme_file):
             os.remove(readme_file)
         with open(readme_file, 'w') as file:
@@ -528,6 +571,8 @@ if get_images:
                 highlighted_image = highlight_area_histograms(CNNModel, img, filter_size, stride, rule, classes)
             elif activation_layer_stats:
                 highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
+            elif probability_stats:
+                continue
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 

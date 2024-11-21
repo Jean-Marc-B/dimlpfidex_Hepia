@@ -626,9 +626,7 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
         nbChannels = 3
 
     ##############################################################################
-    if with_probability:
-        print("On est là")
-    elif resnet:
+    if resnet:
 
         # Load the ResNet50 model with pretrained weights
         input_tensor = Input(shape=(sizeX, sizeY, 3))
@@ -703,14 +701,14 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
 
         model.add(Flatten())
 
-        model.add(Dense(256, activation='sigmoid'))
+        model.add(Dense(256, activation='relu'))
         model.add(Dropout(0.3))
 
         model.add(Dense(nb_classes, activation='softmax'))
 
         model.summary()
 
-        model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True, save_weights_only=True)
     model.fit(x_train, y_train, batch_size=32, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], verbose=2)
@@ -839,7 +837,7 @@ def compute_proba_images(nb_samples, data, size1D, nb_channels, nb_classes, CNNM
         predictions = predictions.reshape(output_size)
         # print(predictions.shape) # (4840,)
         proba_images[sample_id] = predictions
-    #print(proba_images.shape)  # (100, 4840)
+    #print(proba_images.shape)  # (nb_samples, 4840)
     return proba_images
 
 def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride, intermediate_model=None):
@@ -1021,7 +1019,7 @@ def highlight_area_histograms(CNNModel, image, filter_size, stride, rule, classe
             # Check if the prediction with this area satisfies the antecedent
             if (class_prob >= pred_threshold):
                 top_left = position
-                bottom_right = (position[0] + current_filter_size[0], position[1] + current_filter_size[1])
+                bottom_right = (position[0] + current_filter_size[0], position[1] + current_filter_size[1]) # Goes one pixel too long but handled correctly then
 
                 # Accumulate the intensity of the activation in the individual color map
                 individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
@@ -1182,7 +1180,7 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
         for i in patches_idx:
             position = positions[i]
             top_left = position
-            bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
+            bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1]) # Goes one pixel too long but handled correctly then
 
             individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
 
@@ -1196,7 +1194,7 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
                 position = positions[idx]
                 intensity = normalized_intensities[i]
                 top_left = position
-                bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1])
+                bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1]) # Goes one pixel too long but handled correctly then
 
                 if antecedent.inequality:  # Apply green filter
                     combined_green_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
@@ -1358,7 +1356,7 @@ def get_heat_maps(CNNModel, image, filter_size, stride, probability_thresholds, 
         for i, (prediction, position) in enumerate(zip(predictions, positions)):
             # Get location
             top_left = position
-            bottom_right = (position[0] + real_filter_size[0], position[1] + real_filter_size[1])
+            bottom_right = (position[0] + real_filter_size[0], position[1] + real_filter_size[1]) # Goes one pixel too long but handled correctly then
 
             # Add the area prediction and increase the counter
             sum_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += prediction[class_id]
