@@ -3,11 +3,13 @@
     "train_data_file": "temp/train_data_normalized.csv",
     "train_class_file": "temp/train_classes.csv",
     "test_data_file": "input/test_sample_data.csv",
+    "train_pred_outfile": "temp/train_pred_out.csv",
     "weights_file": "temp/dimlpBT.wts",
     "stats_file": "temp/densCls_stats.txt",
     "hidden_layers_file": "temp/hidden_layers.out",
+    "metrics_file": "temp/densClsMetrics.json",
     "nb_attributes": 79,
     "nb_classes": 2,
     "test_pred_outfile": "input/test_sample_pred.csv",
-    "console_file": "logs/202411141412_denscls.log"
+    "console_file": "logs/202411210000_denscls.log"
 }

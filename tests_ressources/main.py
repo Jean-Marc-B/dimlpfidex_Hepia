@@ -1,9 +1,10 @@
 from dimlpfidex.fidex import fidexGlo, fidexGloRules
 from dimlpfidex.dimlp import dimlpBT, densCls
 from trainings import normalization
-import tests_ressources.src.data_helper as dh
-from tests_ressources.src.utils import *
-from tests_ressources.src.rule import *
+import src.data_helper as dh
+from src.patient import *
+from src.utils import *
+from src.rule import *
 import pandas as pd
 import numpy as np
 import math
@@ -32,39 +33,54 @@ def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
 
     with open("temp/attributes.txt", "w") as f:
         f.writelines(data.columns + "\n")
+        f.write("NO\n")
+        f.write("YES")
 
     data.to_csv("temp/train_data.csv", sep=",", header=False, index=False)
     labels.to_csv("temp/train_classes.csv", sep=",", header=False, index=False)
 
 
-def write_results(
-    used_rules_id: list[int], sample_ids: list[str], nb_features: int
-) -> None:
-    res = []
-    g_rules = read_json_file("temp/global_rules_denormalized.json")
+# def write_results(
+#     used_rules_id: list[int], sample_ids: list[str], nb_features: int
+# ) -> None:
+#     res = []
+#     g_rules = read_json_file("temp/global_rules_denormalized.json")
 
-    lower_interval, upper_interval = get_metrics()
-    risks = get_risk()
+#     lower_interval, upper_interval = get_metrics()
+#     risks = get_risk()
 
-    # add STUDYID, SITEIDN, SITENAME, SUBJID, VISIT
+#     # add STUDYID, SITEIDN, SITENAME, SUBJID, VISIT
 
-    for sample, risk in zip(data["samples"], risks):
-        for i, rule in enumerate(sample["rules"]):
-            line = [""] * (nb_features + 5)
-            line[0] = sample_ids[sample["sampleId"]]
-            line[1] = used_rules_id[i]
-            line[2] = f"{risk * 100.0:.3f}"
-            line[3] = f"{lower_interval: .3f}"
-            line[4] = f"{upper_interval: .3f}"
-            line[5] = rule["coveringSize"]
-            for antecedant in rule["antecedents"]:
-                line[antecedant["attribute"] + 5] = get_inequality(
-                    antecedant["inequality"]
-                ) + str(antecedant["value"])
+#     for sample, risk in zip(data["samples"], risks):
+#         for i, rule in enumerate(sample["rules"]):
+#             line = [""] * (nb_features + 5)
+#             line[0] = sample_ids[sample["sampleId"]]
+#             line[1] = used_rules_id[i]
+#             line[2] = f"{risk * 100.0:.3f}"
+#             line[3] = f"{lower_interval: .3f}"
+#             line[4] = f"{upper_interval: .3f}"
+#             line[5] = rule["coveringSize"]
+#             for antecedant in rule["antecedents"]:
+#                 line[antecedant["attribute"] + 5] = get_inequality(
+#                     antecedant["inequality"]
+#                 ) + str(antecedant["value"])
 
-            res.append(line)
+#             res.append(line)
 
-    write_csv(res)
+#     write_csv(res)
+
+
+def read_input(path: str) -> pd.DataFrame:
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext in [".xls", ".xlsx", ".xlsm", ".xlsb", ".odf", ".ods", ".odt"]:
+        return pd.read_excel(path)
+    elif ext == ".csv":
+        return pd.read_csv(path)
+    else:
+        raise NotImplementedError(
+            f"Support for {ext} extension in {path} file is not implemented."
+        )
 
 
 def get_risk() -> list[float]:
@@ -76,7 +92,9 @@ def get_risk() -> list[float]:
 
 def get_metrics() -> tuple[float, float]:
     data = read_json_file(
-        os.path.join(os.path.abspath(os.path.dirname(__file__)), "temp", "stds-avg.json")
+        os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), "temp", "metrics.json"
+        )
     )
     nb_nets = data["nbNets"]
 
@@ -92,24 +110,6 @@ def get_metrics() -> tuple[float, float]:
         round(lower_conf_interval, nb_decimals),
         round(upper_conf_interval, nb_decimals),
     )
-
-
-
-def pretty_print_results(used_rules_id: list[int], sample_ids: list[str], data: dict):
-    lower_interval, upper_interval = get_metrics()
-    risks = get_risk()
-
-    for sample, risk in zip(data["samples"], risks):
-        print(f"Sample {sample_ids[sample['sampleId']]} activated rules:")
-        for i, rule in enumerate(sample["rules"]):
-            print(f"Rule ID {used_rules_id[i]}")
-            print(
-                f"Risk {risk} \n  lower interval: {lower_interval}\n  upper interval: {upper_interval}"
-            )
-            # print_rule(rule)
-            print("\n")
-
-
 
 
 if __name__ == "__main__":
@@ -133,12 +133,20 @@ if __name__ == "__main__":
     nb_features = data.shape[1]
     nb_classes = 2
 
+    attributes = []
+    with open("temp/attributes.txt") as fp:
+        attributes = fp.read().splitlines()
+
     write_train_data(data, labels)
     update_config_files(abspath, nb_features, nb_classes)
     normalization("--json_config_file config/normalization.json")
 
-    # TODO: there will be missing values in the real samples
-    samples_ids = write_test_samples(5)
+    samples_ids = write_test_samples(20)
+
+    # patient_data = read_input("input/PRE-ACT-01_Flow2_20241115_HES-SO.xlsx")
+    # patient = Patient(patient_data)
+    # patient_file = patient.prepare_input_for_extraction("temp/")
+    # update_config_file("config/denscls.json", {"test_data_file": patient_file})
 
     if args.train:
         dimlpBT("--json_config_file config/dimlpbt.json")
@@ -148,12 +156,10 @@ if __name__ == "__main__":
     fidexGlo("--json_config_file config/fidexglo.json")
     normalization("--json_config_file config/denormalization.json")
 
-    global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
-    patient_rules = read_json_file("temp/explanation.json")
+    # global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
+    # global_rules.pretty_print(attributes)
+    # patient_rules = read_json_file("temp/explanation.json")
 
+    # write_results(selected_rules_id, samples_ids, samples_rules, nb_features)
 
-
-    # TODO: add generated rules with the global rules
-    # selected_rules = 
-
-    write_results(selected_rules_id, samples_ids, samples_rules, nb_features)
+    # normalization("--root_folder /home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources --data_files [temp/train_data.csv] --normalization_indices [3,43,48,50,54,73,77,78] --output_normalization_file temp/normalization_stats.txt --nb_attributes 79 --nb_classes 2")
