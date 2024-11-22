@@ -12,20 +12,22 @@ import os
 
 
 # This get random samples until we get real data
-def write_test_samples(nsamples: int) -> None:
-    data = pd.read_csv("temp/train_data_normalized.csv", sep=" ")
+def write_test_sample() -> Patient:
+    data = pd.read_csv("temp/train_data_normalized.csv", sep=" ", header=None)
 
-    samples_data = data.sample(nsamples)
+    sample_data = data.sample(1)
+
+    p = Patient.create_test(sample_data)
 
     # one hotting classes (useless but must be done)
-    samples_data = samples_data.assign(Lymphodema_NO=lambda x: 1)
-    samples_data = samples_data.assign(Lymphodema_YES=lambda x: 0)
+    sample_data = sample_data.assign(Lymphodema_NO=lambda x: 1)
+    sample_data = sample_data.assign(Lymphodema_YES=lambda x: 0)
 
-    samples_data.to_csv(
+    sample_data.to_csv(
         "input/test_sample_data.csv", header=False, index=False, sep=","
     )
 
-    return samples_data.index
+    return p
 
 
 def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
@@ -83,19 +85,21 @@ def read_input(path: str) -> pd.DataFrame:
         )
 
 
-def get_risk() -> list[float]:
+def get_risk() -> float:
     abspath = os.path.abspath(os.path.dirname(__file__))
     preds_filepath = os.path.join(abspath, "input", "test_sample_pred.csv")
 
-    return np.loadtxt(preds_filepath)[:, 1]
+    return np.loadtxt(preds_filepath)[1]
 
 
 def get_metrics() -> tuple[float, float]:
     data = read_json_file(
-        os.path.join(os.path.abspath(os.path.dirname(__file__)), "temp", "metrics.json")
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), "temp", "densClsMetrics.json")
     )
     nb_nets = data["nbNets"]
 
+
+    # TODO: compute this for one given sample
     lower_conf_interval = (
         data["avgs"][1] - (1.96 / math.sqrt(nb_nets)) * data["stds"][1]
     )
@@ -141,7 +145,8 @@ if __name__ == "__main__":
     update_config_files(abspath, nb_features, nb_classes)
     normalization("--json_config_file config/normalization.json")
 
-    samples_ids = write_test_samples(20)
+    patient = write_test_sample()
+
 
     # patient_data = read_input("input/PRE-ACT-01_Flow2_20241115_HES-SO.xlsx")
     # patient = Patient(patient_data)
@@ -156,10 +161,25 @@ if __name__ == "__main__":
     fidexGlo("--json_config_file config/fidexglo.json")
     normalization("--json_config_file config/denormalization.json")
 
-    # global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
-    # global_rules.pretty_print(attributes)
-    # patient_rules = read_json_file("temp/explanation.json")
+    intervals = get_metrics()
+    risk = get_risk()
+    patient.set_metrics(risk, intervals[0], intervals[1])
 
-    # write_results(selected_rules_id, samples_ids, samples_rules, nb_features)
+    selectedrules = read_json_file("temp/explanation.json")["samples"][0]
+    selectedrules = Rule.list_from_dict(selectedrules)
+    global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
 
-    # normalization("--root_folder /home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources --data_files [temp/train_data.csv] --normalization_indices [3,43,48,50,54,73,77,78] --output_normalization_file temp/normalization_stats.txt --nb_attributes 79 --nb_classes 2")
+    global_rules.set_rules_id()
+
+    for rule in selectedrules:
+        id = global_rules.get_rule_id(rule)
+        if id == -1:
+            global_rules.add_rule(rule)
+        
+        rule.id = id
+
+    
+    patient.set_selected_rules(selectedrules)
+    patient.write_results()
+
+

@@ -59,11 +59,6 @@ class Rule:
 
                 self.antecedants.append(Antecedant(attribute_id, inequality, value))
 
-            # properties to be set during rule extraction
-            self.risk = -1
-            self.low_interval = -1
-            self.high_interval = -1
-
         except KeyError as e:
             print(f"Rule creation from JSON error: {e}")
 
@@ -78,24 +73,17 @@ Accuracy: {self.accuracy:.3f}
 Antecedants: {antecedants_str}
 Output: {self.output}"""
 
-    def set_metrics(
-        self, risk: float, low_interval: float, high_interval: float
-    ) -> None:
-        self.risk = risk
-        self.low_interval = low_interval
-        self.high_interval = high_interval
-
     # designed for unicancer format
     def to_str_list(self):
         base_rule = [
-            self.id,
-            self.risk,
-            self.low_interval,
-            self.high_interval,
-            self.covering,
+            str(self.id),
         ]
-        antecedants = [antecedant.to_string() for antecedant in self.antecedants]
-        return base_rule + antecedants
+
+        list_str = [""] * 79
+        for antecedant in self.antecedants:
+            list_str[antecedant.attribute_id] = antecedant.to_string()
+            
+        return base_rule + list_str
 
     def pretty_print(self, attributes: list[str]) -> None:
         print(
@@ -187,7 +175,7 @@ class GlobalRules:
         with open(path, "w") as fp:
             json.dump(json_data, fp, indent=4)
 
-    def set_rule_id(self):
+    def set_rules_id(self):
         for i, rule in enumerate(self.rules):
             rule.id = i  # TODO check if this works
 
