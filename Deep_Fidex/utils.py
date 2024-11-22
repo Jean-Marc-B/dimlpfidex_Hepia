@@ -645,28 +645,28 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
 
             if last_activation_layer_index is None:
                 print(f"Layer {last_activation_layer_name} not found in the model, cannot use LeakyRelu.")
-
-
-
-            if last_activation_layer_index is not None and with_leaky_relu:
+            else:
                 # Get output of previous layer
                 last_conv_layer_output = model_base.layers[last_activation_layer_index - 1].output
 
                 # Apply LeakyReLU instead of ReLU
                 x = LeakyReLU(alpha=0.3, name='conv5_block3_out')(last_conv_layer_output)
+        else:
+            # If not using LeakyReLU, use the default output of the base model
+            x = model_base.output
 
-            x = Flatten()(x)
-            x = Dropout(0.5)(x)
-            x = BatchNormalization()(x)
-            outputs = Dense(nb_classes, activation='softmax')(x)
+        x = Flatten()(x)
+        x = Dropout(0.5)(x)
+        x = BatchNormalization()(x)
+        outputs = Dense(nb_classes, activation='softmax')(x)
 
-            model = Model(inputs=model_base.input, outputs=outputs)
+        model = Model(inputs=model_base.input, outputs=outputs)
 
-            model.compile(optimizer=Adam(learning_rate=0.00001),
-                        loss='categorical_crossentropy',
-                        metrics=['acc'])
+        model.compile(optimizer=Adam(learning_rate=0.00001),
+                    loss='categorical_crossentropy',
+                    metrics=['acc'])
 
-            model.summary()
+        model.summary()
 
     # if resnet:
     #     input_tensor = Input(shape=(sizeX, sizeY, 3))

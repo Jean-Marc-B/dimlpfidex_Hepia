@@ -48,7 +48,7 @@ test_version = True # Whether to launch with minimal data
 
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -59,11 +59,11 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = False
-with_train_second_model = False
+with_stats_computation = True
+with_train_second_model = True
 
 # Rule computation:
-with_global_rules = False
+with_global_rules = True
 
 # Image generation:
 get_images = True # With histograms
@@ -73,8 +73,8 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
