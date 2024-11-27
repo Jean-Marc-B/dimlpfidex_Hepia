@@ -10,66 +10,45 @@ import numpy as np
 import math
 import os
 
+# TODO: clean path handling
 
-# This get random samples until we get real data
-def write_test_sample() -> Patient:
-    data = pd.read_csv("temp/train_data_normalized.csv", sep=" ", header=None)
+# TEMPPATH = "temp"
+# LOGPATH = "logs"
+# INPUTPATH = "input"
+# OUTPUTPATH = "output"
 
-    sample_data = data.sample(1)
 
-    p = Patient.create_test(sample_data)
+def write_patient() -> Patient:
+    trial_data = pd.read_excel("input/PRE-ACT-01_Flow2_20241115_HES-SO.xlsx", index_col=False).iloc[:, :5]
+    clinical_data = dh.obtain_data("input/PRE-ACT-01_Flow2_20241115_HES-SO.xlsx", training=False)
+    clinical_data = clinical_data.assign(BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3))
+
+    p = Patient(trial_data, clinical_data)
 
     # one hotting classes (useless but must be done)
-    sample_data = sample_data.assign(Lymphodema_NO=lambda x: 1)
-    sample_data = sample_data.assign(Lymphodema_YES=lambda x: 0)
+    clinical_data = clinical_data.assign(Lymphodema_NO=lambda x: 1)
+    clinical_data = clinical_data.assign(Lymphodema_YES=lambda x: 0)
 
-    sample_data.to_csv(
-        "input/test_sample_data.csv", header=False, index=False, sep=","
-    )
+    clinical_data.to_csv("input/test_sample_data.csv", header=False, index=False, sep=",")
 
     return p
+
+
+def write_attributes_file(attributes: list[str]) -> list[str]:
+    attributes = attributes + ["LYMPHODEMA_NO", "LYMPHODEMA_YES"]
+
+    with open("temp/attributes.txt", "w") as f:
+        for attribute in attributes:
+            f.write(attribute + "\n")
+
+    return attributes
 
 
 def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
     labels = pd.get_dummies(labels).astype("uint")
 
-    with open("temp/attributes.txt", "w") as f:
-        f.writelines(data.columns + "\n")
-        f.write("NO\n")
-        f.write("YES")
-
     data.to_csv("temp/train_data.csv", sep=",", header=False, index=False)
     labels.to_csv("temp/train_classes.csv", sep=",", header=False, index=False)
-
-
-# def write_results(
-#     used_rules_id: list[int], sample_ids: list[str], nb_features: int
-# ) -> None:
-#     res = []
-#     g_rules = read_json_file("temp/global_rules_denormalized.json")
-
-#     lower_interval, upper_interval = get_metrics()
-#     risks = get_risk()
-
-#     # add STUDYID, SITEIDN, SITENAME, SUBJID, VISIT
-
-#     for sample, risk in zip(data["samples"], risks):
-#         for i, rule in enumerate(sample["rules"]):
-#             line = [""] * (nb_features + 5)
-#             line[0] = sample_ids[sample["sampleId"]]
-#             line[1] = used_rules_id[i]
-#             line[2] = f"{risk * 100.0:.3f}"
-#             line[3] = f"{lower_interval: .3f}"
-#             line[4] = f"{upper_interval: .3f}"
-#             line[5] = rule["coveringSize"]
-#             for antecedant in rule["antecedents"]:
-#                 line[antecedant["attribute"] + 5] = get_inequality(
-#                     antecedant["inequality"]
-#                 ) + str(antecedant["value"])
-
-#             res.append(line)
-
-#     write_csv(res)
 
 
 def read_input(path: str) -> pd.DataFrame:
@@ -94,12 +73,12 @@ def get_risk() -> float:
 
 def get_metrics() -> tuple[float, float]:
     data = read_json_file(
-        os.path.join(os.path.abspath(os.path.dirname(__file__)), "temp", "densClsMetrics.json")
+        os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), "temp", "densClsMetrics.json"
+        )
     )
     nb_nets = data["nbNets"]
 
-
-    # TODO: compute this for one given sample
     lower_conf_interval = (
         data["avgs"][1] - (1.96 / math.sqrt(nb_nets)) * data["stds"][1]
     )
@@ -135,23 +114,12 @@ if __name__ == "__main__":
     nb_features = data.shape[1]
     nb_classes = 2
 
-    # writing attributes
-    attributes = data.columns.to_list() + ["NO", "YES"]
-    with open("temp/attributes.txt", "w") as fp:
-        for a in attributes:
-            fp.write(a + "\n")
-
+    attributes = write_attributes_file(data.columns.to_list())
     write_train_data(data, labels)
     update_config_files(abspath, nb_features, nb_classes)
     normalization("--json_config_file config/normalization.json")
 
-    patient = write_test_sample()
-
-
-    # patient_data = read_input("input/PRE-ACT-01_Flow2_20241115_HES-SO.xlsx")
-    # patient = Patient(patient_data)
-    # patient_file = patient.prepare_input_for_extraction("temp/")
-    # update_config_file("config/denscls.json", {"test_data_file": patient_file})
+    patient = write_patient()
 
     if args.train:
         dimlpBT("--json_config_file config/dimlpbt.json")
@@ -165,21 +133,21 @@ if __name__ == "__main__":
     risk = get_risk()
     patient.set_metrics(risk, intervals[0], intervals[1])
 
-    selectedrules = read_json_file("temp/explanation.json")["samples"][0]
-    selectedrules = Rule.list_from_dict(selectedrules)
-    global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
+    # ! beware of normalized/denormalized data, denormalize explaination
+    selected_rules = read_json_file("temp/explanation.json")["samples"][0]
+    selected_rules = Rule.list_from_dict(selected_rules)
+    global_rules = GlobalRules.from_json_file("temp/global_rules.json")
 
     global_rules.set_rules_id()
 
-    for rule in selectedrules:
+    for rule in selected_rules:
+        # TODO: comparison is broken
         id = global_rules.get_rule_id(rule)
         if id == -1:
-            global_rules.add_rule(rule)
-        
+            id = global_rules.add_rule(rule)
         rule.id = id
+    # print(selected_rules)
 
-    
-    patient.set_selected_rules(selectedrules)
-    patient.write_results()
-
-
+    patient.set_selected_rules(selected_rules)
+    print(patient.pretty_repr(attributes))
+    patient.write_results(attributes[:-2])

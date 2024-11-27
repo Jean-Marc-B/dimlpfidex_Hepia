@@ -24,11 +24,11 @@ class Antecedant:
             "value": self.value,
         }
 
-    def pretty_print(self, attributes: list[str]) -> None:
+    def pretty_repr(self, attributes: list[str]) -> str:
         ineq_str = ">=" if self.inequality else "<"
         attribute = attributes[self.attribute_id]
 
-        print(f"{attribute} {ineq_str} {self.value:.4f}", end=" ")
+        return f"{attribute} {ineq_str} {self.value:.4f}"
 
     # designed for unicancer format
     def to_string(self) -> str:
@@ -82,21 +82,21 @@ Output: {self.output}"""
         list_str = [""] * 79
         for antecedant in self.antecedants:
             list_str[antecedant.attribute_id] = antecedant.to_string()
-            
+
         return base_rule + list_str
 
-    def pretty_print(self, attributes: list[str]) -> None:
-        print(
-            f"""
+    def pretty_repr(self, attributes: list[str]) -> str:
+        labels = attributes[-2:]
+        string = f"""
 Covering: {self.covering}
 Fidelity: {self.fidelity:.3f}
 Accuracy: {self.accuracy:.3f}   
-Antecedants:"""
-        )
+Antecedants:\n\t"""
         for antecedant in self.antecedants:
-            antecedant.pretty_print(attributes)
+            string += antecedant.pretty_repr(attributes) + " "
+        string += f"\nOutput: {labels[self.output]}"
 
-        print(f"Output: {self.output}" "")
+        return string
 
     @staticmethod
     def from_json_file(path: str) -> list[Rule]:
@@ -202,18 +202,16 @@ Rules:"""
 
         return res
 
-    def pretty_print(self, attributes: list[str]) -> None:
-        print(
-            f"""Global rule set:
+    def pretty_repr(self, attributes: list[str]) -> None:
+        string = f"""Global rule set:
 Positive index class: {self.positive_index_class}
 Threshold: {self.threshold}
 Rule set size: {len(self.rules)}
 Rules:"""
-        )
 
         for i, rule in enumerate(self.rules):
-            print(f"Rule #{i+1}:")
-            rule.pretty_print(attributes)
+            string += f"Rule #{i+1}:\n"
+            string += rule.pretty_repr(attributes)
 
     def extract_selected_rules(self, list_rules: list[Rule]) -> dict[int, Rule]:
         res = {}

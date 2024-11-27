@@ -5,19 +5,13 @@ from src.rule import *
 
 
 class Patient:
-    def __init__(self, input_data: pd.DataFrame) -> None:
-        # add STUDYID, SITEIDN, SITENAME, SUBJID, VISIT
-        if input_data.shape[0] != 1:
-            raise ValueError(
-                "Error while creating a patient: Cannot create a patient from more/less than one row of a pandas DataFrame."
-            )
-
-        self.study_id = input_data.iloc[0, 0]
-        self.site_idn = input_data.iloc[0, 1]
-        self.site_name = input_data.iloc[0, 2]
-        self.subj_id = input_data.iloc[0, 3]
-        self.visit = input_data.iloc[0, 4]
-        self.input_data = input_data.iloc[0, 5:]
+    def __init__(self, patient_data: pd.DataFrame, clinical_data: pd.DataFrame) -> None:
+        self.study_id = patient_data.iloc[0, 0]
+        self.site_idn = patient_data.iloc[0, 1]
+        self.site_name = patient_data.iloc[0, 2]
+        self.subj_id = patient_data.iloc[0, 3]
+        self.visit = patient_data.iloc[0, 4]
+        self.input_data = clinical_data
 
         # properties to be set during rule extraction
         self.risk = -1
@@ -28,18 +22,6 @@ class Patient:
 
     def set_selected_rules(self, selected_rules: list[Rule]):
         self.selected_rules = selected_rules
-
-    @staticmethod
-    def create_test(input_data: pd.DataFrame) -> Patient:
-        data = input_data.copy()
-
-        data.insert(0, "VISIT", ["VISIT_000"])
-        data.insert(0, "STUDY_ID", ["STUDYID_000"])
-        data.insert(0, "SITE_NAME", ["SITE_000"])
-        data.insert(0, "SITENAME", ["SITENAME_000"])
-        data.insert(0, "SUBJECT_ID", ["SUBJID_000"])
-
-        return Patient(data)
 
     def set_metrics(
         self, risk: float, low_interval: float, high_interval: float
@@ -56,9 +38,9 @@ class Patient:
             str(self.site_name),
             str(self.subj_id),
             str(self.visit),
-            str(round(self.risk*100,4)),
-            str(self.low_interval),
-            str(self.high_interval),
+            str(round(self.risk * 100, 4)),
+            str(round(self.low_interval * 100, 4)),
+            str(round(self.high_interval * 100, 4)),
         ]
 
         for rule in self.selected_rules:
@@ -78,14 +60,42 @@ class Patient:
 
         return filepath
 
-    def write_results(self)-> None:
+    def write_results(self, attributes: list[str]) -> None:
+        unicancer_headers = ["VISIT", "STUDY_ID", "SITE_NAME", "SITENAME", "SUBJECT_ID"]
+        rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "RULE_ID"]
+        headers = unicancer_headers + rule_headers + attributes
+
         with open(f"output/results_{self.subj_id}.csv", "w") as fp:
+            fp.write(",".join(headers) + "\n")
             for row in self.to_str_list():
                 fp.write(",".join(row) + "\n")
 
     def __repr__(self) -> str:
         rules_str = (
             "".join([rule.__repr__() + " " for rule in self.selected_rules]) + "\n"
+        )
+
+        return f"""Patient:
+Study ID: {self.study_id}
+Site IDN: {self.site_idn}
+Site name: {self.site_name}
+Subject ID: {self.subj_id}
+Visit: {self.visit}
+Risk: {self.risk}
+Low conf. int.: {self.low_interval}
+High conf. int.: {self.high_interval}
+Patient's data: 
+{self.input_data}
+Selected rules: 
+{rules_str}
+        """
+
+    def pretty_repr(self, attributes: list[str]) -> str:
+        rules_str = (
+            "".join(
+                [rule.pretty_repr(attributes) + "\n" for rule in self.selected_rules]
+            )
+            + "\n"
         )
 
         return f"""Patient:
