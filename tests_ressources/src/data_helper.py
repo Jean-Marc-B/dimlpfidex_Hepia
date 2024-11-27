@@ -1,11 +1,81 @@
 import re
 import os
+import copy
 from collections import defaultdict
 from typing import Optional, Any
 from typing import Union
 
 import pandas as pd
 import numpy as np
+from numpy import dtype
+
+__columns_train2trial = {
+    "SUBJID": "SUBJECT ID",
+    "SMOKE": "SMOKER",
+    "DIABE": "DIABETIES",
+    "MENO": "MENOPAUSAL",
+    "SIDE": "SIDE OF PRIMARY",
+    "SURGTYP": "TYPE SURGERY",
+    "AXI": "PLANNED AXILLARY DISSECTION",
+    "NODREM": "NODES REMOVED",
+    "NODINV": "NODES INVOLVED",
+    "SENTNOD": "SENTINEL NODE BIOPSY",
+    "HISTO": "HISTOLOGICAL TYPE",
+    "PATHOSIZ": "PATHOLOGICAL TUMOUR SIZE",
+    "CT": "CLINICAL T-STAGE",
+    "CN": "CLINICAL N-STAGE",
+    "KISTAT": "KI-67 STATUS",
+    "ERSTAT": "ER STATUS",
+    "PRSTAT": "PR STATUS",
+    "HERSTAT": "HER-2 STATUS",
+    "NBFRAC": "NUMBER OF FRACTIONS",
+    "TBRSIDE": "TREATED BREAST RADIO",
+    "BEDBOOST": "BOOST",
+    "NEOADJCH": "NEOADJUVANT CHEMOTHERAPY",
+    "ADJCH": "ADJUVANT CHEMOTHERAPY",
+    "ARMLYM": "BASELINE ARM LYMPHEDEMA"
+}
+
+__original_columns = {
+    'HEIGHT': (dtype('float64'), dtype('int64')),
+    'WEIGHT': (dtype('float64'), dtype('int64')),
+    'AGE': (dtype('float64'), dtype('int64')),
+    'SMOKER': dtype('O'),
+    'MENOPAUSAL': dtype('O'),
+    'TYPE SURGERY': dtype('O'),
+    'NODES INVOLVED': (dtype('float64'), dtype('int64')),
+    'SIDE OF PRIMARY': dtype('O'),
+    'HISTOLOGICAL TYPE': dtype('O'),
+    'PATHOLOGICAL TUMOUR SIZE': (dtype('float64'), dtype('int64')),
+    'CLINICAL T-STAGE': dtype('O'),
+    'CLINICAL N-STAGE': dtype('O'),
+    'KI-67 STATUS': (dtype('float64'), dtype('int64')),
+    'ER STATUS': dtype('O'),
+    'HER-2 STATUS': dtype('O'),
+    'PR STATUS': dtype('O'),
+    'NUMBER OF FRACTIONS': (dtype('float64'), dtype('int64')),
+    'IMRT': (dtype('float64'), dtype('int64')),
+    'IMRT_YES': (dtype('float64'), dtype('int64')),
+    'IMRT_NO': (dtype('float64'), dtype('int64')),
+    'IMRT_UNKNOWN': (dtype('float64'), dtype('int64')),
+    '3D-CRT': dtype('float64'),
+    '3D-CRT_YES': (dtype('float64'), dtype('int64')),
+    '3D-CRT_NO': (dtype('float64'), dtype('int64')),
+    '3D-CRT_UNKNOWN': (dtype('float64'), dtype('int64')),
+    'TREATED BREAST RADIO': dtype('O'),
+    'BOOST': (dtype('float64'), dtype('int64'), dtype('O')),
+    'NEOADJUVANT CHEMOTHERAPY': (dtype('float64'), dtype('int64'), dtype('O')),
+    'ADJUVANT CHEMOTHERAPY': (dtype('float64'), dtype('int64'), dtype('O')),
+    'NODES REMOVED': (dtype('float64'), dtype('int64')),
+    'BASELINE ARM LYMPHEDEMA': (dtype('float64'), dtype('int64'), dtype('O')),
+    'DIABETIES': (dtype('float64'), dtype('int64'), dtype('O')),
+    'PLANNED AXILLARY DISSECTION': (dtype('float64'), dtype('int64'), dtype('O')),
+    'SENTINEL NODE BIOPSY': (dtype('float64'), dtype('int64'), dtype('O'))
+}
+
+__training_columns = {'MENOPAUSAL_POST_MENOPAUSAL', 'IMRT_UNKNOWN', 'NEOADJUVANT_CHEMOTHERAPY_UNKNOWN', 'AGE', 'NODES_REMOVED', 'TREATED_BREAST_RADIO_LEFT', 'HER_2_STATUS_UNKNOWN', 'SIDE_OF_PRIMARY_UNKNOWN', 'PR_STATUS_UNKNOWN', 'CLINICAL_N_STAGE_NX', 'IMRT_YES', 'BOOST_UNKNOWN', 'DIABETIES_UNKNOWN', '3D_CRT_UNKNOWN', 'CLINICAL_T_STAGE_TX', 'TYPE_SURGERY_MASTECTOMY', '3D_CRT_NO', 'SMOKER_FORMER', 'ER_STATUS_UNKNOWN', 'CLINICAL_T_STAGE_TIS', 'SMOKER_UNKNOWN', 'CLINICAL_T_STAGE_UNKNOWN', 'NODES_INVOLVED', 'HISTOLOGICAL_TYPE_UNKNOWN', 'SIDE_OF_PRIMARY_RIGHT', 'BOOST_YES', 'KI_67_STATUS', 'IMRT_NO', 'HISTOLOGICAL_TYPE_OTHER', 'BOOST_NO', 'SENTINEL_NODE_BIOPSY', 'ADJUVANT_CHEMOTHERAPY_YES', 'NEOADJUVANT_CHEMOTHERAPY_NO', 'CLINICAL_T_STAGE_T4D', 'SMOKER_CURRENT', '3D_CRT_YES', 'HER_2_STATUS_NEGATIVE', 'SIDE_OF_PRIMARY_LEFT', 'NUMBER_OF_FRACTIONS', 'PATHOLOGICAL_TUMOUR_SIZE', 'NEOADJUVANT_CHEMOTHERAPY_YES', 'HER_2_STATUS_POSITIVE', 'ADJUVANT_CHEMOTHERAPY_UNKNOWN', 'CLINICAL_T_STAGE_T0', 'CLINICAL_T_STAGE_T3', 'PR_STATUS_NEGATIVE', 'CLINICAL_T_STAGE_T4B', 'ADJUVANT_CHEMOTHERAPY_NO', 'WEIGHT', 'CLINICAL_N_STAGE_N1', 'PR_STATUS_POSITIVE', 'DIABETIES_NO', 'MENOPAUSAL_PRE_MENOPAUSAL', 'HISTOLOGICAL_TYPE_LOBULAR', 'CLINICAL_N_STAGE_UNKNOWN', 'CLINICAL_N_STAGE_N2', 'TYPE_SURGERY_UNKNOWN', 'PLANNED_AXILLARY_DISSECTION', 'BASELINE_ARM_LYMPHEDEMA_YES', 'CLINICAL_T_STAGE_T4', 'TREATED_BREAST_RADIO_UNKNOWN', 'HISTOLOGICAL_TYPE_DUCTAL/INVASIVE_CARCINOMA_NST', 'SMOKER_NEVER', 'HEIGHT', 'ER_STATUS_NEGATIVE', 'CLINICAL_T_STAGE_T2', 'TYPE_SURGERY_BREAST_CONSERVING_SURGERY', 'MENOPAUSAL_NOT_MENOPAUSAL', 'MENOPAUSAL_UNKNOWN', 'BASELINE_ARM_LYMPHEDEMA_NO', 'CLINICAL_N_STAGE_N3', 'DIABETIES_YES', 'BASELINE_ARM_LYMPHEDEMA_UNKNOWN', 'CLINICAL_T_STAGE_T4A', 'CLINICAL_N_STAGE_N0', 'CLINICAL_T_STAGE_T1', 'ER_STATUS_POSITIVE', 'TREATED_BREAST_RADIO_RIGHT'}
+
+__training_means = {'WEIGHT': 69.25586658255796, 'TYPE_SURGERY_UNKNOWN': 0.0018864958339883666, 'TYPE_SURGERY_MASTECTOMY': 0.18519100770319133, 'TYPE_SURGERY_BREAST_CONSERVING_SURGERY': 0.8129224964628203, 'TREATED_BREAST_RADIO_UNKNOWN': 0.48420059739034743, 'TREATED_BREAST_RADIO_RIGHT': 0.2501179059896243, 'TREATED_BREAST_RADIO_LEFT': 0.2656814966200283, 'SMOKER_UNKNOWN': 0.009746895142273228, 'SMOKER_NEVER': 0.6109102342398994, 'SMOKER_FORMER': 0.221191636535136, 'SMOKER_CURRENT': 0.1581512340826914, 'SIDE_OF_PRIMARY_UNKNOWN': 0.0, 'SIDE_OF_PRIMARY_RIGHT': 0.4856154692658387, 'SIDE_OF_PRIMARY_LEFT': 0.5143845307341613, 'SENTINEL_NODE_BIOPSY': 0.7074359377456375, 'PR_STATUS_UNKNOWN': 0.07027196981606666, 'PR_STATUS_POSITIVE': 0.663574909605408, 'PR_STATUS_NEGATIVE': 0.2661531205785254, 'PLANNED_AXILLARY_DISSECTION': 0.40418173243200756, 'PATHOLOGICAL_TUMOUR_SIZE': 17.107667833280303, 'NUMBER_OF_FRACTIONS': 20.30259691381257, 'NODES_REMOVED': 6.396994483545749, 'NODES_INVOLVED': 1.1941463414634146, 'NEOADJUVANT_CHEMOTHERAPY_YES': 0.13409841219933974, 'NEOADJUVANT_CHEMOTHERAPY_UNKNOWN': 0.00015720798616569723, 'NEOADJUVANT_CHEMOTHERAPY_NO': 0.8657443798144946, 'MENOPAUSAL_UNKNOWN': 0.015091966671906933, 'MENOPAUSAL_PRE_MENOPAUSAL': 0.2681968243986795, 'MENOPAUSAL_POST_MENOPAUSAL': 0.6406225436252162, 'MENOPAUSAL_NOT_MENOPAUSAL': 0.07608866530419746, 'KI_67_STATUS': 23.250853970964986, 'IMRT_YES': 0.2600220091180632, 'IMRT_UNKNOWN': 0.4845150133626788, 'IMRT_NO': 0.255462977519258, 'HISTOLOGICAL_TYPE_UNKNOWN': 0.0029869517371482472, 'HISTOLOGICAL_TYPE_OTHER': 0.13881465178431066, 'HISTOLOGICAL_TYPE_LOBULAR': 0.11664832573494734, 'HISTOLOGICAL_TYPE_DUCTAL/INVASIVE_CARCINOMA_NST': 0.7415500707435938, 'HER_2_STATUS_UNKNOWN': 0.04323219619556674, 'HER_2_STATUS_POSITIVE': 0.1359849080333281, 'HER_2_STATUS_NEGATIVE': 0.8207828957711052, 'HEIGHT': 162.67628053585503, 'ER_STATUS_UNKNOWN': 0.021380286118534823, 'ER_STATUS_POSITIVE': 0.8344599905675208, 'ER_STATUS_NEGATIVE': 0.14415972331394436, 'DIABETIES_YES': 0.05895299481213646, 'DIABETIES_UNKNOWN': 0.4577896557145103, 'DIABETIES_NO': 0.48325734947335325, 'CLINICAL_T_STAGE_UNKNOWN': 0.10249960698003459, 'CLINICAL_T_STAGE_TX': 0.010061311114604623, 'CLINICAL_T_STAGE_TIS': 0.04480427605722371, 'CLINICAL_T_STAGE_T4D': 0.00031441597233139445, 'CLINICAL_T_STAGE_T4B': 0.0012576638893255778, 'CLINICAL_T_STAGE_T4A': 0.00031441597233139445, 'CLINICAL_T_STAGE_T4': 0.0031441597233139444, 'CLINICAL_T_STAGE_T3': 0.05046376355918881, 'CLINICAL_T_STAGE_T2': 0.2906775664203742, 'CLINICAL_T_STAGE_T1': 0.7278729759471781, 'CLINICAL_T_STAGE_T0': 0.15956610595818269, 'CLINICAL_N_STAGE_UNKNOWN': 0.0507781795315202, 'CLINICAL_N_STAGE_NX': 0.03285646910863072, 'CLINICAL_N_STAGE_N3': 0.007074359377456375, 'CLINICAL_N_STAGE_N2': 0.029712309385316774, 'CLINICAL_N_STAGE_N1': 0.2145889011161767, 'CLINICAL_N_STAGE_N0': 0.9163653513598491, 'BOOST_YES': 0.310485772677252, 'BOOST_UNKNOWN': 0.4865587171828329, 'BOOST_NO': 0.2029555101399151, 'BASELINE_ARM_LYMPHEDEMA_YES': 0.014777550699575539, 'BASELINE_ARM_LYMPHEDEMA_UNKNOWN': 0.4853010532935073, 'BASELINE_ARM_LYMPHEDEMA_NO': 0.49992139600691715, 'AGE': 57.49154951824356, 'ADJUVANT_CHEMOTHERAPY_YES': 0.3975789970130483, 'ADJUVANT_CHEMOTHERAPY_UNKNOWN': 0.00015720798616569723, 'ADJUVANT_CHEMOTHERAPY_NO': 0.6022637950007861, '3D_CRT_YES': 0.34963056123251063, '3D_CRT_UNKNOWN': 0.48781638107215847, '3D_CRT_NO': 0.16255305769533093}
 
 
 def read_file(file: Union[str, Any], sep: str = ',') -> pd.DataFrame:
@@ -15,10 +85,31 @@ def read_file(file: Union[str, Any], sep: str = ',') -> pd.DataFrame:
     :param file: path to file to open and read or bytes of the file. Must be a CSV file.
     :return: a DataFrame with the data in the file
     """
-    data = pd.read_csv(file, sep=sep)
-    data = data.set_index('Subject ID', drop=True)
-    # Remove index columns from CSV
-    return data.loc[:, ~data.columns.str.contains("^Unnamed")]
+    data = None
+    ext = os.path.splitext(file)[1].lower()
+
+    if ext in [".xls", ".xlsx", ".xlsm", ".xlsb", ".odf", ".ods", ".odt"]:
+        data = pd.read_excel(file)
+        data.columns = [re.sub(r"^AI", "", c) for c in data.columns]
+
+        # Renaming columns
+        # converting clinical trial columns names to training columns names
+        data.rename(columns=__columns_train2trial, inplace=True)
+
+    elif ext == ".csv":
+        data = pd.read_csv(file)
+        # Remove index columns from CSV
+        data = data.loc[:, ~data.columns.str.contains("^Unnamed")]
+        # All capital letters columns
+        data.columns = [c.replace(r"^AI", "").upper() for c in data.columns]
+        # Rename columns to have same names than in our experiences / trials.
+        # If the name is not in the dict provided, it will not change
+        data.rename(columns=__columns_train2trial, inplace=True)
+    else:
+        raise NotImplementedError(f"Support for {ext} extension in {file} file is not implemented.")
+
+    data = data.set_index("SUBJECT ID", drop=True)
+    return data
 
 
 def get_labels(data: pd.DataFrame, *columns_names: str) -> np.array:
@@ -134,12 +225,12 @@ def one_hot_encoding_ext(data: pd.DataFrame, dummy_na: bool, *columns: str) -> p
     return res
 
 
-def infer_missing_values(data: pd.DataFrame, method: str = 'mean', value: Optional[float] = None) -> pd.DataFrame:
+def infer_missing_values(data: pd.DataFrame, method: str = 'mean', values: Optional[dict[str, float]] = None) -> pd.DataFrame:
     """
     Replace NaN vales in the DataFrame with values from chosen method.
     :param data: explicit
     :param method: either 'mean', 'median', 'value'. If value, only numerical values are compatible. Default is median.
-    :param value: Optional if value is chosen.
+    :param values: Optional to replace the value in the precised column by the value
     :return: pd.DataFrame
     """
     res = data.copy(deep=True)
@@ -154,18 +245,105 @@ def infer_missing_values(data: pd.DataFrame, method: str = 'mean', value: Option
         return res
 
     if method == "value":
-        if value is None:
-            raise Exception("A value must be passed to infer missing value")
-        if type(value) != float and type(value) != int:
-            raise Exception(f"Infered value must be of type int or float, passed value was of type {type(value)}")
-        for c in data:
-            res.loc[:, c] = res.loc[:, c].replace(np.nan, value)
+        if values is None:
+            raise ValueError("A value must be passed to infer missing value")
+        if type(values) != dict:
+            raise ValueError(f"Values must be dict-like, was {type(values)}")
+        # replace nan values in columns precized in the dict by their value
+        for c in values:
+            if c not in res.columns:
+                raise ValueError(f"Column {c} not found in data")
+            res.fillna(values, inplace=True)
         return res
 
     raise Exception("Method must be one of 'median', 'mean', value'")
 
 
-def __obtain_clinical_data(file_path: str, training: bool=True) -> tuple[pd.DataFrame, np.array]:
+def __manage_T_retroactively(attributes: pd.DataFrame) -> pd.DataFrame:
+    # Transforming to imply that T4a, T4b, T4d <=> T4
+    # Transforming to imply that T4 -> T3 -> T2 -> T1
+    t4 = attributes.filter(regex=r"^CLINICAL_T_STAGE_T4[A-D]?$")
+    ts = attributes.filter(regex=r"^CLINICAL_T_STAGE_T[1-3]$")
+    t4 = np.add.reduce(t4, axis=1)
+    t4.rename("CLINICAL_T_STAGE_T4", inplace=True)
+    ts = pd.concat([ts, t4], axis=1)
+    attributes = attributes.drop(ts.columns, axis=1)
+
+    ts = ts.sort_index(axis=1, ascending=False)
+    new_ts = []
+    for c in ts.columns[:-1]:
+        new_ts.append(ts[c])
+        ts = ts.drop(c, axis=1)
+        ts = ts.add(new_ts[-1], axis=0)
+
+    ts = pd.concat([*new_ts, ts], axis=1).apply(lambda x: x.apply(lambda y: 1 if y >= 1 else 0), axis=1)
+
+    attributes = pd.concat([attributes, ts], axis=1)
+
+    # Tis are T0s
+    tis = attributes["CLINICAL_T_STAGE_TIS"]
+    t0s = attributes["CLINICAL_T_STAGE_T0"].add(tis, axis=0).apply(lambda x: 1 if x >=1 else 0).rename("CLINICAL_T_STAGE_T0")
+    attributes = attributes.drop(["CLINICAL_T_STAGE_T0"], axis=1)
+    attributes = pd.concat([attributes, t0s], axis=1)
+
+    # T+ (T1->T4/T4a,b,c,d) can't be T0
+    t_plus = attributes.filter(regex=r"^CLINICAL_T_STAGE_T[1-4][a-d]?$")
+    t_plus = np.add.reduce(t_plus, axis=1).rename("CLINICAL_T_STAGE_T+")
+    t0s = attributes["CLINICAL_T_STAGE_T0"]
+    ts = pd.concat([t0s, t_plus], axis=1)
+    t0s = ts.apply(lambda x: 1 if x["CLINICAL_T_STAGE_T+"] == 0 and x["CLINICAL_T_STAGE_T0"] == 1 else 0, axis=1).rename("CLINICAL_T_STAGE_T0")
+    attributes = attributes.drop(["CLINICAL_T_STAGE_T0"], axis=1)
+    attributes = pd.concat([attributes, t0s], axis=1)
+    return attributes.sort_index(axis=1, ascending=True)
+
+
+def __manage_N_retroactively(attributes: pd.DataFrame) -> pd.DataFrame:
+    ns = attributes.filter(regex=r"^CLINICAL_N_STAGE_N[0-3]$")
+    attributes = attributes.drop(ns.columns, axis=1)
+
+    ns = ns.sort_index(axis=1, ascending=False)
+    new_ns = []
+    for c in ns.columns[:-1]:
+        new_ns.append(ns[c])
+        ns = ns.drop(c, axis=1)
+        ns = ns.add(new_ns[-1], axis=0)
+
+    ns = pd.concat([*new_ns, ns], axis=1)
+    ns = ns.apply(lambda x: x.apply(lambda y: 1 if y >= 1 else 0), axis=1)
+
+    attributes = pd.concat([attributes, ns], axis=1)
+    return attributes.sort_index(axis=1, ascending=True)
+
+
+def __check_dtypes(dtypes: pd.Series) -> None:
+    for c in dtypes.index:
+        if type(__original_columns[c]) is tuple:
+            if dtypes[c] not in __original_columns[c]:
+                raise ValueError(f"Column {c} should be of dtype '{__original_columns[c]}. Got {dtypes[c]} instead.")
+                # print(f"Column {c} should be of dtype '{__original_columns[c]}. Got {dtypes[c]} instead.")
+        elif dtypes[c] != __original_columns[c]:
+            raise ValueError(f"Column {c} should be of dtype '{__original_columns[c]}. Got {dtypes[c]} instead.")
+            # print(f"Column {c} should be of dtype '{__original_columns[c]}. Got {dtypes[c]} instead.")
+
+
+def __postprocess_attributes(attributes: pd.DataFrame) -> pd.DataFrame:
+    # replace NAN in column's name by UNKNOWN, spaces by _ and - by _
+    attributes.rename(
+        columns=lambda col: col.strip().upper().replace("NAN", "UNKNOWN").replace("-", "_").replace(" ", "_"),
+        inplace=True)
+
+    # Management of T1-4
+    attributes = __manage_T_retroactively(attributes)
+
+    # Management of N0-3
+    attributes = __manage_N_retroactively(attributes)
+
+    attributes = attributes.sort_index(axis=1, ascending=False)
+
+    return attributes
+
+
+def __obtain_clinical_data(file_path: str) -> tuple[pd.DataFrame, Optional[pd.Series]]:
     """
     Get the data and apply some tranformations to be usable for experiences
     Read the data
@@ -173,117 +351,124 @@ def __obtain_clinical_data(file_path: str, training: bool=True) -> tuple[pd.Data
     Remove useless columns
     One hot encode categorical data
     :param file_path: path to the file to read
-    :return: a pd.DataFrame with the data and a np.array with the labels.
+    :return: a pd.DataFrame with the data and a pd.Series with the labels if in training case, otherwise only clinical Data.
     """
     data = read_file(file_path)
-    # label_names = ['12m follow-up Arm Lymphedema', '24m follow-up Arm Lymphedema', '36m follow-up Arm Lymphedema']
-    label_names = ['12m follow-up Arm Lymphedema', '24m follow-up Arm Lymphedema']
-    label_lymph = get_labels(data, *label_names)
 
-    keywords = ["follow-up", "DB", "Post-RT", "Date", 'Baseline Telangiectasia', 'Baseline Edema',
-                'Baseline SkinInduration', 'Baseline Erythema', 'Baseline SkinHyperpigment', 'Mean Heart Dose']
+    # Managing labels and train drop columns
+    # label_names = ['12m follow-up Arm Lymphedema', '24m follow-up Arm Lymphedema', '36m follow-up Arm Lymphedema']
+    label_names = ['12M FOLLOW-UP ARM LYMPHEDEMA', '24M FOLLOW-UP ARM LYMPHEDEMA']
+    label_lymph = get_labels(data, *label_names)
+    label_lymph.rename("label", inplace=True)
+
+    keywords = ['FOLLOW-UP', 'DB', 'POST-RT', 'DATE', 'BASELINE TELANGIECTASIA', 'BASELINE EDEMA',
+                'BASELINE SKININDURATION', 'BASELINE ERYTHEMA', 'BASELINE SKINHYPERPIGMENT', 'MEAN HEART DOSE']
 
     attributes = remove_attributes_with_keyword(data, *keywords)
     # Surgery is a special case since some attributes have surgery in their names we have to delete only this column
-    attributes.drop('Surgery', inplace=True, axis=1)
+    attributes.drop('SURGERY', inplace=True, axis=1)
+
+    # match trial names
+    attributes.rename(columns={"3D": "3D-CRT", "NODES EXAMINED": "NODES REMOVED"}, inplace=True)
+
+    # check columns dtypes for consistancy before transformation and one hot encoding
+    __check_dtypes(attributes.dtypes)
+
     attributes = one_hot_encoding(attributes, dummy_na=True)
-    categorical_cols = ['Diabeties', 'IMRT', '3D', 'Boost', 'neoadjuvant chemotherapy', 'adjuvant chemotherapy',
-                        'Baseline Arm Lymphedema']
+    attributes.rename(columns={"HISTOLOGICAL TYPE_DUCTAL": "HISTOLOGICAL TYPE_DUCTAL/INVASIVE_CARCINOMA_NST"}, inplace=True)
+    categorical_cols = ['DIABETIES', 'IMRT', '3D-CRT', 'BOOST', 'NEOADJUVANT CHEMOTHERAPY', 'ADJUVANT CHEMOTHERAPY',
+                        'BASELINE ARM LYMPHEDEMA']
     attributes = one_hot_encoding_ext(attributes, True, *categorical_cols)
+
+    # Match trial columns
+    attributes.rename(columns={"SMOKER_YES": "SMOKER_CURRENT", "SMOKER_NO": "SMOKER_NEVER"}, inplace=True)
     attributes = infer_missing_values(attributes)
-    label_lymph.rename("label", inplace=True)
 
-    # Adding missing columns if in clinical experiment case
-    if not training:
-        # clinical tests case
-        # we have to rename some columns, add some more to correspond to training data
-        # CF. ressources and file "precautionsDeCodage.pdf" for further information
-        # Wa add column smoker former and nan if not present
-        smoker = pd.DataFrame(np.zeros((attributes.shape[0], 2)), index=attributes.index,
-                              columns=["Smoker_nan", "Smoker_FORMER"])
-
-        # -> We add Pre Menopausal and Monopausal Nan if not present
-        menopausal = pd.DataFrame(np.zeros((attributes.shape[0], 2)), index=attributes.index,
-                              columns=["Menopausal_PRE-MENOPAUSAL", "Menopausal_nan"])
-        #           -> Rajouter T4C -> T4A/T4B
-        t4c = attributes['Clinical T-Stage_T4c']
-        t4at4b = attributes.filter(regex=r"^Clinical T-Stage_T4[a-b]$")
-        t4at4b = t4at4b.add(t4c, axis=0)
-        attributes = attributes.drop(('Clinical T-Stage_T4a', 'Clinical T-Stage_T4b', 'Clinical T-Stage_T4c'), axis=1)
-
-        # 3D - IMRT
-        # TODO I do not have acces on clinical trial file for now and I have som questions about it
-
-        # add new columns
-        attributes = pd.concat([attributes, smoker, menopausal, t4at4b], axis=1)
-
-    # Management of T1-4
-    def __manage_T_retroactively(attributes: pd.DataFrame) -> pd.DataFrame:
-        # Transforming to imply that T4a, T4b, T4d <=> T4
-        # Transforming to imply that T4 -> T3 -> T2 -> T1
-        t4 = attributes.filter(regex=r"^Clinical T-Stage_T4[a-d]?$")
-        ts = attributes.filter(regex=r"^Clinical T-Stage_T[1-3]$")
-        t4 = np.add.reduce(t4, axis=1)
-        t4.rename("Clinical T-Stage_T4", inplace=True)
-        ts = pd.concat([ts, t4], axis=1)
-        attributes = attributes.drop(ts.columns, axis=1)
-
-        ts = ts.sort_index(axis=1, ascending=False)
-        new_ts = []
-        for c in ts.columns[:-1]:
-            new_ts.append(ts[c])
-            ts = ts.drop(c, axis=1)
-            ts = ts.add(new_ts[-1], axis=0)
-
-        ts = pd.concat([*new_ts, ts], axis=1).apply(lambda x: x.apply(lambda y: 1 if y >= 1 else 0), axis=1)
-
-        attributes = pd.concat([attributes, ts], axis=1)
-
-        # Tis are T0s
-        tis = attributes["Clinical T-Stage_Tis"]
-        t0s = attributes["Clinical T-Stage_T0"].add(tis, axis=0).apply(lambda x: 1 if x >=1 else 0).rename("Clinical T-Stage_T0")
-        attributes = attributes.drop(["Clinical T-Stage_T0"], axis=1)
-        attributes = pd.concat([attributes, t0s], axis=1)
-
-        # T+ (T1->T4/T4a,b,c,d) can't be T0
-        t_plus = attributes.filter(regex=r"^Clinical T-Stage_T[1-4][a-d]?$")
-        t_plus = np.add.reduce(t_plus, axis=1).rename("Clinical T-Stage_T+")
-        t0s = attributes["Clinical T-Stage_T0"]
-        ts = pd.concat([t0s, t_plus], axis=1)
-        t0s = ts.apply(lambda x: 1 if x["Clinical T-Stage_T+"] == 0 and x["Clinical T-Stage_T0"] == 1 else 0, axis=1).rename("Clinical T-Stage_T0")
-        attributes = attributes.drop(["Clinical T-Stage_T0"], axis=1)
-        attributes = pd.concat([attributes, t0s], axis=1)
-
-        return attributes.sort_index(axis=1, ascending=True)
-
-    attributes = __manage_T_retroactively(attributes)
-
-    def __manage_N_retroactively(attributes: pd.DataFrame) -> pd.DataFrame:
-        ns = attributes.filter(regex=r"^Clinical N-Stage_N[0-3]$")
-        attributes = attributes.drop(ns.columns, axis=1)
-
-        ns = ns.sort_index(axis=1, ascending=False)
-        new_ns = []
-        for c in ns.columns[:-1]:
-            new_ns.append(ns[c])
-            ns = ns.drop(c, axis=1)
-            ns = ns.add(new_ns[-1], axis=0)
-
-        ns = pd.concat([*new_ns, ns], axis=1)
-        ns = ns.apply(lambda x: x.apply(lambda y: 1 if y >= 1 else 0), axis=1)
-
-        attributes = pd.concat([attributes, ns], axis=1)
-        return attributes.sort_index(axis=1, ascending=True)
-
-    attributes = __manage_N_retroactively(attributes)
-    # All capital letter
-    attributes.columns = [col.upper() for col in attributes.columns]
-    attributes = attributes.sort_index(axis=1, ascending=False)
-
-    # replace NAN in column's name by UNKNOWN, spaces by _ and - by _
-    attributes.rename(columns=lambda col: col.strip().replace("NAN", "UNKNOWN").replace("-", "_").replace(" ", "_"), inplace=True)
+    attributes = __postprocess_attributes(attributes)
 
     return attributes, label_lymph
+
+
+def __obtain_trial_data(file_path: str) -> pd.DataFrame:
+    data = read_file(file_path)
+    # Managing RTTEC -> 3D/IMRT case and trial drop columns
+    trial_keywords = ['STUDYID', 'SITEIDN', 'SITENAME', 'VISIT', 'SURG']
+    attributes = remove_attributes_with_keyword(data, *trial_keywords)
+
+    def __convert_rttec(value: str, df: pd.DataFrame) -> None:
+        """
+        Utilitary function to transform column RTTEC in clinical trials to 2 columns 3D and IMRT to match training data
+        :param value: Value of the RTTEC column
+        :param df: temporary DataFrame in the form Subject_ID -> (3D, IMRT)
+        :return : None
+        """
+        if value == "3D-CRT":
+            df["3D-CRT_YES"] = 1
+            df["IMRT_NO"] = 1
+        elif value == "IMRT":
+            df["3D-CRT_NO"] = 1
+            df["IMRT_YES"] = 1
+        else:
+            df["3D-CRT_UNKNOWN"] = 1
+            df["IMRT_UNKNOWN"] = 1
+
+    rttec = pd.DataFrame(np.zeros((data.shape[0], 6)), columns=["3D-CRT_YES", "IMRT_YES", "3D-CRT_NO", "IMRT_NO", "3D-CRT_UNKNOWN", "IMRT_UNKNOWN"], index=data.index, )
+    attributes["RTTEC"].apply(lambda x: __convert_rttec(x, rttec))
+    attributes.drop("RTTEC", axis=1, inplace=True)
+    attributes = pd.concat([attributes, rttec], axis=1)
+
+    # CLINICAL N Stages and T Stages are encoded with just their numbers must add prefix N and T
+    attributes["CLINICAL N-STAGE"] = "N" + attributes["CLINICAL N-STAGE"].apply(
+        lambda x: str(x).upper() if x != 'Tis' else 'is')
+    attributes["CLINICAL T-STAGE"] = "T" + attributes["CLINICAL T-STAGE"].apply(lambda x: str(x))
+
+    # clinical tests case
+    # we have to rename some columns, add some more to correspond to training data
+    # CF. ressources and file "precautionsDeCodage.pdf" for further information
+    if 'CLINICAL T-STAGE_T4C' in attributes.columns:
+        t4c = attributes['CLINICAL T-STAGE_T4C']
+        t4at4b = attributes.filter(regex=r"^CLINICAL T-STAGE_T4[A-B]$")
+        t4at4b = t4at4b.add(t4c, axis=0)
+        attributes = attributes.drop(('CLINICAL T-STAGE_T4A', 'CLINICAL T-STAGE_T4B', 'CLINICAL T-STAGE_T4C'), axis=1)
+        attributes = pd.concat([attributes, t4at4b], axis=1)
+
+    def __manage_categorical(x: str):
+        if x.upper() == "YES":
+            return 1
+        elif x.upper() == "NO":
+            return 0
+        return np.nan
+
+    # planned axillary columns is categorical in trial, must transform to 0/1/nan
+    attributes["PLANNED AXILLARY DISSECTION"] = attributes["PLANNED AXILLARY DISSECTION"].apply(lambda x: __manage_categorical(x))
+
+    # same for sentinel node biopsy
+    attributes["SENTINEL NODE BIOPSY"] = attributes["SENTINEL NODE BIOPSY"].apply( lambda x: __manage_categorical(x))
+
+    # Remove smoker postfix in Smoker column
+    attributes['SMOKER'] = attributes['SMOKER'].apply(lambda x: x.upper().replace(" SMOKER", ""))
+
+    # Seen during adaptation, NOT Menopausal has been transformed to NON Menopausal, changing it
+    attributes['MENOPAUSAL'] = attributes['MENOPAUSAL'].apply(lambda x: x.upper().replace("NON", "NOT"))
+
+    __check_dtypes(attributes.dtypes)
+
+    attributes = one_hot_encoding(attributes, dummy_na=True)
+
+    # check missing columns and adding them
+    attributes.rename(
+        columns=lambda col: col.strip().upper().replace("NAN", "UNKNOWN").replace("-", "_").replace(" ", "_"),
+        inplace=True)
+    trial_columns = set(attributes.columns)
+    diff = list(__training_columns.difference(trial_columns))
+    missing_columns = pd.DataFrame(np.zeros((attributes.shape[0], len(diff))), columns=diff, index=attributes.index)
+    attributes = pd.concat([attributes, missing_columns], axis=1)
+
+    attributes = infer_missing_values(attributes, method='value', values=__training_means)
+
+    attributes = __postprocess_attributes(attributes)
+
+    return attributes
 
 
 def __obtain_file_with_ids(file_with_ids: str) -> pd.DataFrame:
@@ -298,7 +483,7 @@ def __obtain_file_with_ids(file_with_ids: str) -> pd.DataFrame:
     return genom_data
 
 
-def obtain_data(clinical_file: str, file_with_ids: Optional[str] = None) -> Any:
+def obtain_data(clinical_file: str, file_with_ids: Optional[str] = None, training: bool = True) -> Any:
     """
     Return data contained in files passed in argument.
     Must be either clinical data or clinical data and genomic data.
@@ -306,6 +491,9 @@ def obtain_data(clinical_file: str, file_with_ids: Optional[str] = None) -> Any:
     :param file_with_ids: path to data file containing patient ids and data related to them
     :return: Clinical data and Labels or Clinical data, Genomic data and Labels
     """
+    if not training:
+        return __obtain_trial_data(clinical_file)
+
     if not file_with_ids:
         return __obtain_clinical_data(clinical_file)
 
