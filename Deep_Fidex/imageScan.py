@@ -43,12 +43,12 @@ start_time = time.time()
 
 
 # What to launch
-test_version = True # Whether to launch with minimal data
+test_version = False # Whether to launch with minimal data
 
 
 
 # Training CNN:
-with_train_cnn = True
+with_train_cnn = False
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -60,7 +60,7 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
 
 
 with_stats_computation = False
-with_train_second_model = False
+with_train_second_model = True
 
 # Rule computation:
 with_global_rules = False
@@ -73,8 +73,8 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
@@ -97,7 +97,7 @@ if dataset == "MNIST":     # for MNIST images
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
-    base_folder = "CifarVGG/"
+    base_folder = "CifarProbaRF/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -386,19 +386,36 @@ if with_train_second_model:
             train_probas = train_probas.astype('float32')
             test_probas = np.loadtxt(test_stats_file)
             test_probas = test_probas.astype('float32')
-        #print(train_probas.shape) # (nb_train_samples, 4840)
-        #print(test_probas.shape) # (nb_test_samples, 4840)
-        train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_val, nbQuantLevels, hiknot, second_model_output_rules)
-        test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_val, nbQuantLevels, hiknot, mu=mu, sigma=sigma)
-        train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+output_size)
-        test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+output_size)
-        #print(train_probas.shape)  # (nb_train_samples, 22, 22, 10)
-        #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
-        second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
-        second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
+        # #print(train_probas.shape) # (nb_train_samples, 4840)
+        # #print(test_probas.shape) # (nb_test_samples, 4840)
+        # train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_val, nbQuantLevels, hiknot, second_model_output_rules)
+        # test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_val, nbQuantLevels, hiknot, mu=mu, sigma=sigma)
+        # train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+output_size)
+        # test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+output_size)
+        # #print(train_probas.shape)  # (nb_train_samples, 22, 22, 10)
+        # #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
+        # second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
+        # second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
 
-        trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes, nb_classes, "small", 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+        # trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes, nb_classes, "small", 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
 
+        command = (
+            f'--train_data_file {train_stats_file} '
+            f'--train_class_file {train_class_file} '
+            f'--test_data_file {test_stats_file} '
+            f'--test_class_file {test_class_file} '
+            f'--stats_file {second_model_stats} '
+            f'--train_pred_outfile {second_model_train_pred} '
+            f'--test_pred_outfile {second_model_test_pred} '
+            f'--nb_attributes {nb_stats_attributes} '
+            f'--nb_classes {nb_classes} '
+            f'--root_folder . '
+            )
+
+        command += f'--rules_outfile {second_model_output_rules} '
+        status = randForestsTrn(command)
+        if status != -1:
+            print("\nSecond model trained.")
     else:
 
         # Train model
