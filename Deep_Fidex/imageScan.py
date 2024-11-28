@@ -73,8 +73,8 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28

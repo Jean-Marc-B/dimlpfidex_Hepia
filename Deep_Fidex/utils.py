@@ -703,7 +703,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, mod
         if with_leaky_relu:
             raise ValueError("VGG with leakyRelu is not yet implemented.")
 
-        input_tensor = Input(shape=(height, width, 3))
+        if height < 32 or width < 32:
+            input_tensor = Input(shape=(32, 32, 3))
 
         # charge pre-trained model vgg with imageNet weights
         model_base = VGG16(include_top=False, weights="imagenet", input_tensor=input_tensor)
