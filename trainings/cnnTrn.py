@@ -309,8 +309,8 @@ def cnnTrn(args: str = None):
             model_base = VGG16(include_top=False, weights="imagenet", input_tensor=input_tensor)
 
             # Freeze layers of VGG
-            for layer in model_base.layers:
-                layer.trainable = False
+            # for layer in model_base.layers:
+            #     layer.trainable = False
 
             model = Sequential()
             if args.model_input_size is not None:
