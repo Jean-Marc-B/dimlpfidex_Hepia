@@ -220,10 +220,10 @@ dropout_hyp = 0.9
 dropout_dim = 0.9
 
 if probability_stats:
-    sizeX_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image qith probabilities from original image
-    sizeY_proba_stat = size1D - filter_size[0][1] + 1
-    nb_stats_attributes = sizeX_proba_stat*sizeY_proba_stat*nb_classes
-    output_size = (sizeX_proba_stat, sizeY_proba_stat, nb_classes)
+    size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image qith probabilities from original image
+    size_Width_proba_stat = size1D - filter_size[0][1] + 1
+    nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*nb_classes
+    output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes)
 #----------------------------
 # Folder for output images
 rules_folder = base_folder + scan_folder + "Rules"
@@ -395,7 +395,7 @@ if with_train_second_model:
         second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
         second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
 
-        trainCNN(sizeX_proba_stat, sizeY_proba_stat, nb_classes, nb_classes, False, 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+        trainCNN(size_Height_proba_stat, sizeY_proba_stat, nb_classes, nb_classes, False, 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
 
     else:
 
@@ -556,12 +556,12 @@ if get_images:
         elif probability_stats:
             # Change antecedent with area and class involved
             for antecedent in rule_to_print.antecedents: # TODO : handle stride, different filter sizes, etc
-                # area_index (sizeX_proba_stat, sizeY_proba_stat) : 0 : (1,1), 1: (1,2), ...
+                # area_index (size_Height_proba_stat, size_Width_proba_stat) : 0 : (1,1), 1: (1,2), ...
                 class_name = classes[antecedent.attribute % nb_classes]
                 area_number = antecedent.attribute // nb_classes
-                area_X = area_number // sizeY_proba_stat
-                area_Y = area_number % sizeY_proba_stat
-                antecedent.attribute = f"P_class_{class_name}_area_[{area_X}-{area_X+filter_size[0][0]-1}]x[{area_Y}-{area_Y+filter_size[0][1]-1}]"
+                area_Height = area_number // size_Width_proba_stat
+                area_Width = area_number % size_Width_proba_stat
+                antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+filter_size[0][0]-1}]x[{area_Width}-{area_Width+filter_size[0][1]-1}]"
 
         if os.path.exists(readme_file):
             os.remove(readme_file)
@@ -576,7 +576,7 @@ if get_images:
             elif activation_layer_stats:
                 highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
             elif probability_stats:
-                highlighted_image = highlight_area_probability_image(img, rule, sizeY_proba_stat, filter_size, classes)
+                highlighted_image = highlight_area_probability_image(img, rule, size_Width_proba_stat, filter_size, classes)
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 
