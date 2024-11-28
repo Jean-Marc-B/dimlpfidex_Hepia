@@ -43,12 +43,12 @@ start_time = time.time()
 
 
 # What to launch
-test_version = False # Whether to launch with minimal data
+test_version = True # Whether to launch with minimal data
 
 
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -66,20 +66,20 @@ with_train_second_model = False
 with_global_rules = False
 
 # Image generation:
-get_images = True # With histograms
+get_images = False # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nb_channels         = 1
-    base_folder = "MnistProba/"
+    base_folder = "MnistVGG/"
     data_type = "integer"
     classes = {
         0:"0",
@@ -97,7 +97,7 @@ if dataset == "MNIST":     # for MNIST images
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
-    base_folder = "CifarProba/"
+    base_folder = "CifarVGG/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -148,11 +148,13 @@ attributes_file = base_folder + scan_folder + "attributes.txt"
 model_checkpoint_weights = base_folder + scan_folder + "weightsModel.weights.h5"
 model_stats = base_folder + scan_folder + "stats_model.txt"
 if test_version:
-    resnet=False
+    model="small"
     nbIt = 4
 else:
-    resnet = True
+    model = "resnet"
     nbIt = 80
+
+model = "VGG"
 
 if activation_layer_stats:
     with_leaky_relu = True
@@ -265,7 +267,7 @@ print("Data loaded.\n")
 # Train CNN model
 if with_train_cnn:
     start_time_train_cnn = time.time()
-    trainCNN(size1D, size1D, nb_channels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
+    trainCNN(size1D, size1D, nb_channels, nb_classes, model, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
     end_time_train_cnn = time.time()
     full_time_train_cnn = end_time_train_cnn - start_time_train_cnn
     full_time_train_cnn = "{:.6f}".format(full_time_train_cnn).rstrip("0").rstrip(".")
@@ -395,7 +397,7 @@ if with_train_second_model:
         second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
         second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
 
-        trainCNN(size_Height_proba_stat, sizeY_proba_stat, nb_classes, nb_classes, False, 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+        trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes, nb_classes, "small", 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
 
     else:
 

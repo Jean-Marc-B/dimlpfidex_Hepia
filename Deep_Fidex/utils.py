@@ -6,7 +6,7 @@ from keras import backend as K
 from keras.models     import Sequential
 from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU
 from keras.layers     import BatchNormalization
-from keras.applications     import ResNet50
+from keras.applications     import ResNet50, VGG16
 from keras.optimizers import Adam
 from tensorflow.keras.models import Model
 
@@ -594,16 +594,16 @@ def image_to_rgb(image):
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
-def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu, with_probability=False):
+def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu, with_probability=False):
     """
     Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
 
     Parameters:
-    - sizeX: The size of the first dimension of the input image (image is sizeX x sizeY).
-    - sizeY: The size of the second dimension of the input image (image is sizeX x sizeY).
+    - height: The size of the first dimension of the input image (image is height x width).
+    - width: The size of the second dimension of the input image (image is height x width).
     - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - nb_classes: The number of classes for classification.
-    - resnet: Boolean indicating whether to use a ResNet architecture (True) or a smaller custom model (False).
+    - model: Can be resnet, VGG or small indicating the model architecture to use (small is a smaller custom model).
     - nbIt: The number of epochs to train the model.
     - model_file: File path to save the trained model.
     - model_checkpoint_weights: File path for saving the best model weights during training.
@@ -621,6 +621,9 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
 
     print("Training CNN...\n")
 
+    if model not in ["resnet", "VGG", "small"]:
+        raise ValueError("The model needs to be one of resnet, VGG or small")
+
     split_index = int(0.8 * len(X_train))
     x_train = X_train[0:split_index]
     x_val   = X_train[split_index:]
@@ -631,7 +634,7 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
     print(f"Validation set: {x_val.shape}, {y_val.shape}")
     print(f"Test set: {X_test.shape}, {Y_test.shape}")
 
-    if (nbChannels == 1 and resnet and not with_probability):
+    if (nbChannels == 1 and model in ["resnet", "VGG"] and not with_probability):
         # B&W to RGB
         x_train = np.repeat(x_train, 3, axis=-1)
         X_test = np.repeat(X_test, 3, axis=-1)
@@ -639,10 +642,10 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
         nbChannels = 3
 
     ##############################################################################
-    if resnet:
+    if model == "resnet":
 
         # Load the ResNet50 model with pretrained weights
-        input_tensor = Input(shape=(sizeX, sizeY, 3))
+        input_tensor = Input(shape=(height, width, 3))
         model_base = ResNet50(include_top=False, weights='imagenet', input_tensor=input_tensor)
 
         if with_leaky_relu:
@@ -682,7 +685,7 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
         model.summary()
 
     # if resnet:
-    #     input_tensor = Input(shape=(sizeX, sizeY, 3))
+    #     input_tensor = Input(shape=(height, width, 3))
     #     model_base = ResNet50(include_top=False, weights="imagenet", input_tensor=input_tensor)
     #     model = Sequential()
     #     model.add(model_base)
@@ -691,15 +694,41 @@ def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, mod
     #     model.add(BatchNormalization())
     #     model.add(Dense(nb_classes, activation='softmax'))
 
-    #     model.build((None, sizeX, sizeY, 3))  # Build the model with the input shape
+    #     model.build((None, height, width, 3))  # Build the model with the input shape
 
     #     model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
     #     model.summary()
 
-    else:
+    elif model == "VGG":
+        if with_leaky_relu:
+            raise ValueError("VGG with leakyRelu is not yet implemented.")
+
+        input_tensor = Input(shape=(height, width, 3))
+
+        # charge pre-trained model vgg with imageNet weights
+        model_base = VGG16(include_top=False, weights="imagenet", input_tensor=input_tensor)
+
+        # Freeze layers of VGG
+        # for layer in model_base.layers:
+        #     layer.trainable = False
+
+        model = Sequential()
+        model.add(model_base)
+        model.add(Flatten())
+        model.add(Dense(256, activation='relu'))
+        model.add(Dropout(0.3))
+        model.add(BatchNormalization())
+        model.add(Dense(nb_classes, activation='softmax'))
+
+        model.build((None, height, width, 3))  # Build the model with the input shape
+
+        model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
+        model.summary()
+
+    elif model == "small":
         model = Sequential()
 
-        model.add(Input(shape=(sizeX, sizeY, nbChannels)))
+        model.add(Input(shape=(height, width, nbChannels)))
 
         model.add(Convolution2D(32, (5, 5), activation='relu'))
         model.add(Dropout(0.3))
