@@ -4,7 +4,7 @@ import tensorflow as tf
 from stairObj import StairObj
 from keras import backend as K
 from keras.models     import Sequential
-from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU
+from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU, Resizing
 from keras.layers     import BatchNormalization
 from keras.applications     import ResNet50, VGG16
 from keras.optimizers import Adam
@@ -713,6 +713,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, mod
         #     layer.trainable = False
 
         model = Sequential()
+        if height < 32 or width < 32:
+            model.add(Resizing(32, 32))
         model.add(model_base)
         model.add(Flatten())
         model.add(Dense(256, activation='relu'))
