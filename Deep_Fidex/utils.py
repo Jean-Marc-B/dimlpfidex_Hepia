@@ -1287,7 +1287,7 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
 
 ###############################################################
 
-def highlight_area_probability_image(image, rule, sizeY_proba_stat, filter_size, classes):
+def highlight_area_probability_image(image, rule, size_Width_proba_stat, filter_size, classes):
 
     nb_classes = len(classes)
 
@@ -1300,20 +1300,20 @@ def highlight_area_probability_image(image, rule, sizeY_proba_stat, filter_size,
     for antecedent in rule.antecedents:
         # Get attribute information
         area_number = antecedent.attribute // nb_classes
-        area_X = area_number // sizeY_proba_stat
-        area_X_end = area_X+filter_size[0][0]-1
-        area_Y = area_number % sizeY_proba_stat
-        area_Y_end = area_Y+filter_size[0][1]-1
-        # print(area_X, "-", area_X_end)
-        # print(area_Y, "-", area_Y_end)
+        area_Height = area_number // size_Width_proba_stat
+        area_Height_end = area_Height+filter_size[0][0]-1
+        area_Width = area_number % size_Width_proba_stat
+        area_Width_end = area_Width+filter_size[0][1]-1
+        # print(area_Height, "-", area_Height_end)
+        # print(area_Width, "-", area_Width_end)
 
         filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
         if antecedent.inequality:  # >=
-            filtered_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 1] += 1
-            combined_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 1] += 1
+            filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
+            combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
         else:  # <
-            filtered_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 0] += 1
-            combined_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 0] += 1
+            filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
+            combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
 
         filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8)
 
@@ -1365,15 +1365,15 @@ def highlight_area_probability_image(image, rule, sizeY_proba_stat, filter_size,
     for i,img in enumerate(filtered_images):
         antecedent = rule.antecedents[i]
         area_number = antecedent.attribute // nb_classes
-        area_X = area_number // sizeY_proba_stat
-        area_X_end = area_X+filter_size[0][0]-1
-        area_Y = area_number % sizeY_proba_stat
-        area_Y_end = area_Y+filter_size[0][1]-1
+        area_Height = area_number // size_Width_proba_stat
+        area_Height_end = area_Height+filter_size[0][0]-1
+        area_Width = area_number % size_Width_proba_stat
+        area_Width_end = area_Width+filter_size[0][1]-1
         class_name = classes[antecedent.attribute % nb_classes]
         img = img.astype(np.uint8)
         ineq = ">=" if antecedent.inequality else "<"
         axes[i+2].imshow(img)
-        axes[i+2].set_title(f"P_class_{class_name}_area_[{area_X}-{area_X_end}]x[{area_Y}-{area_Y_end}]{ineq}{antecedent.value:.6f}")
+        axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
         axes[i+2].axis('off')
     # Hide any remaining empty subplots if total_images < num_rows * num_columns
     for j in range(total_images, len(axes)):
