@@ -202,3 +202,6 @@ preact/dataset/
 preact/input/
 preact/output/
 preact/patients_data/
+Deep_Fidex/MnistLeakyReluResnet/
+Deep_Fidex/CifarProba/
+Deep_Fidex/MnistProba/

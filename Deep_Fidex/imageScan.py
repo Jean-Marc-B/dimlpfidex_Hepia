@@ -27,7 +27,7 @@ import re
 import copy
 from tensorflow.keras import Model
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
-from utils import trainCNN, compute_histograms, compute_activation_sums, compute_proba_images, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, getProbabilityThresholds, get_heat_maps, compute_first_hidden_layer
+from utils import trainCNN, compute_histograms, compute_activation_sums, compute_proba_images, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, highlight_area_probability_image, getProbabilityThresholds, get_heat_maps, compute_first_hidden_layer
 
 np.random.seed(seed=None)
 
@@ -43,12 +43,12 @@ start_time = time.time()
 
 
 # What to launch
-test_version = True # Whether to launch with minimal data
+test_version = False # Whether to launch with minimal data
 
 
 
 # Training CNN:
-with_train_cnn = True
+with_train_cnn = False
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -59,11 +59,11 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = True
-with_train_second_model = True
+with_stats_computation = False
+with_train_second_model = False
 
 # Rule computation:
-with_global_rules = True
+with_global_rules = False
 
 # Image generation:
 get_images = True # With histograms
@@ -73,14 +73,13 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nb_channels         = 1
-    nb_classes = 10
-    base_folder = "Mnist/"
+    base_folder = "MnistProba/"
     data_type = "integer"
     classes = {
         0:"0",
@@ -98,8 +97,7 @@ if dataset == "MNIST":     # for MNIST images
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
-    nb_classes = 10
-    base_folder = "Cifar/"
+    base_folder = "CifarProba/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -113,6 +111,8 @@ elif dataset == "CIFAR":     # for Cifar images
         8: "ship",
         9: "truck",
     }
+
+nb_classes = len(classes)
 
 
 ##############################################################################
@@ -220,9 +220,10 @@ dropout_hyp = 0.9
 dropout_dim = 0.9
 
 if probability_stats:
-    sizeX_proba_stat = size1D - filter_size[0][0] + 1
+    sizeX_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image qith probabilities from original image
     sizeY_proba_stat = size1D - filter_size[0][1] + 1
     nb_stats_attributes = sizeX_proba_stat*sizeY_proba_stat*nb_classes
+    output_size = (sizeX_proba_stat, sizeY_proba_stat, nb_classes)
 #----------------------------
 # Folder for output images
 rules_folder = base_folder + scan_folder + "Rules"
@@ -387,7 +388,6 @@ if with_train_second_model:
         #print(test_probas.shape) # (nb_test_samples, 4840)
         train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_val, nbQuantLevels, hiknot, second_model_output_rules)
         test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_val, nbQuantLevels, hiknot, mu=mu, sigma=sigma)
-        output_size = (sizeX_proba_stat, sizeY_proba_stat, nb_classes)
         train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+output_size)
         test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+output_size)
         #print(train_probas.shape)  # (nb_train_samples, 22, 22, 10)
@@ -514,7 +514,16 @@ if get_images:
     os.makedirs(rules_folder)
 
     # For each rule we get filter images for train samples covering the rule
-    for id,rule in enumerate(global_rules[0:50]):
+    good_classes = [2,3,7]
+    conteur = 0
+    for id,rule in enumerate(global_rules):
+
+        if conteur == 50:
+            exit()
+        if rule.target_class not in good_classes:
+            continue
+        else:
+            conteur += 1
 
         if histogram_stats:
             rule.include_X = False
@@ -546,17 +555,12 @@ if get_images:
                     raise ValueError("Wrong antecedent...")
         elif probability_stats:
             # Change antecedent with area and class involved
-            for antecedent in rule_to_print.antecedents:
-                output_size = (sizeX_proba_stat, sizeY_proba_stat, nb_classes)
+            for antecedent in rule_to_print.antecedents: # TODO : handle stride, different filter sizes, etc
                 # area_index (sizeX_proba_stat, sizeY_proba_stat) : 0 : (1,1), 1: (1,2), ...
-                # attribute_index = (area_index*nb_classes)+class_index
-                # area_index = floor(attribute_index/nb_classes)
-                # class_index = attribute_index modulo nb_classes
-
                 class_name = classes[antecedent.attribute % nb_classes]
                 area_number = antecedent.attribute // nb_classes
                 area_X = area_number // sizeY_proba_stat
-                area_Y = area_number % sizeX_proba_stat
+                area_Y = area_number % sizeY_proba_stat
                 antecedent.attribute = f"P_class_{class_name}_area_[{area_X}-{area_X+filter_size[0][0]-1}]x[{area_Y}-{area_Y+filter_size[0][1]-1}]"
 
         if os.path.exists(readme_file):
@@ -572,7 +576,7 @@ if get_images:
             elif activation_layer_stats:
                 highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
             elif probability_stats:
-                continue
+                highlighted_image = highlight_area_probability_image(img, rule, sizeY_proba_stat, filter_size, classes)
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 

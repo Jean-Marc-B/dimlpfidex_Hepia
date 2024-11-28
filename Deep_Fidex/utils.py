@@ -579,6 +579,19 @@ def clone_and_replace(model):
     return new_model
 
 ###############################################################
+# Convert an image to RGB if necessary
+def image_to_rgb(image):
+    if len(image.shape) == 2:
+        original_image_rgb = np.stack((image,) * 3, axis=-1)
+    elif len(image.shape) == 3 and image.shape[2] == 1:
+        original_image_rgb = np.squeeze(image, axis=2)  # Remove the supplementary dimension
+        original_image_rgb = np.stack((original_image_rgb,) * 3, axis=-1)
+    else:
+        original_image_rgb = image.copy()
+
+    return original_image_rgb
+
+###############################################################
 # Train a CNN with a Resnet or with a small model
 
 def trainCNN(sizeX, sizeY, nbChannels, nb_classes, resnet, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu, with_probability=False):
@@ -976,13 +989,7 @@ def highlight_area_histograms(CNNModel, image, filter_size, stride, rule, classe
     CNNModel, image, filter_size, stride)
 
     # Convert to RGB if necessary
-    if len(image.shape) == 2:
-        original_image_rgb = np.stack((image,) * 3, axis=-1)
-    elif len(image.shape) == 3 and image.shape[2] == 1:
-        original_image_rgb = np.squeeze(image, axis=2)  # Remove the supplementary dimension
-        original_image_rgb = np.stack((original_image_rgb,) * 3, axis=-1)
-    else:
-        original_image_rgb = image.copy()
+    original_image_rgb = image_to_rgb(image)
 
     # Initialize the combined intensity maps for green and red
     combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
@@ -1145,7 +1152,7 @@ def get_top_ids(array, X=10, largest=True):
 
 def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
 
-    nb_top_filters = 20
+    nb_top_filters = 20 # Number of filters to show in an image
 
     activations, positions = generate_filtered_images_and_predictions( #nb_filters x nb_activations
             CNNModel, image, filter_size, stride, intermediate_model)
@@ -1153,13 +1160,7 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
     filter_size = filter_size[0]
 
     # Convert to RGB if necessary
-    if len(image.shape) == 2:
-        original_image_rgb = np.stack((image,) * 3, axis=-1)
-    elif len(image.shape) == 3 and image.shape[2] == 1:
-        original_image_rgb = np.squeeze(image, axis=2)  # Remove the supplementary dimension
-        original_image_rgb = np.stack((original_image_rgb,) * 3, axis=-1)
-    else:
-        original_image_rgb = image.copy()
+    original_image_rgb = image_to_rgb(image)
 
     # Initialize the combined intensity maps for green and red
     combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
@@ -1286,6 +1287,107 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
 
 ###############################################################
 
+def highlight_area_probability_image(image, rule, sizeY_proba_stat, filter_size, classes):
+
+    nb_classes = len(classes)
+
+    # Convert to RGB if necessary
+    original_image_rgb = image_to_rgb(image)
+
+    filtered_images = []
+    combined_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+
+    for antecedent in rule.antecedents:
+        # Get attribute information
+        area_number = antecedent.attribute // nb_classes
+        area_X = area_number // sizeY_proba_stat
+        area_X_end = area_X+filter_size[0][0]-1
+        area_Y = area_number % sizeY_proba_stat
+        area_Y_end = area_Y+filter_size[0][1]-1
+        # print(area_X, "-", area_X_end)
+        # print(area_Y, "-", area_Y_end)
+
+        filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+        if antecedent.inequality:  # >=
+            filtered_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 1] += 1
+            combined_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 1] += 1
+        else:  # <
+            filtered_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 0] += 1
+            combined_image_intensity[area_X:area_X_end+1, area_Y:area_Y_end+1, 0] += 1
+
+        filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8)
+
+        filtered_image = original_image_rgb.copy()
+        filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1] + filtered_image_intensity[:, :, 1], 0, 255)  # Green channel
+        filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0] + filtered_image_intensity[:, :, 0], 0, 255)    # Red channel
+
+        filtered_images.append(filtered_image)
+    # Normalise combined image between 0 and 255
+    combined_image_intensity = np.clip(combined_image_intensity / np.max(combined_image_intensity) * 255, 0, 255).astype(np.uint8)
+
+    combined_image = original_image_rgb.copy()
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1] + combined_image_intensity[:, :, 1], 0, 255)  # Green channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + combined_image_intensity[:, :, 0], 0, 255)    # Red channel
+
+
+    # Plotting
+
+    # Determine the number of rows and columns for the subplots
+    num_antecedents = len(rule.antecedents)
+    total_images = num_antecedents + 2  # Original, combined, and individual filters
+
+    # We set a maximum number of columns per row for better visualization
+    max_columns = 4
+    num_columns = min(max_columns, total_images)
+    num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
+
+    # Create the matplotlib figure with dynamic rows and columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+
+    # If axes is a single AxesSubplot, convert it to a list for consistent indexing
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+
+    # Show the original image on top left
+    axes[0].imshow(original_image_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # Show combined image
+    axes[1].imshow(combined_image.astype(np.uint8))
+    axes[1].set_title("Combined Filters")
+    axes[1].axis('off')
+
+    # Show each antecedent image
+    for i,img in enumerate(filtered_images):
+        antecedent = rule.antecedents[i]
+        area_number = antecedent.attribute // nb_classes
+        area_X = area_number // sizeY_proba_stat
+        area_X_end = area_X+filter_size[0][0]-1
+        area_Y = area_number % sizeY_proba_stat
+        area_Y_end = area_Y+filter_size[0][1]-1
+        class_name = classes[antecedent.attribute % nb_classes]
+        img = img.astype(np.uint8)
+        ineq = ">=" if antecedent.inequality else "<"
+        axes[i+2].imshow(img)
+        axes[i+2].set_title(f"P_class_{class_name}_area_[{area_X}-{area_X_end}]x[{area_Y}-{area_Y_end}]{ineq}{antecedent.value:.6f}")
+        axes[i+2].axis('off')
+    # Hide any remaining empty subplots if total_images < num_rows * num_columns
+    for j in range(total_images, len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout() # Adjust spacing
+    plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    plt.close(fig)
+
+    return fig
+
+###############################################################
+
 # Only for one filter !
 def get_heat_maps(CNNModel, image, filter_size, stride, probability_thresholds, classes):
     """
@@ -1318,13 +1420,7 @@ def get_heat_maps(CNNModel, image, filter_size, stride, probability_thresholds, 
     real_filter_size = filter_size[0]
 
     # Convert to RGB if necessary
-    if len(image.shape) == 2:
-        original_image_rgb = np.stack((image,) * 3, axis=-1)
-    elif len(image.shape) == 3 and image.shape[2] == 1:
-        original_image_rgb = np.squeeze(image, axis=2)  # Remove the supplementary dimension
-        original_image_rgb = np.stack((original_image_rgb,) * 3, axis=-1)
-    else:
-        original_image_rgb = image.copy()
+    original_image_rgb = image_to_rgb(image)
 
     total_images = len(classes)+1
     # We set a maximum number of columns per row for better visualization
