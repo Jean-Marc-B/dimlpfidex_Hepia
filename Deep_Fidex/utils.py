@@ -5,7 +5,7 @@ from stairObj import StairObj
 from keras import backend as K
 from keras.models     import Sequential
 from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU, Resizing
-from keras.layers     import BatchNormalization
+from keras.layers     import BatchNormalization, GlobalAveragePooling2D
 from keras.applications     import ResNet50, VGG16
 from keras.optimizers import Adam
 from tensorflow.keras.models import Model
@@ -647,6 +647,9 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, mod
         # Load the ResNet50 model with pretrained weights
         input_tensor = Input(shape=(height, width, 3))
         model_base = ResNet50(include_top=False, weights='imagenet', input_tensor=input_tensor)
+        # Freeze layers of ResNet
+        for layer in model_base.layers:
+            layer.trainable = False
 
         if with_leaky_relu:
             # Name of the last ReLU activation
@@ -671,9 +674,15 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, mod
             # If not using LeakyReLU, use the default output of the base model
             x = model_base.output
 
-        x = Flatten()(x)
+
+        # x = Flatten()(x)
+        # x = Dropout(0.5)(x)
+        # x = BatchNormalization()(x)
+
+        x = GlobalAveragePooling2D(name="flatten")(x)
+        x = Dense(256, activation='relu')(x)
         x = Dropout(0.5)(x)
-        x = BatchNormalization()(x)
+
         outputs = Dense(nb_classes, activation='softmax')(x)
 
         model = Model(inputs=model_base.input, outputs=outputs)
