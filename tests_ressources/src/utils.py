@@ -5,6 +5,12 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
+def get_most_recent_file(absolute_path: str) -> str:
+    # get all filepaths inside input/ folder 
+    list_filepaths = [os.path.join(absolute_path, filename) for filename in os.listdir(absolute_path)]
+    # get most recent by comparing UNIX timestamps
+    return max(list_filepaths, key=lambda filepath: os.path.getctime(filepath))
+
 
 def update_config_file(filename: str, params: dict) -> None:
     with open(filename, "r+") as f:

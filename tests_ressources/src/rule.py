@@ -153,8 +153,8 @@ class GlobalRules:
 
         return GlobalRules(
             rules=Rule.list_from_dict(data),
-            positive_index_class=data.get("positive_index_class", None),
-            threshold=data.get("positive_index_class", None),
+            positive_index_class=data.get("positive index class", None),
+            threshold=data.get("threshold", None),
         )
 
     def to_json_file(
@@ -202,7 +202,7 @@ Rules:"""
 
         return res
 
-    def pretty_repr(self, attributes: list[str]) -> None:
+    def pretty_repr(self, attributes: list[str]) -> str:
         string = f"""Global rule set:
 Positive index class: {self.positive_index_class}
 Threshold: {self.threshold}
@@ -210,8 +210,10 @@ Rule set size: {len(self.rules)}
 Rules:"""
 
         for i, rule in enumerate(self.rules):
-            string += f"Rule #{i+1}:\n"
+            string += f"\n\nRule #{i+1}:"
             string += rule.pretty_repr(attributes)
+
+        return string
 
     def extract_selected_rules(self, list_rules: list[Rule]) -> dict[int, Rule]:
         res = {}
