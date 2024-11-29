@@ -646,7 +646,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, mod
 
         # Load the ResNet50 model with pretrained weights
         input_tensor = Input(shape=(height, width, 3))
-        model_base = ResNet50(include_top=False, weights='imagenet', input_tensor=input_tensor)
+        resized_input = Resizing(224, 224, name='resizing_layer')(input_tensor)
+        model_base = ResNet50(include_top=False, weights='imagenet', input_tensor=resized_input)
         # Freeze layers of ResNet
         for layer in model_base.layers:
             layer.trainable = False
