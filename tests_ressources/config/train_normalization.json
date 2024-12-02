@@ -2,7 +2,7 @@
     "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources",
     "data_files": "[temp/train_data.csv]",
     "output_normalization_file": "temp/normalization_stats.txt",
-    "normalization_indices": "[0,19,20,22,30,41,71,78]",
+    "normalization_indices": "[0,19,20,21,30,41,71,78]",
     "nb_attributes": 79,
     "nb_classes": 2,
     "attributes_file": "temp/attributes.txt",
