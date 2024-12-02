@@ -31,6 +31,7 @@ def write_patient() -> Patient:
 
     return p
 
+
 # this is for testing puroposes only
 def write_samples_file(n: int) -> Patient:
     patient_metadata = pd.read_excel(
@@ -44,7 +45,7 @@ def write_samples_file(n: int) -> Patient:
 
     patients = []
     for i in range(n):
-        patient_metadata.iloc[0, 3] = f"FRA_TEST_00{i+1}" # FOR TESTING PURPOSES ONLY
+        patient_metadata.iloc[0, 3] = f"FRA_TEST_00{i+1}"  # FOR TESTING PURPOSES ONLY
         patients.append(Patient(patient_metadata, sample_data.iloc[i, :], abspath))
 
     return patients
@@ -66,9 +67,12 @@ def write_train_data(data: pd.DataFrame, labels: pd.Series) -> None:
     data.to_csv("temp/train_data.csv", sep=",", header=False, index=False)
     labels.to_csv("temp/train_classes.csv", sep=",", header=False, index=False)
 
+
 def write_results(patients: list[Patient], attributes: list[str]) -> None:
     abspath = os.path.abspath(os.path.dirname(__file__))
-    write_path = os.path.join(abspath, "output", f"results_{datetime.today().strftime('%Y%m%d')}.csv")
+    write_path = os.path.join(
+        abspath, "output", f"results_{datetime.today().strftime('%Y%m%d')}.csv"
+    )
 
     unicancer_headers = ["VISIT", "STUDY_ID", "SITE_NAME", "SITENAME", "SUBJECT_ID"]
     rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "RULE_ID"]
@@ -79,8 +83,9 @@ def write_results(patients: list[Patient], attributes: list[str]) -> None:
     for patient in patients:
         string += patient.format_results()
 
-    with open(write_path,"w") as fp:
+    with open(write_path, "w") as fp:
         fp.write(string)
+
 
 if __name__ == "__main__":
     args = init_args()
@@ -104,20 +109,19 @@ if __name__ == "__main__":
 
     attributes = write_attributes_file(data.columns.to_list())
     write_train_data(data, labels)
-    update_config_files(abspath, nb_features, nb_classes)
-    # patient = write_patient()
-    patients = write_samples_file(3)
-
-    # normalization("--json_config_file config/normalization.json")
 
     if args.train:
+        update_config_files(abspath, nb_features, nb_classes)
+        normalization("--json_config_file config/train_normalization.json")
         dimlpBT("--json_config_file config/dimlpbt.json")
         fidexGloRules("--json_config_file config/fidexglorules.json")
-        exit()
+        normalization("--json_config_file config/train_denormalization.json")
+    else:
+        # patient = write_patient()
+        patients = write_samples_file(3)
+        global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
 
-    global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
+        for patient in patients:
+            patient.extract_rules(global_rules)
 
-    for patient in patients:
-        patient.extract_rules(global_rules)
-
-    write_results(patients, attributes)
+        write_results(patients, attributes)

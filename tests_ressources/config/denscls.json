@@ -2,14 +2,14 @@
     "root_folder": "/home/eldado/Documents/hepia/dimlpfidex_Hepia/tests_ressources",
     "train_data_file": "temp/train_data_normalized.csv",
     "train_class_file": "temp/train_classes.csv",
-    "test_data_file": "input/test_sample_data.csv",
+    "test_data_file": "patients_data/FRA_TEST_003/input_data_normalized.csv",
     "train_pred_outfile": "temp/train_pred_out.csv",
     "weights_file": "temp/dimlpBT.wts",
     "stats_file": "temp/densCls_stats.txt",
     "hidden_layers_file": "temp/hidden_layers.out",
-    "metrics_file": "temp/densClsMetrics.json",
+    "metrics_file": "patients_data/FRA_TEST_003/densClsMetrics.json",
     "nb_attributes": 79,
     "nb_classes": 2,
-    "test_pred_outfile": "input/test_sample_pred.csv",
-    "console_file": "logs/202411210000_denscls.log"
+    "test_pred_outfile": "patients_data/FRA_TEST_003/prediction.csv",
+    "console_file": "logs/202412021615_denscls.log"
 }
