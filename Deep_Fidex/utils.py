@@ -9,6 +9,7 @@ from keras.layers     import BatchNormalization, GlobalAveragePooling2D
 from keras.applications     import ResNet50, VGG16
 from keras.optimizers import Adam
 from tensorflow.keras.models import Model
+from tensorflow.keras.backend import clear_session
 
 from keras.callbacks  import ModelCheckpoint
 from rule import Rule
@@ -594,7 +595,7 @@ def image_to_rgb(image):
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
-def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu, with_probability=False):
+def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu, with_probability=False):
     """
     Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
 
@@ -620,6 +621,9 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, mod
     start_time = time.time()
 
     print("Training CNN...\n")
+
+    # To avoid memory problems on GPU we clear GPU memory before training
+    clear_session()
 
     if model not in ["resnet", "VGG", "small"]:
         raise ValueError("The model needs to be one of resnet, VGG or small")
@@ -766,7 +770,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, model_file, mod
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True, save_weights_only=True)
-    model.fit(x_train, y_train, batch_size=32, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], verbose=2)
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], verbose=2)
 
     print("\nCNN trained\n")
 

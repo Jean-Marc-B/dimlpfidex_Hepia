@@ -150,9 +150,13 @@ model_stats = base_folder + scan_folder + "stats_model.txt"
 if test_version:
     model="small"
     nbIt = 4
+    batch_size = 32
+    batch_size_second_model = 32
 else:
     model = "resnet"
     nbIt = 80
+    batch_size = 16 # To avoid memory problems on GPU
+    batch_size_second_model = 16
 
 if activation_layer_stats:
     with_leaky_relu = True
@@ -265,7 +269,7 @@ print("Data loaded.\n")
 # Train CNN model
 if with_train_cnn:
     start_time_train_cnn = time.time()
-    trainCNN(size1D, size1D, nb_channels, nb_classes, model, nbIt, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
+    trainCNN(size1D, size1D, nb_channels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
     end_time_train_cnn = time.time()
     full_time_train_cnn = end_time_train_cnn - start_time_train_cnn
     full_time_train_cnn = "{:.6f}".format(full_time_train_cnn).rstrip("0").rstrip(".")
@@ -395,7 +399,7 @@ if with_train_second_model:
         second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
         second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
 
-        trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes, nb_classes, "small", 80, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+        trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
 
     else:
 
