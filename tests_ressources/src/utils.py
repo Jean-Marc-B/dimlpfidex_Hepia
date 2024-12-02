@@ -43,7 +43,7 @@ def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
 
     update_config_file(
         os.path.join(confpath, "train_normalization.json"),
-        {"":"","root_folder": root_folder, "nb_attributes": nb_features},
+        {"root_folder": root_folder, "nb_attributes": nb_features},
     )
     update_config_file(
         os.path.join(confpath, "train_denormalization.json"),
