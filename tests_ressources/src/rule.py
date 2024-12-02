@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import math
 
 
 class Antecedant:
@@ -16,6 +17,18 @@ class Antecedant:
         # elif >= then ceil()
         ineq_str = ">=" if self.inequality else "<"
         return f"{self.attribute_id} {ineq_str} {self.value:.4f}"
+
+    def __eq__(self, other: Antecedant) -> bool:
+        eps = 1e-4
+
+        if not self.attribute_id == other.attribute_id:
+            return False
+        if not self.inequality == other.inequality:
+            return False
+        if not math.isclose(self.value, other.value, rel_tol=eps):
+            return False
+
+        return True
 
     def to_dict(self) -> dict:
         return {
@@ -73,6 +86,41 @@ Accuracy: {self.accuracy:.3f}
 Antecedants: {antecedants_str}
 Output: {self.output}"""
 
+    def __eq__(self, other: Rule) -> bool:
+        eps = 1e-4
+
+        if not math.isclose(self.accuracy, other.accuracy, rel_tol=eps):
+            print(f"EQ: accuracy {self.accuracy} is not {other.accuracy}")
+            return False
+        if not math.isclose(self.covering, other.covering, rel_tol=eps):
+            print(f"EQ: covering {self.covering} is not {other.covering}")
+            return False
+        if not math.isclose(self.confidence, other.confidence, rel_tol=eps):
+            print(f"EQ: confidence {self.confidence} is not {other.confidence}")
+            return False
+        if not math.isclose(self.fidelity, other.fidelity, rel_tol=eps):
+            print(f"EQ: fidelity {self.fidelity} is not {other.fidelity}")
+            return False
+        if not math.isclose(self.output, other.output, rel_tol=eps):
+            print(f"EQ: output {self.output} is not {other.output}")
+            return False
+        if not len(self.antecedants) == len(other.antecedants):
+            print(f"EQ: antecedants size {len(self.antecedants) } is not {len(other.antecedants)}")
+            return False
+
+        for self_antecedant, other_antecedant in zip(
+            self.antecedants, other.antecedants
+        ):
+            if self_antecedant != other_antecedant:
+                print(f"EQ: antecedant {self_antecedant } is not {other_antecedant}")
+                return False
+
+        return True
+
+    def set_id(self, id: int) -> Rule:
+        self.id = id
+        return self
+
     # designed for unicancer format
     def to_str_list(self):
         base_rule = [
@@ -88,6 +136,7 @@ Output: {self.output}"""
     def pretty_repr(self, attributes: list[str]) -> str:
         labels = attributes[-2:]
         string = f"""
+ID: {self.id}
 Covering: {self.covering}
 Fidelity: {self.fidelity:.3f}
 Accuracy: {self.accuracy:.3f}   
@@ -132,7 +181,8 @@ class GlobalRules:
         positive_index_class: int = None,
         threshold: float = None,
     ) -> None:
-        self.rules = rules
+        # setting rules ID
+        self.rules = [rule.set_id(id) for id, rule in enumerate(rules)]
 
         if positive_index_class == None and threshold != None:
             raise ValueError(
@@ -175,20 +225,19 @@ class GlobalRules:
         with open(path, "w") as fp:
             json.dump(json_data, fp, indent=4)
 
-    def set_rules_id(self):
-        for i, rule in enumerate(self.rules):
-            rule.id = i  # TODO check if this works
-
     def get_rule_id(self, target: Rule):
-        for i, rule in enumerate(self.rules):
+        for rule in self.rules:
+            print("RID:", rule.id)
+            print("acc:", rule.accuracy, target.accuracy)
+            print("cnf:", rule.confidence, target.confidence)
+            print("fid:", rule.fidelity, target.fidelity)
+            print("cvs:", rule.covering, target.covering)
+            print("out:", rule.output, target.output)
             if rule == target:
-                return i
+                return rule.id
+            print("-"*50)
 
         return -1
-
-    def add_rule(self, rule: Rule) -> int:
-        self.rules.append(rule)
-        return len(self.rules)
 
     def __repr__(self) -> str:
         res = f"""Global rule set:
@@ -214,15 +263,3 @@ Rules:"""
             string += rule.pretty_repr(attributes)
 
         return string
-
-    def extract_selected_rules(self, list_rules: list[Rule]) -> dict[int, Rule]:
-        res = {}
-
-        for selected_rule in list_rules:
-            id = self.get_rule_id(selected_rule)
-            if id == -1:
-                id = self.add_rule(selected_rule)
-
-            res[id] = selected_rule
-
-        return res
