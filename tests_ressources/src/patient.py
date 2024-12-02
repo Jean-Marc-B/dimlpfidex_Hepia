@@ -54,9 +54,8 @@ class Patient:
 
     def __prepare_input_for_extraction(self) -> str:
         input_filepath = os.path.join(self.absdir, "input_data.csv")
-        normalization_conf_file = os.path.join(
-            self.project_abspath, "config", "normalization.json"
-        )
+        normalization_conf_file = os.path.join(self.project_abspath, "config", "normalization.json")
+        denormalization_conf_file = os.path.join(self.project_abspath, "config", "denormalization.json")
 
         # one hotting classes (useless but must be done in order to work with densCls)
         to_write = self.clinical_data.to_frame().T.copy()
@@ -68,12 +67,27 @@ class Patient:
             normalization_conf_file,
             {
                 "data_files": f"[{self.reldir}/input_data.csv]",
-                "output_normalization_file": f"{self.reldir}/normalization_stats.txt",
             },
         )
-        # TODO: normalization("--json_config_file config/normalization.json") 
 
-    def extract_rules(self):
+        update_config_file(
+            denormalization_conf_file,
+            {
+                "rule_files": f"{self.reldir}/extracted_rules.json",
+            },
+        )
+
+        normalized_file_path = f"{self.reldir}/input_data_normalized.csv"
+        normalization(f"--json_config_file config/normalization.json")
+
+        # one hotting classes (useless but must be done in order to work with densCls)
+        to_write = pd.read_csv(normalized_file_path, sep=" ", header=None)
+        to_write = to_write.copy()
+        to_write = to_write.assign(Lymphodema_NO=lambda x: 1)
+        to_write = to_write.assign(Lymphodema_YES=lambda x: 0)
+        to_write.to_csv(normalized_file_path, sep=" ", header=False, index=False)
+
+    def extract_rules(self, global_rules: GlobalRules, normalize: bool = True):
         denscls_conf_file = os.path.join(self.project_abspath, "config", "denscls.json")
         fidexglo_conf_file = os.path.join(
             self.project_abspath, "config", "fidexglo.json"
@@ -82,36 +96,63 @@ class Patient:
         update_config_file(
             denscls_conf_file,
             {
-                "test_data_file": f"{self.reldir}/input_data.csv",
+                "test_data_file": f"{self.reldir}/input_data_normalized.csv",
                 "test_pred_outfile": f"{self.reldir}/prediction.csv",
                 "metrics_file": f"{self.reldir}/densClsMetrics.json",
-                "console_file":  f"{self.reldir}/{datetime.today().strftime('%Y%m%d%H%M')}.log"
+                "console_file": f"{self.reldir}/{datetime.today().strftime('%Y%m%d%H%M')}.log",
             },
         )
 
         update_config_file(
             fidexglo_conf_file,
             {
-                "test_data_file": f"{self.reldir}/input_data.csv",
+                "test_data_file": f"{self.reldir}/input_data_normalized.csv",
                 "test_pred_file": f"{self.reldir}/prediction.csv",
                 "explanation_file": f"{self.reldir}/extracted_rules.json",
-                "console_file":  f"{self.reldir}/{datetime.today().strftime('%Y%m%d%H%M')}.log"
+                "console_file": f"{self.reldir}/{datetime.today().strftime('%Y%m%d%H%M')}.log",
             },
         )
 
-        self.__prepare_input_for_extraction()
+        if normalize:
+            self.__prepare_input_for_extraction()
+
         densCls(f"--json_config_file {denscls_conf_file}")
         fidexGlo(f"--json_config_file {fidexglo_conf_file}")
 
         self.__set_metrics()
         self.__set_risk()
 
-        selected_rules = read_json_file(f"{self.absdir}/extracted_rules.json")[
-            "samples"
-        ][0]
-        self.selected_rules = Rule.list_from_dict(selected_rules)
+        selected_rules_dict = {}
+        self.__rewrite_extracted_rules_file()
 
-        # normalization("--json_config_file config/denormalization.json")
+        if normalize:
+            # TODO: test
+            normalization(f"--json_config_file config/denormalization.json")
+            selected_rules_dict = read_json_file(
+                f"{self.absdir}/extracted_rules_denormalized.json"
+            )
+        else:
+            selected_rules_dict = read_json_file(f"{self.absdir}/extracted_rules.json")
+
+        self.selected_rules = Rule.list_from_dict(selected_rules_dict)
+        self.__process_selected_rules(global_rules)
+
+    def __process_selected_rules(self, global_rules: GlobalRules) -> None:
+        updated_selected_rules = []
+
+        for rule in self.selected_rules:
+            id = global_rules.get_rule_id(rule)
+            id = len(global_rules.rules) if id == -1 else id
+            updated_selected_rules.append(rule.set_id(id))
+
+        self.selected_rules = updated_selected_rules
+
+    def __rewrite_extracted_rules_file(self) -> None:
+        rules_file_path = os.path.join(self.reldir, "extracted_rules.json")
+        selected_rules = read_json_file(rules_file_path)["samples"][0]["rules"]
+
+        with open(rules_file_path, "w") as fp:
+            json.dump({"rules": selected_rules}, fp, indent=4)
 
     def __set_metrics(self):
         data = read_json_file(os.path.join(self.absdir, "densClsMetrics.json"))
@@ -127,6 +168,14 @@ class Patient:
     def __set_risk(self):
         preds_filepath = os.path.join(self.absdir, "prediction.csv")
         self.risk = np.loadtxt(preds_filepath)[1]
+
+    def format_results(self) -> str:
+        string = ""
+
+        for row in self.to_str_list():
+            string += ",".join(row) + "\n"
+
+        return string
 
     def write_results(self, attributes: list[str]) -> None:
         unicancer_headers = ["VISIT", "STUDY_ID", "SITE_NAME", "SITENAME", "SUBJECT_ID"]
