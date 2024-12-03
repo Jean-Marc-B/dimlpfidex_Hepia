@@ -90,29 +90,22 @@ Output: {self.output}"""
         eps = 1e-4
 
         if not math.isclose(self.accuracy, other.accuracy, rel_tol=eps):
-            print(f"EQ: accuracy {self.accuracy} is not {other.accuracy}")
             return False
         if not math.isclose(self.covering, other.covering, rel_tol=eps):
-            print(f"EQ: covering {self.covering} is not {other.covering}")
             return False
         if not math.isclose(self.confidence, other.confidence, rel_tol=eps):
-            print(f"EQ: confidence {self.confidence} is not {other.confidence}")
             return False
         if not math.isclose(self.fidelity, other.fidelity, rel_tol=eps):
-            print(f"EQ: fidelity {self.fidelity} is not {other.fidelity}")
             return False
         if not math.isclose(self.output, other.output, rel_tol=eps):
-            print(f"EQ: output {self.output} is not {other.output}")
             return False
         if not len(self.antecedants) == len(other.antecedants):
-            print(f"EQ: antecedants size {len(self.antecedants) } is not {len(other.antecedants)}")
             return False
 
         for self_antecedant, other_antecedant in zip(
             self.antecedants, other.antecedants
         ):
             if self_antecedant != other_antecedant:
-                print(f"EQ: antecedant {self_antecedant } is not {other_antecedant}")
                 return False
 
         return True
@@ -227,15 +220,8 @@ class GlobalRules:
 
     def get_rule_id(self, target: Rule):
         for rule in self.rules:
-            print("RID:", rule.id)
-            print("acc:", rule.accuracy, target.accuracy)
-            print("cnf:", rule.confidence, target.confidence)
-            print("fid:", rule.fidelity, target.fidelity)
-            print("cvs:", rule.covering, target.covering)
-            print("out:", rule.output, target.output)
             if rule == target:
                 return rule.id
-            print("-"*50)
 
         return -1
 

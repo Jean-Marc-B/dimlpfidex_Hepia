@@ -7,20 +7,20 @@ from src.rule import *
 from pathlib import Path
 from datetime import datetime
 from trainings import normalization
+from src.utils import read_json_file
 from dimlpfidex.dimlp import densCls
 from dimlpfidex.fidex import fidexGlo
-from src.utils import update_config_file, read_json_file
 
 
 class Patient:
     def __init__(
-        self, patient_data: pd.DataFrame, clinical_data: pd.DataFrame, abspath: str
+        self, metadata: pd.Series, clinical_data: pd.Series, abspath: str
     ) -> None:
-        self.study_id = patient_data.iloc[0, 0]
-        self.site_idn = patient_data.iloc[0, 1]
-        self.site_name = patient_data.iloc[0, 2]
-        self.subj_id = patient_data.iloc[0, 3]
-        self.visit = patient_data.iloc[0, 4]
+        self.study_id = metadata.loc["STUDYID"]
+        self.site_idn = metadata.loc["SITEIDN"]
+        self.site_name = metadata.loc["SITENAME"]
+        self.subj_id = metadata.loc["SUBJID"]
+        self.visit = metadata.loc["VISIT"]
         self.clinical_data = clinical_data
 
         self.project_abspath = abspath
@@ -54,8 +54,6 @@ class Patient:
 
     def __prepare_input_for_extraction(self) -> str:
         input_filepath = os.path.join(self.absdir, "input_data.csv")
-        normalization_conf_file = os.path.join(self.project_abspath, "config", "normalization.json")
-        denormalization_conf_file = os.path.join(self.project_abspath, "config", "denormalization.json")
 
         # one hotting classes (useless but must be done in order to work with densCls)
         to_write = self.clinical_data.to_frame().T.copy()
@@ -63,89 +61,111 @@ class Patient:
         to_write = to_write.assign(Lymphodema_YES=lambda x: 0)
         to_write.to_csv(input_filepath, sep=" ", header=False, index=False)
 
-        update_config_file(
-            normalization_conf_file,
-            {
-                "data_files": f"[{self.reldir}/input_data.csv]",
-            },
-        )
-
-        update_config_file(
-            denormalization_conf_file,
-            {
-                "rule_files": f"{self.reldir}/extracted_rules.json",
-            },
-        )
-
         normalized_file_path = f"{self.reldir}/input_data_normalized.csv"
-        normalization(f"--json_config_file config/normalization.json")
+        normalization(self.__get_normalization_config())
 
         # one hotting classes (useless but must be done in order to work with densCls)
         to_write = pd.read_csv(normalized_file_path, sep=" ", header=None)
-        to_write = to_write.copy()
         to_write = to_write.assign(Lymphodema_NO=lambda x: 1)
         to_write = to_write.assign(Lymphodema_YES=lambda x: 0)
         to_write.to_csv(normalized_file_path, sep=" ", header=False, index=False)
 
-    def extract_rules(self, global_rules: GlobalRules, normalize: bool = True):
-        denscls_conf_file = os.path.join(self.project_abspath, "config", "denscls.json")
-        fidexglo_conf_file = os.path.join(
-            self.project_abspath, "config", "fidexglo.json"
-        )
-
-        update_config_file(
-            denscls_conf_file,
-            {
-                "test_data_file": f"{self.reldir}/input_data_normalized.csv",
-                "test_pred_outfile": f"{self.reldir}/prediction.csv",
-                "metrics_file": f"{self.reldir}/densClsMetrics.json",
-                "console_file": f"{self.reldir}/{datetime.today().strftime('%Y%m%d%H%M')}.log",
-            },
-        )
-
-        update_config_file(
-            fidexglo_conf_file,
-            {
-                "test_data_file": f"{self.reldir}/input_data_normalized.csv",
-                "test_pred_file": f"{self.reldir}/prediction.csv",
-                "explanation_file": f"{self.reldir}/extracted_rules.json",
-                "console_file": f"{self.reldir}/{datetime.today().strftime('%Y%m%d%H%M')}.log",
-            },
-        )
-
+    def extract_rules(self, global_rules: GlobalRules, normalize: bool = True) -> GlobalRules:
         if normalize:
             self.__prepare_input_for_extraction()
 
-        densCls(f"--json_config_file {denscls_conf_file}")
-        fidexGlo(f"--json_config_file {fidexglo_conf_file}")
+        densCls(self.__get_denscls_config())
+        fidexGlo(self.__get_fidexglo_config())
 
         self.__set_metrics()
         self.__set_risk()
-
-        selected_rules_dict = {}
         self.__rewrite_extracted_rules_file()
 
         if normalize:
-            # TODO: test
-            normalization(f"--json_config_file config/denormalization.json")
-            selected_rules_dict = read_json_file(
-                f"{self.absdir}/extracted_rules_denormalized.json"
-            )
+            normalization(self.__get_denormalization_config())
+            selected_rules_dict = read_json_file(f"{self.absdir}/extracted_rules_denormalized.json")
         else:
             selected_rules_dict = read_json_file(f"{self.absdir}/extracted_rules.json")
 
         self.selected_rules = Rule.list_from_dict(selected_rules_dict)
         self.__process_selected_rules(global_rules)
 
-    def __process_selected_rules(self, global_rules: GlobalRules) -> None:
+    def __get_normalization_config(self) -> str:
+        return (
+            f"--root_folder {self.project_abspath} "
+            f"--data_files [{self.reldir}/input_data.csv] "
+            f"--output_normalization_file {self.absdir}/normalization_stats.txt "
+            "--normalization_file temp/normalization_stats.txt "
+            "--nb_attributes 79 "
+            "--nb_classes 2 "
+            "--attributes_file temp/attributes.txt "
+            "--missing_values NaN"
+        )
+
+    def __get_denormalization_config(self) -> str:
+        return (
+            f"--root_folder {self.project_abspath} "
+            f"--rule_files {self.reldir}/extracted_rules.json "
+            "--normalization_file temp/normalization_stats.txt "
+            "--nb_attributes 79 "
+            "--attributes_file temp/attributes.txt"
+        )
+
+    def __get_fidexglo_config(self) -> str:
+        return (
+            f"--root_folder {self.project_abspath} "
+            "--train_data_file temp/train_data_normalized.csv "
+            "--train_class_file temp/train_classes.csv "
+            "--train_pred_file temp/dimlpBTTrain.out "
+            f"--test_data_file {self.reldir}/input_data_normalized.csv "
+            f"--test_pred_file {self.reldir}/prediction.csv "
+            "--weights_file temp/dimlpBT.wts "
+            "--global_rules_file temp/global_rules.json "
+            f"--console_file {self.reldir}/202412031114.log "
+            "--nb_attributes 79 "
+            "--nb_classes 2 "
+            f"--explanation_file {self.reldir}/extracted_rules.json "
+            "--with_minimal_version true "
+            "--with_fidex true "
+            "--min_fidelity 1.0 "
+            "--lowest_min_fidelity 1.0 "
+            "--min_covering 6 "
+            "--max_iterations 20 "
+            "--nb_fidex_rules 1 "
+            "--dropout_dim 0.5 "
+            "--dropout_hyp 0.5"
+        )
+
+    def __get_denscls_config(self) -> str:
+        return (
+            f"--root_folder {self.project_abspath} "
+            "--train_data_file temp/train_data_normalized.csv "
+            "--train_class_file temp/train_classes.csv "
+            f"--test_data_file {self.reldir}/input_data_normalized.csv "
+            "--train_pred_outfile temp/train_pred_out.csv "
+            "--weights_file temp/dimlpBT.wts "
+            f"--stats_file {self.reldir}/densCls_stats.txt "
+            "--hidden_layers_file temp/hidden_layers.out "
+            f"--metrics_file {self.reldir}/densClsMetrics.json "
+            "--nb_attributes 79 "
+            "--nb_classes 2 "
+            f"--test_pred_outfile {self.reldir}/prediction.csv "
+            f"--console_file {self.reldir}/202412031114.log"
+        )
+
+    def __process_selected_rules(self, global_rules: GlobalRules) -> GlobalRules:
         updated_selected_rules = []
 
         for rule in self.selected_rules:
             id = global_rules.get_rule_id(rule)
-            id = len(global_rules.rules) if id == -1 else id
+            if id == -1 :
+                id == len(global_rules.rules) 
+                global_rules.rules.append(rule) # save generated rule if not found
+
             updated_selected_rules.append(rule.set_id(id))
 
         self.selected_rules = updated_selected_rules
+        return global_rules
 
     def __rewrite_extracted_rules_file(self) -> None:
         rules_file_path = os.path.join(self.reldir, "extracted_rules.json")
@@ -191,9 +211,12 @@ class Patient:
                 fp.write(",".join(row) + "\n")
 
     def __repr__(self) -> str:
-        rules_str = (
-            "".join([rule.__repr__() + " " for rule in self.selected_rules]) + "\n"
-        )
+        if len(self.selected_rules) < 1:
+            rules_str = "None"
+        else:
+            rules_str = "\n".join(
+                [rule.__repr__() + " " for rule in self.selected_rules]
+            )
 
         return f"""Patient:
 Study ID: {self.study_id}
@@ -206,9 +229,7 @@ Low conf. int.: {self.low_interval}
 High conf. int.: {self.high_interval}
 Patient's data: 
 {self.clinical_data}
-Selected rules: 
-{rules_str}
-        """
+Selected rules: {rules_str}"""
 
     def pretty_repr(self, attributes: list[str]) -> str:
         rules_str = (
