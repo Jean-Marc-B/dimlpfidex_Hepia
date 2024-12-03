@@ -719,17 +719,21 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
         if height < 32 or width < 32:
             input_tensor = Input(shape=(32, 32, 3))
+        else:
+            input_tensor = Input(shape=(height, width, 3))
+
+        resized_input = Resizing(224, 224, name='resizing_layer')(input_tensor)
 
         # charge pre-trained model vgg with imageNet weights
-        model_base = VGG16(include_top=False, weights="imagenet", input_tensor=input_tensor)
+        model_base = VGG16(include_top=False, weights="imagenet", input_tensor=resized_input)
 
         # Freeze layers of VGG
         # for layer in model_base.layers:
         #     layer.trainable = False
 
         model = Sequential()
-        if height < 32 or width < 32:
-            model.add(Resizing(32, 32))
+        #if height < 32 or width < 32:
+        #    model.add(Resizing(32, 32))
         model.add(model_base)
         model.add(Flatten())
         model.add(Dense(256, activation='relu'))

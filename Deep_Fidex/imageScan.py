@@ -26,6 +26,7 @@ import shutil
 import re
 import copy
 from tensorflow.keras import Model
+import tensorflow as tf
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
 from utils import trainCNN, compute_histograms, compute_activation_sums, compute_proba_images, output_data, getRules, highlight_area_histograms, highlight_area_activations_sum, highlight_area_probability_image, getProbabilityThresholds, get_heat_maps, compute_first_hidden_layer
 
@@ -43,7 +44,7 @@ start_time = time.time()
 
 
 # What to launch
-test_version = False # Whether to launch with minimal data
+test_version = True # Whether to launch with minimal data
 
 
 
@@ -59,8 +60,8 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = False
-with_train_second_model = False
+with_stats_computation = True
+with_train_second_model = True
 
 # Rule computation:
 with_global_rules = False
@@ -97,7 +98,7 @@ if dataset == "MNIST":     # for MNIST images
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
-    base_folder = "CifarNewResnet/"
+    base_folder = "Cifar/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -224,7 +225,7 @@ dropout_hyp = 0.9
 dropout_dim = 0.9
 
 if probability_stats:
-    size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image qith probabilities from original image
+    size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
     size_Width_proba_stat = size1D - filter_size[0][1] + 1
     nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*nb_classes
     output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes)
@@ -275,7 +276,9 @@ if with_train_cnn:
     full_time_train_cnn = "{:.6f}".format(full_time_train_cnn).rstrip("0").rstrip(".")
     print(f"\nTrain first CNN time = {full_time_train_cnn} sec")
 
+print("Loading model...")
 CNNModel = keras.saving.load_model(model_file)
+print("Model loaded.")
 if activation_layer_stats: # Get intermediate model
     input_channels = CNNModel.input_shape[-1]
     dummy_input = np.zeros((1, size1D, size1D, input_channels))
@@ -384,12 +387,29 @@ if with_train_second_model:
 
     if probability_stats:
         if not with_stats_computation:
+            print("Loading probability stats...")
             train_probas = np.loadtxt(train_stats_file)
             train_probas = train_probas.astype('float32')
             test_probas = np.loadtxt(test_stats_file)
             test_probas = test_probas.astype('float32')
+            print("Probability stats loaded.")
         #print(train_probas.shape) # (nb_train_samples, 4840)
         #print(test_probas.shape) # (nb_test_samples, 4840)
+
+        print("Adding original image...")
+
+        train_probas = train_probas.reshape(nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
+        X_train_reshaped = tf.image.resize(X_train, (size_Height_proba_stat, size_Width_proba_stat))
+        train_probas = np.concatenate((train_probas, X_train_reshaped[:nb_train_samples]), axis=-1)
+        train_probas = train_probas.reshape(nb_train_samples, -1)
+
+        test_probas = test_probas.reshape(nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
+        X_test_reshaped = tf.image.resize(X_test, (size_Height_proba_stat, size_Width_proba_stat))
+        test_probas = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1)
+        test_probas = test_probas.reshape(nb_test_samples, -1)
+
+        print("original image added.")
+
         train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_val, nbQuantLevels, hiknot, second_model_output_rules)
         test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_val, nbQuantLevels, hiknot, mu=mu, sigma=sigma)
         train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+output_size)
@@ -520,14 +540,14 @@ if get_images:
     # For each rule we get filter images for train samples covering the rule
     good_classes = [2,3,7]
     conteur = 0
-    for id,rule in enumerate(global_rules):
+    for id,rule in enumerate(global_rules·[:50]):
 
-        if conteur == 50:
-            exit()
-        if rule.target_class not in good_classes:
-            continue
-        else:
-            conteur += 1
+        # if conteur == 50:
+        #     exit()
+        # if rule.target_class not in good_classes:
+        #     continue
+        # else:
+        #     conteur += 1
 
         if histogram_stats:
             rule.include_X = False
