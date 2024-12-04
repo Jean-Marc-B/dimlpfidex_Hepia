@@ -1,7 +1,5 @@
-from src.utils import init_args, update_config_files
-from dimlpfidex.fidex import fidexGloRules
-from dimlpfidex.dimlp import dimlpBT
-from trainings import normalization
+from src.utils import init_args
+from src.trainer import Trainer
 import src.data_helper as dh
 from src.patient import *
 from src.rule import *
@@ -16,24 +14,19 @@ if __name__ == "__main__":
     # adding BMI column
     data = data.assign(BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3))
 
-    nb_features = data.shape[1]
-    nb_classes = 2
-
     attributes = write_attributes_file(abspath, data.columns.to_list())
-    write_train_data(abspath, data, labels)
 
     if args.train:
-        update_config_files(abspath, nb_features, nb_classes)
-        normalization("--json_config_file config/train_normalization.json")
-        dimlpBT("--json_config_file config/dimlpbt.json")
-        fidexGloRules("--json_config_file config/fidexglorules.json")
-        normalization("--json_config_file config/train_denormalization.json")
+        trainer = Trainer(abspath, data, labels)
+        trainer.train(True, 0.1)
         exit()
 
     elif args.test:
+        write_train_data(abspath, data, labels)
         patients = write_samples_file(abspath, args.test)
 
     else:
+        write_train_data(abspath, data, labels)
         patients = write_patients(abspath)
 
     print("Loading global rules...")
