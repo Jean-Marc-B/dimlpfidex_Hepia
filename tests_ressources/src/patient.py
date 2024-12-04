@@ -1,15 +1,17 @@
 from __future__ import annotations
-import os
-import math
-import numpy as np
-import pandas as pd
-from src.rule import *
-from pathlib import Path
-from datetime import datetime
-from trainings import normalization
-from src.utils import read_json_file
-from dimlpfidex.dimlp import densCls
 from dimlpfidex.fidex import fidexGlo
+from dimlpfidex.dimlp import densCls
+from src.utils import read_json_file
+from trainings import normalization
+from datetime import datetime
+import src.data_helper as dh
+from pathlib import Path
+from src.utils import *
+from src.rule import *
+import pandas as pd
+import numpy as np
+import math
+import os
 
 
 class Patient:
@@ -70,7 +72,9 @@ class Patient:
         to_write = to_write.assign(Lymphodema_YES=lambda x: 0)
         to_write.to_csv(normalized_file_path, sep=" ", header=False, index=False)
 
-    def extract_rules(self, global_rules: GlobalRules, normalize: bool = True) -> GlobalRules:
+    def extract_rules(
+        self, global_rules: GlobalRules, normalize: bool = True
+    ) -> GlobalRules:
         if normalize:
             self.__prepare_input_for_extraction()
 
@@ -83,12 +87,16 @@ class Patient:
 
         if normalize:
             normalization(self.__get_denormalization_config())
-            selected_rules_dict = read_json_file(f"{self.absdir}/extracted_rules_denormalized.json")
+            selected_rules_dict = read_json_file(
+                f"{self.absdir}/extracted_rules_denormalized.json"
+            )
         else:
             selected_rules_dict = read_json_file(f"{self.absdir}/extracted_rules.json")
 
         self.selected_rules = Rule.list_from_dict(selected_rules_dict)
-        self.__process_selected_rules(global_rules)
+        
+        # return updated global rules
+        return self.__process_selected_rules(global_rules)
 
     def __get_normalization_config(self) -> str:
         return (
@@ -158,9 +166,9 @@ class Patient:
 
         for rule in self.selected_rules:
             id = global_rules.get_rule_id(rule)
-            if id == -1 :
-                id == len(global_rules.rules) 
-                global_rules.rules.append(rule) # save generated rule if not found
+            if id == -1:
+                id == len(global_rules.rules)
+                global_rules.rules.append(rule)  # save generated rule if not found
 
             updated_selected_rules.append(rule.set_id(id))
 
@@ -253,3 +261,57 @@ Patient's data:
 Selected rules: 
 {rules_str}
         """
+
+
+def write_patients(abspath: str) -> list[Patient]:
+    input_file_path = get_most_recent_input_file(abspath)
+
+    # TODO: check if read_excel is adapted
+    metadata = pd.read_excel(input_file_path, index_col=False).iloc[:, :5]
+    clinical_data = dh.obtain_data(input_file_path, training=False)
+    clinical_data = clinical_data.assign(
+        BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3)
+    )
+
+    patients = []
+    for i in range(clinical_data.shape[0]):
+        patients.append(Patient(metadata.iloc[i], clinical_data.iloc[i], abspath))
+
+    return patients
+
+
+# this is for testing puroposes only
+def write_samples_file(abspath: str, n: int) -> list[Patient]:
+    metadata_file = os.path.join(
+        abspath, "input", "PRE-ACT-01_Flow2_20241115_HES-SO.xlsx"
+    )
+    data_file = os.path.join(abspath, "temp", "train_data.csv")
+
+    metadata = pd.read_excel(metadata_file, index_col=False).iloc[0, :5]
+    data = pd.read_csv(data_file, sep=" ", header=None)
+
+    sample_data = data.sample(n)
+
+    patients = []
+    for i in range(n):
+        metadata.iloc[3] = f"FRA_TEST_00{i+1}"
+        patients.append(Patient(metadata, sample_data.iloc[i, :], abspath))
+
+    return patients
+
+
+def write_results(abspath: str, patients: list[Patient], attributes: list[str]) -> None:
+    today = datetime.today().strftime("%Y_%m_%d")
+    write_path = os.path.join(abspath, "output", f"results_{today}.csv")
+
+    unicancer_headers = ["STUDYID", "SITEIDN", "SITENAME", "SUBJID", "VISIT"]
+    rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "RULE_ID"]
+    headers = unicancer_headers + rule_headers + attributes
+
+    string = ",".join(headers) + "\n"
+
+    for patient in patients:
+        string += patient.format_results()
+
+    with open(write_path, "w") as fp:
+        fp.write(string)

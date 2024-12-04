@@ -1,11 +1,15 @@
-import os
-import json
-import argparse
 from datetime import datetime
+import pandas as pd
+import argparse
+import json
+import os
+
 
 def get_most_recent_input_file(absolute_path: str) -> str:
-    # get all filepaths inside input/ folder 
-    list_filepaths = [os.path.join(absolute_path, filename) for filename in os.listdir(absolute_path)]
+    # get all filepaths inside input/ folder
+    list_filepaths = [
+        os.path.join(absolute_path, filename) for filename in os.listdir(absolute_path)
+    ]
     # get most recent by comparing UNIX timestamps
     return max(list_filepaths, key=lambda filepath: os.path.getctime(filepath))
 
@@ -19,6 +23,27 @@ def update_config_file(filename: str, params: dict) -> None:
         f.seek(0)
         json.dump(config, f, indent=4)
         f.truncate()
+
+
+def write_attributes_file(abspath: str, attributes: list[str]) -> list[str]:
+    file_path = os.path.join(abspath, "temp", "attributes.txt")
+    attributes = attributes + ["LYMPHODEMA_NO", "LYMPHODEMA_YES"]
+
+    with open(file_path, "w") as f:
+        for attribute in attributes:
+            f.write(attribute + "\n")
+
+    return attributes
+
+
+def write_train_data(abspath: str, data: pd.DataFrame, labels: pd.Series) -> None:
+    labels = pd.get_dummies(labels).astype("uint")
+
+    data_file = os.path.join(abspath, "temp", "train_data.csv")
+    labels_file = os.path.join(abspath, "temp", "train_classes.csv")
+
+    data.to_csv(data_file, sep=",", header=False, index=False)
+    labels.to_csv(labels_file, sep=",", header=False, index=False)
 
 
 def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
@@ -57,6 +82,7 @@ def read_json_file(path: str) -> dict:
 def write_json_file(path: str, data: dict, mode: str = "w") -> None:
     with open(path, mode) as fp:
         json.dump(data, fp, indent=4)
+
 
 def init_args():
     parser = argparse.ArgumentParser()
