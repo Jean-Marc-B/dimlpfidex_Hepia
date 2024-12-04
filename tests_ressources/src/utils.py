@@ -36,14 +36,31 @@ def write_attributes_file(abspath: str, attributes: list[str]) -> list[str]:
     return attributes
 
 
-def write_train_data(abspath: str, data: pd.DataFrame, labels: pd.Series) -> None:
+def write_train_data(abspath: str, data: pd.DataFrame, labels: pd.Series, split: float = 0.0) -> None:
     labels = pd.get_dummies(labels).astype("uint")
+    train_data_file = os.path.join(abspath, "temp", "train_data.csv")
+    train_labels_file = os.path.join(abspath, "temp", "train_classes.csv")
+    test_data_file = os.path.join(abspath, "temp", "test_data.csv")
+    test_labels_file = os.path.join(abspath, "temp", "test_classes.csv")
 
-    data_file = os.path.join(abspath, "temp", "train_data.csv")
-    labels_file = os.path.join(abspath, "temp", "train_classes.csv")
+    train_data = data
+    train_labels = labels
 
-    data.to_csv(data_file, sep=",", header=False, index=False)
-    labels.to_csv(labels_file, sep=",", header=False, index=False)
+    if split > 0.0:
+        split = 0.5 if split > 0.5 else split
+        split_idx = data.shape[0] - int(data.shape[0] * split) 
+
+        train_data = data.iloc[:split_idx]
+        train_labels = labels.iloc[:split_idx]
+        test_data = data.iloc[split_idx:]
+        test_labels = labels.iloc[split_idx:]
+
+        test_data.to_csv(test_data_file, sep=",", header=False, index=False)
+        test_labels.to_csv(test_labels_file, sep=",", header=False, index=False)
+
+
+    train_data.to_csv(train_data_file, sep=",", header=False, index=False)
+    train_labels.to_csv(train_labels_file, sep=",", header=False, index=False)
 
 
 def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
