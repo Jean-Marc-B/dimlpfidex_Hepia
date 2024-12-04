@@ -156,8 +156,8 @@ if test_version:
 else:
     model = "resnet"
     nbIt = 80
-    batch_size = 16 # To avoid memory problems on GPU
-    batch_size_second_model = 16
+    batch_size = 64 # To avoid memory problems on GPU
+    batch_size_second_model = 64
 
 if activation_layer_stats:
     with_leaky_relu = True
