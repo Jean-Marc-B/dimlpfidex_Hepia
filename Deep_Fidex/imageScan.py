@@ -518,6 +518,10 @@ if histogram_stats:
                 myFile.write(f"P_{i}>={j:.6g}\n")
 
 
+if probability_stats:
+    train_stats_file = train_stats_file_with_image
+    test_stats_file = test_stats_file_with_image
+
 ##############################################################################
 # Compute global rules
 
