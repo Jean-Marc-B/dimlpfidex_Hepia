@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import math
+import os
 
 
 class Antecedant:
@@ -189,6 +190,9 @@ class GlobalRules:
         self.positive_index_class = positive_index_class
         self.threshold = threshold
 
+    def __len__(self):
+        return len(self.rules)
+
     @staticmethod
     def from_json_file(path: str):
         with open(path, "r") as fp:
@@ -200,7 +204,14 @@ class GlobalRules:
             threshold=data.get("threshold", None),
         )
 
-    def to_json_file(
+    def save(self, abspath: str):
+        global_rules_path = os.path.join(
+            abspath, "temp", "global_rules_denormalized.json"
+        )
+
+        self.__to_json_file(global_rules_path)
+
+    def __to_json_file(
         self,
         path: str,
     ) -> None:
