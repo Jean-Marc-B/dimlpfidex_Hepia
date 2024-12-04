@@ -219,7 +219,7 @@ class GlobalRules:
             json_data = {
                 "positive index class": self.positive_index_class,
                 "rules": Rule.list_to_dict(self.rules),
-                "thresold": self.threshold,
+                "threshold": self.threshold,
             }
         else:
             json_data = {

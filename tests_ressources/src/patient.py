@@ -94,7 +94,7 @@ class Patient:
             selected_rules_dict = read_json_file(f"{self.absdir}/extracted_rules.json")
 
         self.selected_rules = Rule.list_from_dict(selected_rules_dict)
-        
+
         # return updated global rules
         return self.__process_selected_rules(global_rules)
 
@@ -120,6 +120,7 @@ class Patient:
         )
 
     def __get_fidexglo_config(self) -> str:
+        today = datetime.today().strftime("%Y_%m_%d")
         return (
             f"--root_folder {self.project_abspath} "
             "--train_data_file temp/train_data_normalized.csv "
@@ -129,7 +130,7 @@ class Patient:
             f"--test_pred_file {self.reldir}/prediction.csv "
             "--weights_file temp/dimlpBT.wts "
             "--global_rules_file temp/global_rules.json "
-            f"--console_file {self.reldir}/202412031114.log "
+            f"--console_file {self.reldir}/fidexglo_{today}.log "
             "--nb_attributes 79 "
             "--nb_classes 2 "
             f"--explanation_file {self.reldir}/extracted_rules.json "
