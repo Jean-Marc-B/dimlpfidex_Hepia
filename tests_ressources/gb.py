@@ -22,7 +22,6 @@ def delete_all_content_of_dir(dirpath: str) -> None:
             print("Failed to delete %s. Reason: %s" % (file_path, e))
 
 
-# TODO
 def test_with_gb(data: pd.DataFrame, labels: pd.Series) -> None:
     tprs = []
     fprs = []
