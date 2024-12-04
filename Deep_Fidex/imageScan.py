@@ -44,12 +44,12 @@ start_time = time.time()
 
 
 # What to launch
-test_version = False # Whether to launch with minimal data
+test_version = True # Whether to launch with minimal data
 
 
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -60,14 +60,14 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = False
+with_stats_computation = True
 with_train_second_model = True
 
 # Rule computation:
-with_global_rules = False
+with_global_rules = True
 
 # Image generation:
-get_images = False # With histograms
+get_images = True # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
@@ -176,6 +176,8 @@ elif activation_layer_stats:
 elif probability_stats:
     train_stats_file = base_folder + scan_folder + "train_probability_images.txt"
     test_stats_file = base_folder + scan_folder + "test_probability_images.txt"
+    train_stats_file_with_image = base_folder + scan_folder + "train_probability_images_with_original_img.txt"
+    test_stats_file_with_image = base_folder + scan_folder + "test_probability_images_with_original_img.txt"
 
 filter_size = [[7,7]] # Size of filter(s) applied to the image
 if np.asarray(filter_size).ndim == 1:
@@ -194,8 +196,8 @@ if histogram_stats:
 
 #----------------------------
 # For second model training
-#second_model = "cnn"
-second_model = "randomForests"
+second_model = "cnn"
+#second_model = "randomForests"
 if not probability_stats:
     # second_model = "randomForests"
     second_model = "gradientBoosting"
@@ -228,7 +230,7 @@ dropout_dim = 0.9
 if probability_stats:
     size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
     size_Width_proba_stat = size1D - filter_size[0][1] + 1
-    nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*nb_classes
+    nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*(nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
     output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
 #----------------------------
 # Folder for output images
@@ -408,6 +410,17 @@ if with_train_second_model:
         X_test_reshaped = tf.image.resize(X_test, (size_Height_proba_stat, size_Width_proba_stat))
         test_probas = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1)
         test_probas = test_probas.reshape(nb_test_samples, -1)
+
+        # Update stats data
+        output_data(train_probas, train_stats_file_with_image)
+        output_data(test_probas, test_stats_file_with_image)
+
+        train_probas = np.loadtxt(train_stats_file_with_image)
+        train_probas = train_probas.astype('float32')
+        test_probas = np.loadtxt(test_stats_file_with_image)
+        test_probas = test_probas.astype('float32')
+        train_stats_file = train_stats_file_with_image
+        test_stats_file = test_stats_file_with_image
 
         print("original image added.")
 
