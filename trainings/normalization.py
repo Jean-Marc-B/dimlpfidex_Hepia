@@ -334,6 +334,7 @@ def get_and_check_parameters(init_args):
     # Add new attributes
     parser = CustomArgumentParser(description="This is a parser for normalization", parents=[initial_parser], formatter_class=formatter, add_help=True)
     parser.add_argument("--nb_attributes", type=lambda x: int_type(x, min=1), help="Number of attributes in the dataset", metavar="<int [1,inf[>", required=True)
+    parser.add_argument("--verbose", help="Whether or not to print information", action="store_true")
     parser.add_argument("--nb_classes", type=lambda x: int_type(x, min=1), help="Number of classes in the dataset", metavar="<int [1,inf[>")
     parser.add_argument("--data_files", type=lambda x: [sanitizepath(args.root_folder, file) for file in list_type(x, dict(func=str))], metavar="<list<str>>", help="List of paths to data files to normalize, they are normalized with respect to the first one if normalization_file is not specified", action=TaggableAction, tag="Normalization")
     parser.add_argument("--rule_files", type=lambda x: [sanitizepath(args.root_folder, file) for file in list_type(x, dict(func=str))], metavar="<list<str>>", help="List of paths to rule files to denormalize, denormalization is possible only if a normalization_file file or mus, sigmas and normalization_indices are given. Either 'data_files' or 'rule_files' must be specified", action=TaggableAction, tag="Normalization")
@@ -492,7 +493,8 @@ def normalization(args: str = None):
         if (args.rule_files is None and args.data_files is None):
             raise ValueError("Error : rule_files or data_files must be specified.")
 
-        print_parameters(args)
+        if args.verbose :
+            print_parameters(args)
 
         # Get attributes
         attributes = None
@@ -634,7 +636,8 @@ def normalization(args: str = None):
         full_time = end_time - start_time
         full_time = "{:.6f}".format(full_time).rstrip("0").rstrip(".")
 
-        print(f"\nFull execution time = {full_time} sec")
+        if args.verbose:
+            print(f"\nFull execution time = {full_time} sec")
 
         return 0
 
