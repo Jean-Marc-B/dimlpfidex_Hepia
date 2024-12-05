@@ -1,8 +1,18 @@
-from datetime import datetime
+import src.data_helper as dh
 import pandas as pd
 import argparse
 import json
 import os
+
+
+def load_clinical_data(path: str) -> tuple[pd.DataFrame, pd.Series]:
+    datas, labels = dh.obtain_data(path)
+    datas, labels = dh.filter_clinical(datas, labels)
+
+    # adding BMI column
+    datas = datas.assign(BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3))
+
+    return datas, labels
 
 
 def get_most_recent_input_file(absolute_path: str) -> str:
@@ -12,17 +22,6 @@ def get_most_recent_input_file(absolute_path: str) -> str:
     ]
     # get most recent by comparing UNIX timestamps
     return max(list_filepaths, key=lambda filepath: os.path.getctime(filepath))
-
-
-def update_config_file(filename: str, params: dict) -> None:
-    with open(filename, "r+") as f:
-        config = json.load(f)
-        for key, param in params.items():
-            config[key] = param
-
-        f.seek(0)
-        json.dump(config, f, indent=4)
-        f.truncate()
 
 
 def write_attributes_file(abspath: str, attributes: list[str]) -> list[str]:
@@ -36,7 +35,16 @@ def write_attributes_file(abspath: str, attributes: list[str]) -> list[str]:
     return attributes
 
 
-def write_train_data(abspath: str, data: pd.DataFrame, labels: pd.Series, split: float = 0.0) -> None:
+def read_attributes_file(abspath: str) -> list[str]:
+    file_path = os.path.join(abspath, "temp", "attributes.txt")
+
+    with open(file_path, "r") as f:
+        return f.read().splitlines()
+
+
+def write_train_data(
+    abspath: str, data: pd.DataFrame, labels: pd.Series, split: float = 0.0
+) -> None:
     labels = pd.get_dummies(labels).astype("uint")
     train_data_file = os.path.join(abspath, "temp", "train_data.csv")
     train_labels_file = os.path.join(abspath, "temp", "train_classes.csv")
@@ -48,7 +56,7 @@ def write_train_data(abspath: str, data: pd.DataFrame, labels: pd.Series, split:
 
     if split > 0.0:
         split = 0.5 if split > 0.5 else split
-        split_idx = data.shape[0] - int(data.shape[0] * split) 
+        split_idx = data.shape[0] - int(data.shape[0] * split)
 
         train_data = data.iloc[:split_idx]
         train_labels = labels.iloc[:split_idx]
@@ -58,47 +66,13 @@ def write_train_data(abspath: str, data: pd.DataFrame, labels: pd.Series, split:
         test_data.to_csv(test_data_file, sep=",", header=False, index=False)
         test_labels.to_csv(test_labels_file, sep=",", header=False, index=False)
 
-
     train_data.to_csv(train_data_file, sep=",", header=False, index=False)
     train_labels.to_csv(train_labels_file, sep=",", header=False, index=False)
-
-
-def update_config_files(root_folder: str, nb_features: int, nb_classes: int):
-    confpath = os.path.join(root_folder, "config")
-    logpath = "logs/"
-
-    programs = ["dimlpbt", "denscls", "fidexglo", "fidexglorules"]
-
-    for program in programs:
-        config_filename = os.path.join(confpath, f"{program}.json")
-        config = dict()
-        config["root_folder"] = root_folder
-        config["nb_attributes"] = nb_features
-        config["nb_classes"] = nb_classes
-        config["console_file"] = (
-            f"{logpath + datetime.today().strftime('%Y%m%d%H%M')}_{program}.log"
-        )
-
-        update_config_file(config_filename, config)
-
-    update_config_file(
-        os.path.join(confpath, "train_normalization.json"),
-        {"root_folder": root_folder, "nb_attributes": nb_features},
-    )
-    update_config_file(
-        os.path.join(confpath, "train_denormalization.json"),
-        {"root_folder": root_folder, "nb_attributes": nb_features},
-    )
 
 
 def read_json_file(path: str) -> dict:
     with open(path) as fp:
         return json.load(fp)
-
-
-def write_json_file(path: str, data: dict, mode: str = "w") -> None:
-    with open(path, mode) as fp:
-        json.dump(data, fp, indent=4)
 
 
 def init_args():
