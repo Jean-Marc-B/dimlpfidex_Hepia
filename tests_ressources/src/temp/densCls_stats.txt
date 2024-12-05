@@ -1,2 +1,0 @@
-Global accuracy on training set = 0.937994
-Global accuracy on testing set = 1

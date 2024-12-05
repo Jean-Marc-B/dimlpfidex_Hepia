@@ -1,3 +1,4 @@
+import src.constants as constants
 import src.data_helper as dh
 import pandas as pd
 import argparse
@@ -20,12 +21,17 @@ def get_most_recent_input_file(absolute_path: str) -> str:
     list_filepaths = [
         os.path.join(absolute_path, filename) for filename in os.listdir(absolute_path)
     ]
+
+    # if none found
+    if len(list_filepaths) < 1:
+        return ""
+
     # get most recent by comparing UNIX timestamps
     return max(list_filepaths, key=lambda filepath: os.path.getctime(filepath))
 
 
 def write_attributes_file(abspath: str, attributes: list[str]) -> list[str]:
-    file_path = os.path.join(abspath, "temp", "attributes.txt")
+    file_path = os.path.join(abspath, constants.MODEL_DIRNAME, "attributes.txt")
     attributes = attributes + ["LYMPHODEMA_NO", "LYMPHODEMA_YES"]
 
     with open(file_path, "w") as f:
@@ -36,7 +42,7 @@ def write_attributes_file(abspath: str, attributes: list[str]) -> list[str]:
 
 
 def read_attributes_file(abspath: str) -> list[str]:
-    file_path = os.path.join(abspath, "temp", "attributes.txt")
+    file_path = os.path.join(abspath, constants.MODEL_DIRNAME, "attributes.txt")
 
     with open(file_path, "r") as f:
         return f.read().splitlines()
@@ -46,10 +52,14 @@ def write_train_data(
     abspath: str, data: pd.DataFrame, labels: pd.Series, split: float = 0.0
 ) -> None:
     labels = pd.get_dummies(labels).astype("uint")
-    train_data_file = os.path.join(abspath, "temp", "train_data.csv")
-    train_labels_file = os.path.join(abspath, "temp", "train_classes.csv")
-    test_data_file = os.path.join(abspath, "temp", "test_data.csv")
-    test_labels_file = os.path.join(abspath, "temp", "test_classes.csv")
+    train_data_file = os.path.join(abspath, constants.MODEL_DIRNAME, "train_data.csv")
+    train_labels_file = os.path.join(
+        abspath, constants.MODEL_DIRNAME, "train_classes.csv"
+    )
+    test_data_file = os.path.join(abspath, constants.MODEL_DIRNAME, "test_data.csv")
+    test_labels_file = os.path.join(
+        abspath, constants.MODEL_DIRNAME, "test_classes.csv"
+    )
 
     train_data = data
     train_labels = labels

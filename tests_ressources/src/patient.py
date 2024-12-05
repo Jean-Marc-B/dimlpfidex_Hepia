@@ -3,6 +3,7 @@ from dimlpfidex.fidex import fidexGlo
 from dimlpfidex.dimlp import densCls
 from src.utils import read_json_file
 from trainings import normalization
+import src.constants as constants
 from datetime import datetime
 import src.data_helper as dh
 from pathlib import Path
@@ -26,7 +27,7 @@ class Patient:
         self.clinical_data = clinical_data
 
         self.project_abspath = abspath
-        self.reldir = os.path.join("patients_data", self.subj_id)
+        self.reldir = os.path.join(constants.PATIENTS_DATA_DIRNAME, self.subj_id)
         self.absdir = os.path.join(abspath, self.reldir)
         Path(self.absdir).mkdir(exist_ok=True)
 
@@ -103,10 +104,10 @@ class Patient:
             f"--root_folder {self.project_abspath} "
             f"--data_files [{self.reldir}/input_data.csv] "
             f"--output_normalization_file {self.absdir}/normalization_stats.txt "
-            "--normalization_file temp/normalization_stats.txt "
+            f"--normalization_file {constants.MODEL_DIRNAME}/normalization_stats.txt "
             "--nb_attributes 79 "
             "--nb_classes 2 "
-            "--attributes_file temp/attributes.txt "
+            f"--attributes_file {constants.MODEL_DIRNAME}/attributes.txt "
             "--missing_values NaN"
         )
 
@@ -114,22 +115,22 @@ class Patient:
         return (
             f"--root_folder {self.project_abspath} "
             f"--rule_files {self.reldir}/extracted_rules.json "
-            "--normalization_file temp/normalization_stats.txt "
+            f"--normalization_file {constants.MODEL_DIRNAME}/normalization_stats.txt "
             "--nb_attributes 79 "
-            "--attributes_file temp/attributes.txt"
+            f"--attributes_file {constants.MODEL_DIRNAME}/attributes.txt"
         )
 
     def __get_fidexglo_config(self) -> str:
         today = datetime.today().strftime("%Y_%m_%d")
         return (
             f"--root_folder {self.project_abspath} "
-            "--train_data_file temp/train_data_normalized.csv "
-            "--train_class_file temp/train_classes.csv "
-            "--train_pred_file temp/dimlpBTTrain.out "
+            f"--train_data_file {constants.MODEL_DIRNAME}/train_data_normalized.csv "
+            f"--train_class_file {constants.MODEL_DIRNAME}/train_classes.csv "
+            f"--train_pred_file {constants.MODEL_DIRNAME}/dimlpBTTrain.out "
             f"--test_data_file {self.reldir}/input_data_normalized.csv "
             f"--test_pred_file {self.reldir}/prediction.csv "
-            "--weights_file temp/dimlpBT.wts "
-            "--global_rules_file temp/global_rules.json "
+            f"--weights_file {constants.MODEL_DIRNAME}/dimlpBT.wts "
+            f"--global_rules_file {constants.MODEL_DIRNAME}/global_rules.json "
             f"--console_file {self.reldir}/fidexglo_{today}.log "
             "--nb_attributes 79 "
             "--nb_classes 2 "
@@ -148,13 +149,13 @@ class Patient:
     def __get_denscls_config(self) -> str:
         return (
             f"--root_folder {self.project_abspath} "
-            "--train_data_file temp/train_data_normalized.csv "
-            "--train_class_file temp/train_classes.csv "
+            f"--train_data_file {constants.MODEL_DIRNAME}/train_data_normalized.csv "
+            f"--train_class_file {constants.MODEL_DIRNAME}/train_classes.csv "
             f"--test_data_file {self.reldir}/input_data_normalized.csv "
-            "--train_pred_outfile temp/train_pred_out.csv "
-            "--weights_file temp/dimlpBT.wts "
+            f"--train_pred_outfile {constants.MODEL_DIRNAME}/train_pred_out.csv "
+            f"--weights_file {constants.MODEL_DIRNAME}/dimlpBT.wts "
             f"--stats_file {self.reldir}/densCls_stats.txt "
-            "--hidden_layers_file temp/hidden_layers.out "
+            f"--hidden_layers_file {constants.MODEL_DIRNAME}/hidden_layers.out "
             f"--metrics_file {self.reldir}/densClsMetrics.json "
             "--nb_attributes 79 "
             "--nb_classes 2 "
@@ -211,8 +212,10 @@ class Patient:
         rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "RULE_ID"]
         headers = unicancer_headers + rule_headers + attributes
 
+        today = datetime.today().strftime("%Y%m%d%H%M")
+
         with open(
-            f"{self.project_abspath}/output/{self.subj_id}_results_{datetime.today().strftime('%Y%m%d%H%M')}.csv",
+            f"{self.project_abspath}/{constants.OUTPUT_DIRNAME}/{self.subj_id}_results_{today}.csv",
             "w",
         ) as fp:
             fp.write(",".join(headers) + "\n")
@@ -265,11 +268,16 @@ Selected rules:
 
 
 def write_patients(abspath: str) -> list[Patient]:
-    input_file_path = get_most_recent_input_file(abspath)
+    input_dirpath = os.path.join(abspath, constants.INPUT_DIRNAME)
+    input_filepath = get_most_recent_input_file(input_dirpath)
+
+    if input_filepath == "":
+        print(f"ERROR: No input file inside {input_dirpath} was found")
+        exit()
 
     # TODO: check if read_excel is adapted
-    metadata = pd.read_excel(input_file_path, index_col=False).iloc[:, :5]
-    clinical_data = dh.obtain_data(input_file_path, training=False)
+    metadata = pd.read_excel(input_filepath, index_col=False).iloc[:, :5]
+    clinical_data = dh.obtain_data(input_filepath, training=False)
     clinical_data = clinical_data.assign(
         BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3)
     )
@@ -286,7 +294,7 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
     metadata_file = os.path.join(
         abspath, "input", "PRE-ACT-01_Flow2_20241115_HES-SO.xlsx"
     )
-    data_file = os.path.join(abspath, "temp", "train_data.csv")
+    data_file = os.path.join(abspath, constants.MODEL_DIRNAME, "train_data.csv")
 
     metadata = pd.read_excel(metadata_file, index_col=False).iloc[0, :5]
     data = pd.read_csv(data_file, sep=" ", header=None)
@@ -303,7 +311,7 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
 
 def write_results(abspath: str, patients: list[Patient]) -> None:
     today = datetime.today().strftime("%Y_%m_%d")
-    write_path = os.path.join(abspath, "output", f"results_{today}.csv")
+    write_path = os.path.join(abspath, constants.OUTPUT_DIRNAME, f"results_{today}.csv")
 
     attributes = read_attributes_file(abspath)
     unicancer_headers = ["STUDYID", "SITEIDN", "SITENAME", "SUBJID", "VISIT"]
