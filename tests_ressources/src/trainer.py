@@ -11,8 +11,8 @@ class Trainer:
     def __init__(
         self,
         abspath: str,
-        datas: pd.DataFrame,
-        labels: pd.Series,
+        datas: pd.DataFrame = None,
+        labels: pd.Series = None,
     ):
         self.project_abspath = abspath
         self.reldir = "temp"
@@ -25,7 +25,8 @@ class Trainer:
         self.epochs = 300
 
     def train(self, normalize: bool = True, split: float = 0.0):
-        write_train_data(self.project_abspath, self.datas, self.labels, split)
+        if self.datas is not None and self.labels is not None:
+            write_train_data(self.project_abspath, self.datas, self.labels, split)
 
         if normalize:
             print("Normalizing datas...")
@@ -112,8 +113,8 @@ class Trainer:
             "--max_iterations 20 "
             "--min_fidelity 1.0 "
             "--lowest_min_fidelity 1.0 "
-            "--dropout_dim 0.9 "
-            "--dropout_hyp 0.9 "
+            "--dropout_dim 0.0 "
+            "--dropout_hyp 0.0 "
             "--decision_threshold 0.06 "
             "--positive_class_index 1"
         )

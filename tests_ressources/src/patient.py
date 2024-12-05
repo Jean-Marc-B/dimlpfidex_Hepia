@@ -301,10 +301,11 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
     return patients
 
 
-def write_results(abspath: str, patients: list[Patient], attributes: list[str]) -> None:
+def write_results(abspath: str, patients: list[Patient]) -> None:
     today = datetime.today().strftime("%Y_%m_%d")
     write_path = os.path.join(abspath, "output", f"results_{today}.csv")
 
+    attributes = read_attributes_file(abspath)
     unicancer_headers = ["STUDYID", "SITEIDN", "SITENAME", "SUBJID", "VISIT"]
     rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "RULE_ID"]
     headers = unicancer_headers + rule_headers + attributes
