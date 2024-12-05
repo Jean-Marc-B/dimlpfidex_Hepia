@@ -1,6 +1,5 @@
 from src.utils import init_args
 from src.trainer import Trainer
-import src.data_helper as dh
 from src.patient import *
 from src.rule import *
 import os
@@ -9,15 +8,8 @@ if __name__ == "__main__":
     args = init_args()
     abspath = os.path.abspath(os.path.dirname(__file__))
 
-    data, labels = dh.obtain_data("dataset/clinical_complete_rev1.csv")
-    data, labels = dh.filter_clinical(data, labels)
-    # adding BMI column
-    data = data.assign(BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3))
-
-    attributes = write_attributes_file(abspath, data.columns.to_list())
-
     if args.train:
-        trainer = Trainer(abspath, data, labels)
+        trainer = Trainer(abspath)
         trainer.train(True, 0.1)
         exit()
 
@@ -42,7 +34,7 @@ if __name__ == "__main__":
 
     print(f"Rule extraction done for {npatients} patients")
     print(f"Writing UNICANCER results file...")
-    write_results(abspath, patients, attributes)
+    write_results(abspath, patients)
     print(f"File successfully written")
 
     # save potentially generated rules if new ones appeared
