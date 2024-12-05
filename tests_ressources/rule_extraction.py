@@ -1,3 +1,4 @@
+import src.constants as constants
 from src.utils import init_args
 from src.trainer import Trainer
 from src.patient import *
@@ -7,11 +8,13 @@ import os
 if __name__ == "__main__":
     args = init_args()
     abspath = os.path.abspath(os.path.dirname(__file__))
+    constants.check_directories_existance(abspath)
 
     if args.train:
         trainer = Trainer(abspath)
-        trainer.train(True, 0.1)
-        exit()
+        normalize = True
+        trainer.train(normalize)
+        exit(0)
 
     elif args.test:
         # write_train_data(abspath, data, labels)
@@ -22,7 +25,9 @@ if __name__ == "__main__":
         patients = write_patients(abspath)
 
     print("Loading global rules...")
-    global_rules = GlobalRules.from_json_file("temp/global_rules_denormalized.json")
+    global_rules = GlobalRules.from_json_file(
+        os.path.join(constants.MODEL_DIRNAME, "global_rules_denormalized.json")
+    )
     nb_global_rules = len(global_rules)
 
     npatients = len(patients)

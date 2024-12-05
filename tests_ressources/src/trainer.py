@@ -3,6 +3,7 @@ from src.patient import write_train_data
 from dimlpfidex.dimlp import dimlpBT
 from trainings import normalization
 from datetime import datetime
+import src.constants as constants
 import pandas as pd
 import os
 
@@ -15,7 +16,7 @@ class Trainer:
         labels: pd.Series = None,
     ):
         self.project_abspath = abspath
-        self.reldir = "temp"
+        self.reldir = constants.MODEL_DIRNAME
         self.absdir = os.path.join(self.project_abspath, self.reldir)
         self.nb_features = datas.shape[1]
         self.labels = labels

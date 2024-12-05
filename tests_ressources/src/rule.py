@@ -1,4 +1,5 @@
 from __future__ import annotations
+import src.constants as constants
 import json
 import math
 import os
@@ -206,7 +207,7 @@ class GlobalRules:
 
     def save(self, abspath: str):
         global_rules_path = os.path.join(
-            abspath, "temp", "global_rules_denormalized.json"
+            abspath, constants.MODEL_DIRNAME, "global_rules_denormalized.json"
         )
 
         self.__to_json_file(global_rules_path)
