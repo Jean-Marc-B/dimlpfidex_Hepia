@@ -13,5 +13,6 @@ cmake --build . -j 8 && \
 cd .. && \
 python3 -m build . && \
 pip uninstall dimlpfidex && \
-pip install dist/*.whl
-# add openpyxl and pandas
+pip install dist/*.whl && \
+cd ./tests_ressources && \
+python rule_extraction.py --test 5
