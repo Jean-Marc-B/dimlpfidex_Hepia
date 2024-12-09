@@ -29,7 +29,7 @@ class Patient:
         self.project_abspath = abspath
         self.reldir = os.path.join(constants.PATIENTS_DATA_DIRNAME, self.subj_id)
         self.absdir = os.path.join(abspath, self.reldir)
-        Path(self.absdir).mkdir(exist_ok=True)
+        Path(self.absdir).mkdir(mode=0o777, exist_ok=True)
 
         # properties to be set during rule extraction
         self.risk = -1
@@ -186,14 +186,16 @@ class Patient:
 
     def __set_metrics(self):
         data = read_json_file(os.path.join(self.absdir, "densClsMetrics.json"))
-        nb_nets = data["nbNets"]
+        preds_filepath = os.path.join(self.absdir, "prediction.csv")
 
-        self.low_interval = (
-            data["avgs"][1] - (1.96 / math.sqrt(nb_nets)) * data["stds"][1]
-        )
-        self.high_interval = (
-            data["avgs"][1] + (1.96 / math.sqrt(nb_nets)) * data["stds"][1]
-        )
+        # setting risk (output of 2nd output neuron)
+        self.risk = np.loadtxt(preds_filepath)[1]
+        
+        # setting upper and lower confidence interval
+        interval = (1.96 / math.sqrt(data["nbNets"])) * data["stds"][1]
+        self.low_interval = data["avgs"][1] - interval
+        self.high_interval = data["avgs"][1] + interval
+        
 
     def __set_risk(self):
         preds_filepath = os.path.join(self.absdir, "prediction.csv")
