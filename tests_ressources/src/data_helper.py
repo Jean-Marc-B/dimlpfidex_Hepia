@@ -661,7 +661,7 @@ def create_2d_dataset(root_folder: str, columns: list[str], labels: pd.Series) -
     return aggregate
 
 
-def obtain_standalone_data(filename: Union[str, Any], sep: str = ";") -> (pd.DataFrame, pd.Series):
+def obtain_standalone_data(filename: Union[str, Any], sep: str = ";") -> tuple[pd.DataFrame, pd.Series]:
     """
     Read CSV standalone file. A Standalone file contains flatten data with one Subject ID per line.
     There must also be a label column.
@@ -676,7 +676,7 @@ def obtain_standalone_data(filename: Union[str, Any], sep: str = ";") -> (pd.Dat
     data = infer_missing_values(data)
     return data, labels
 
-def filter_clinical(data: pd.DataFrame, labels: pd.Series) -> (pd.DataFrame, pd.Series):
+def filter_clinical(data: pd.DataFrame, labels: pd.Series) -> tuple[pd.DataFrame, pd.Series]:
     """
     Filter Clinical data with the rules given from doctors.
     Clinical T-Stage_nan != 1 AND Clinical N-Stage_nan != 1
