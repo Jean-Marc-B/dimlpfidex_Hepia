@@ -61,13 +61,13 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
 
 
 with_stats_computation = False
-with_train_second_model = True
+with_train_second_model = False
 
 # Rule computation:
-with_global_rules = False
+with_global_rules = True
 
 # Image generation:
-get_images = False # With histograms
+get_images = True # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
@@ -226,6 +226,8 @@ nbQuantLevels = 100
 K_val = 1.0
 dropout_hyp = 0.9
 dropout_dim = 0.9
+global_rules_with_test_stats = base_folder + scan_folder + "globalRulesWithStats.json"
+global_rules_stats = base_folder + scan_folder + "global_rules_stats.txt"
 
 if probability_stats:
     size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
@@ -556,6 +558,22 @@ if with_global_rules:
     if status != -1:
         print("\nGlobal rules computed.")
 
+    command = (
+        f'--test_data_file {test_stats_file} '
+        f'--test_pred_file {second_model_test_pred} '
+        f'--test_class_file {test_class_file} '
+        f'--nb_classes {nb_classes} '
+        f'--global_rules_file {global_rules_file} '
+        f'--nb_attributes {nb_stats_attributes} '
+        f'--global_rules_outfile {global_rules_with_test_stats} '
+        f'--stats_file {global_rules_stats}'
+    )
+
+    print("\nComputing statistics on global rules...\n")
+    status = fidex.fidexGloStats(command)
+    if status != -1:
+        print("\nStatistics computed.")
+
     end_time_global_rules = time.time()
     full_time_global_rules = end_time_global_rules - start_time_global_rules
     full_time_global_rules = "{:.6f}".format(full_time_global_rules).rstrip("0").rstrip(".")
@@ -623,9 +641,7 @@ if get_images:
             scale_w = size1D / size_Width_proba_stat
             for antecedent in rule_to_print.antecedents: # TODO : handle stride, different filter sizes, etc
                 # area_index (size_Height_proba_stat, size_Width_proba_stat) : 0 : (1,1), 1: (1,2), ...
-                print(antecedent)
                 channel_id = antecedent.attribute % (nb_classes + nb_channels)
-                print(channel_id)
                 area_number = antecedent.attribute // (nb_classes + nb_channels)
                 area_Height = area_number // size_Width_proba_stat
                 area_Width = area_number % size_Width_proba_stat
