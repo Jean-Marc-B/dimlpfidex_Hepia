@@ -717,10 +717,10 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         if with_leaky_relu:
             raise ValueError("VGG with leakyRelu is not yet implemented.")
 
-        if height < 32 or width < 32:
-            input_tensor = Input(shape=(32, 32, 3))
-        else:
-            input_tensor = Input(shape=(height, width, 3))
+        # if height < 32 or width < 32:
+        #     input_tensor = Input(shape=(32, 32, 3))
+        # else:
+        input_tensor = Input(shape=(height, width, 3))
 
         resized_input = Resizing(224, 224, name='resizing_layer')(input_tensor)
 
@@ -1337,7 +1337,7 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
 
 ###############################################################
 
-def highlight_area_probability_image(image, rule, size_Width_proba_stat, filter_size, classes):
+def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
 
     nb_classes = len(classes)
 
@@ -1346,39 +1346,85 @@ def highlight_area_probability_image(image, rule, size_Width_proba_stat, filter_
 
     filtered_images = []
     combined_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+    mask_green_combined = np.zeros((size1D, size1D), dtype=bool)
+    mask_red_combined = np.zeros((size1D, size1D), dtype=bool)
+
+    # Scales of changes of original image to reshaped image
+    scale_h = size1D / size_Height_proba_stat
+    scale_w = size1D / size_Width_proba_stat
+
 
     for antecedent in rule.antecedents:
-        # Get attribute information
-        area_number = antecedent.attribute // nb_classes
+        channel_id = antecedent.attribute % (nb_classes + nb_channels)
+        area_number = antecedent.attribute // (nb_classes + nb_channels)
         area_Height = area_number // size_Width_proba_stat
-        area_Height_end = area_Height+filter_size[0][0]-1
         area_Width = area_number % size_Width_proba_stat
-        area_Width_end = area_Width+filter_size[0][1]-1
-        # print(area_Height, "-", area_Height_end)
-        # print(area_Width, "-", area_Width_end)
-
         filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
-        if antecedent.inequality:  # >=
-            filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
-            combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
-        else:  # <
-            filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
-            combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
+
+        if channel_id < nb_classes:
+            # Get attribute information
+            area_Height_end = area_Height+filter_size[0][0]-1
+            area_Width_end = area_Width+filter_size[0][1]-1
+            # print(area_Height, "-", area_Height_end)
+            # print(area_Width, "-", area_Width_end)
+
+            if antecedent.inequality:  # >=
+                filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
+                combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
+            else:  # <
+                filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
+                combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
+        else:
+            height_original = round(area_Height * scale_h)
+            width_original = round(area_Width * scale_w)
+            if antecedent.inequality:  # >=
+                filtered_image_intensity[height_original, width_original, :] = [0, 255, 0]  # Green
+                combined_image_intensity[height_original, width_original, :] = [0, 255, 0]
+            else:  # <
+                filtered_image_intensity[height_original, width_original, :] = [255, 0, 0]  # Red
+                combined_image_intensity[height_original, width_original, :] = [255, 0, 0]
+
+
+        # We force pixel specifics to be green or red
+        mask_green = (filtered_image_intensity[:, :, 1] >= 255).astype(bool)   # Pixels marked for green
+        mask_red = (filtered_image_intensity[:, :, 0] >= 255).astype(bool)     # Pixels marked for red
+
+        mask_green_combined |= mask_green
+        mask_red_combined |= mask_red
 
         filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8)
-
         filtered_image = original_image_rgb.copy()
         filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1] + filtered_image_intensity[:, :, 1], 0, 255)  # Green channel
-        filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0] + filtered_image_intensity[:, :, 0], 0, 255)    # Red channel
+        filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0] + filtered_image_intensity[:, :, 0], 0, 255)  # Red channel
+
+        # Green Pixels
+        filtered_image[mask_green] = [0, 255, 0]
+        # Red Pixels
+        filtered_image[mask_red] = [255, 0, 0]
 
         filtered_images.append(filtered_image)
+
     # Normalise combined image between 0 and 255
-    combined_image_intensity = np.clip(combined_image_intensity / np.max(combined_image_intensity) * 255, 0, 255).astype(np.uint8)
+
+    combined_masked_intensity = combined_image_intensity.copy()
+    combined_masked_intensity[mask_green_combined | mask_red_combined] = 0  # Ignore marked pixels for max calculation
+
+    # Normalizazion without marked pixels
+    combined_max_value = np.max(combined_masked_intensity)
+
+    if combined_max_value > 0:
+        combined_image_intensity = np.clip(combined_image_intensity / combined_max_value * 255, 0, 255)
+    else:
+        combined_image_intensity = np.zeros_like(combined_image_intensity)
 
     combined_image = original_image_rgb.copy()
     combined_image[:, :, 1] = np.clip(combined_image[:, :, 1] + combined_image_intensity[:, :, 1], 0, 255)  # Green channel
-    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + combined_image_intensity[:, :, 0], 0, 255)    # Red channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + combined_image_intensity[:, :, 0], 0, 255)  # Red channel
 
+    # Green Pixels
+    combined_image[mask_green_combined] = [0, 255, 0]
+    # Red Pixels
+    combined_image[mask_red_combined] = [255, 0, 0]
 
     # Plotting
 
@@ -1414,16 +1460,24 @@ def highlight_area_probability_image(image, rule, size_Width_proba_stat, filter_
     # Show each antecedent image
     for i,img in enumerate(filtered_images):
         antecedent = rule.antecedents[i]
-        area_number = antecedent.attribute // nb_classes
+        channel_id = antecedent.attribute % (nb_classes + nb_channels)
+        area_number = antecedent.attribute // (nb_classes + nb_channels)
         area_Height = area_number // size_Width_proba_stat
-        area_Height_end = area_Height+filter_size[0][0]-1
         area_Width = area_number % size_Width_proba_stat
-        area_Width_end = area_Width+filter_size[0][1]-1
-        class_name = classes[antecedent.attribute % nb_classes]
         img = img.astype(np.uint8)
         ineq = ">=" if antecedent.inequality else "<"
         axes[i+2].imshow(img)
-        axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
+        if channel_id < nb_classes:
+            area_Height_end = area_Height+filter_size[0][0]-1
+            area_Width_end = area_Width+filter_size[0][1]-1
+            class_name = classes[antecedent.attribute % nb_classes]
+            axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
+        else:
+            channel = channel_id - nb_classes
+            # Conversion of resized coordinates into originales
+            height_original = round(area_Height * scale_h)
+            width_original = round(area_Width * scale_w)
+            axes[i+2].set_title(f"Pixel_{height_original}x{width_original}x{channel}{ineq}{antecedent.value:.6f}")
         axes[i+2].axis('off')
     # Hide any remaining empty subplots if total_images < num_rows * num_columns
     for j in range(total_images, len(axes)):
