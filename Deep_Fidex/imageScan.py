@@ -49,7 +49,7 @@ test_version = True # Whether to launch with minimal data
 
 
 # Training CNN:
-with_train_cnn = True
+with_train_cnn = False
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -60,22 +60,22 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = True
+with_stats_computation = False
 with_train_second_model = True
 
 # Rule computation:
-with_global_rules = True
+with_global_rules = False
 
 # Image generation:
-get_images = True # With histograms
+get_images = False # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
@@ -396,7 +396,7 @@ if with_train_second_model:
             test_probas = np.loadtxt(test_stats_file)
             test_probas = test_probas.astype('float32')
             print("Probability stats loaded.")
-        #print(train_probas.shape) # (nb_train_samples, 4840)
+        #print(train_probas.shape) # (nb_train_samples, 4840) (22*22*10)
         #print(test_probas.shape) # (nb_test_samples, 4840)
 
         print("Adding original image...")
@@ -421,6 +421,9 @@ if with_train_second_model:
         test_probas = test_probas.astype('float32')
         train_stats_file = train_stats_file_with_image
         test_stats_file = test_stats_file_with_image
+        # print(train_probas.shape) #(nb_train_samples, 5324) (22*22*11)
+        # print(test_probas.shape)  #(nb_test_samples, 5324)
+
 
         print("original image added.")
 
@@ -614,13 +617,27 @@ if get_images:
                     raise ValueError("Wrong antecedent...")
         elif probability_stats:
             # Change antecedent with area and class involved
+
+            # Scales of changes of original image to reshaped image
+            scale_h = size1D / size_Height_proba_stat
+            scale_w = size1D / size_Width_proba_stat
             for antecedent in rule_to_print.antecedents: # TODO : handle stride, different filter sizes, etc
                 # area_index (size_Height_proba_stat, size_Width_proba_stat) : 0 : (1,1), 1: (1,2), ...
-                class_name = classes[antecedent.attribute % nb_classes]
-                area_number = antecedent.attribute // nb_classes
+                print(antecedent)
+                channel_id = antecedent.attribute % (nb_classes + nb_channels)
+                print(channel_id)
+                area_number = antecedent.attribute // (nb_classes + nb_channels)
                 area_Height = area_number // size_Width_proba_stat
                 area_Width = area_number % size_Width_proba_stat
-                antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+filter_size[0][0]-1}]x[{area_Width}-{area_Width+filter_size[0][1]-1}]"
+                if channel_id < nb_classes:
+                    class_name = classes[channel_id]
+                    antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+filter_size[0][0]-1}]x[{area_Width}-{area_Width+filter_size[0][1]-1}]"
+                else:
+                    channel = channel_id - nb_classes
+                    # Conversion of resized coordinates into originales
+                    height_original = round(area_Height * scale_h)
+                    width_original = round(area_Width * scale_w)
+                    antecedent.attribute = f"Pixel_{height_original}x{width_original}x{channel}"
 
         if os.path.exists(readme_file):
             os.remove(readme_file)
@@ -635,7 +652,7 @@ if get_images:
             elif activation_layer_stats:
                 highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
             elif probability_stats:
-                highlighted_image = highlight_area_probability_image(img, rule, size_Width_proba_stat, filter_size, classes)
+                highlighted_image = highlight_area_probability_image(img, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels)
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 
