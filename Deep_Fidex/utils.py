@@ -756,9 +756,9 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
         if with_leaky_relu:
-            model.add(Convolution2D(32, (5, 5), activation='leaky_relu'))
+            model.add(DepthwiseConv2D((5, 5), activation='leaky_relu'))
         else:
-            model.add(Convolution2D(32, (5, 5), activation='relu'))
+            model.add(DepthwiseConv2D((5, 5), activation='relu'))
         model.add(Dropout(0.3))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
