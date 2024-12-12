@@ -60,8 +60,8 @@ if histogram_stats + activation_layer_stats + probability_stats != 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
 
 
-with_stats_computation = False
-with_train_second_model = False
+with_stats_computation = True
+with_train_second_model = True
 
 # Rule computation:
 with_global_rules = True
@@ -76,6 +76,7 @@ simple_heat_map = False # Only evaluation on patches
 # Which dataset to launch
 dataset = "MNIST"
 #dataset = "CIFAR"
+#dataset = "testDataset"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
@@ -111,6 +112,16 @@ elif dataset == "CIFAR":     # for Cifar images
         7: "horse",
         8: "ship",
         9: "truck",
+    }
+
+elif dataset == "testDataset":
+    size1D = 20
+    nb_channels = 1
+    base_folder = "Test/"
+    data_type = "integer"
+    classes = {
+        0: "cl0",
+        1: "cl1",
     }
 
 nb_classes = len(classes)
@@ -155,7 +166,7 @@ if test_version:
     batch_size_second_model = 32
 else:
     model = "resnet"
-    nbIt = 80
+    nbIt = 4
     batch_size = 64 # To avoid memory problems on GPU
     batch_size_second_model = 64
 
@@ -196,8 +207,8 @@ if histogram_stats:
 
 #----------------------------
 # For second model training
-second_model = "cnn"
-#second_model = "randomForests"
+#second_model = "cnn"
+second_model = "randomForests"
 if not probability_stats:
     # second_model = "randomForests"
     second_model = "gradientBoosting"
@@ -423,6 +434,8 @@ if with_train_second_model:
         test_probas = test_probas.astype('float32')
         train_stats_file = train_stats_file_with_image
         test_stats_file = test_stats_file_with_image
+        # print("Probas de 2024 depuis train_probas(modifié), pour le sample 12 : ", train_probas[56][2024])
+        # print("Probas de 2024 depuis test_probas(modifié), pour le sample 12 : ", test_probas[56][2024])
         # print(train_probas.shape) #(nb_train_samples, 5324) (22*22*11)
         # print(test_probas.shape)  #(nb_test_samples, 5324)
 
@@ -634,6 +647,8 @@ if get_images:
                 else:
                     raise ValueError("Wrong antecedent...")
         elif probability_stats:
+            # attribut_de_test = 2024 # -> classe :  0, Height :  8, Width :  8
+
             # Change antecedent with area and class involved
 
             # Scales of changes of original image to reshaped image
@@ -643,8 +658,14 @@ if get_images:
                 # area_index (size_Height_proba_stat, size_Width_proba_stat) : 0 : (1,1), 1: (1,2), ...
                 channel_id = antecedent.attribute % (nb_classes + nb_channels)
                 area_number = antecedent.attribute // (nb_classes + nb_channels)
+                # channel_id = attribut_de_test % (nb_classes + nb_channels)
+                # area_number = attribut_de_test // (nb_classes + nb_channels)
                 area_Height = area_number // size_Width_proba_stat
                 area_Width = area_number % size_Width_proba_stat
+                # print("classe : ", channel_id)
+                # print("Height : ", area_Height)
+                # print("Width : ", area_Width)
+                # exit()
                 if channel_id < nb_classes:
                     class_name = classes[channel_id]
                     antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+filter_size[0][0]-1}]x[{area_Width}-{area_Width+filter_size[0][1]-1}]"
