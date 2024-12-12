@@ -1,22 +1,22 @@
 from __future__ import annotations
 import src.constants as constants
+from math import ceil, floor
 import json
 import math
+import copy
 import os
 
 
 class Antecedant:
-    def __init__(self, attribute_id: dict, inequality: str, value: float) -> None:
+    def __init__(
+        self, attribute_id: dict, inequality: str, value: float, attributes: list[str]
+    ) -> None:
         self.attribute_id = attribute_id
+        self.attribute_name = attributes[attribute_id]
         self.inequality = inequality
         self.value = value
 
     def __repr__(self) -> str:
-        # nodes_examined = nodes_removed
-        # TODO: sentinel_node_biopsy exlue planned_axillary_dissection
-        # TODO: age, weight, height, nodes_involved, tumor_size, KI_67, fractions, nodes_removed
-        # for these, if < then floor()
-        # elif >= then ceil()
         ineq_str = ">=" if self.inequality else "<"
         return f"{self.attribute_id} {ineq_str} {self.value:.4f}"
 
@@ -39,11 +39,10 @@ class Antecedant:
             "value": self.value,
         }
 
-    def pretty_repr(self, attributes: list[str]) -> str:
+    def pretty_repr(self) -> str:
         ineq_str = ">=" if self.inequality else "<"
-        attribute = attributes[self.attribute_id]
 
-        return f"{attribute} {ineq_str} {self.value:.4f}"
+        return f"{self.attribute_name} {ineq_str} {self.value:.4f}"
 
     # designed for unicancer format
     def to_string(self) -> str:
@@ -54,9 +53,19 @@ class Antecedant:
     def list_to_dict(antecedants_list: list[Antecedant]) -> dict:
         return [antecedant.to_dict() for antecedant in antecedants_list]
 
+    def round(self) -> Antecedant:
+        res = copy.deepcopy(self)
+
+        if res.inequality:
+            res.value = ceil(res.value)
+        else:
+            res.value = floor(res.value)
+
+        return res
+
 
 class Rule:
-    def __init__(self, json_data: dict) -> None:
+    def __init__(self, json_data: dict, attributes: list[str]) -> None:
         try:
             self.id = -1
             self.covering = json_data["coveringSize"]
@@ -72,7 +81,9 @@ class Rule:
                 inequality = antecedant["inequality"]
                 value = antecedant["value"]
 
-                self.antecedants.append(Antecedant(attribute_id, inequality, value))
+                self.antecedants.append(
+                    Antecedant(attribute_id, inequality, value, attributes)
+                )
 
         except KeyError as e:
             print(f"Rule creation from JSON error: {e}")
@@ -137,10 +148,20 @@ Fidelity: {self.fidelity:.3f}
 Accuracy: {self.accuracy:.3f}   
 Antecedants:\n\t"""
         for antecedant in self.antecedants:
-            string += antecedant.pretty_repr(attributes) + " "
+            string += antecedant.pretty_repr() + " "
         string += f"\nOutput: {labels[self.output]}"
 
         return string
+
+    def postprocess(self):
+        # nodes_examined = nodes_removed
+        # TODO: sentinel_node_biopsy exlue planned_axillary_dissection (do not touch yet)
+
+        # TODO: get rid of double negated unknown features 
+        # TODO: age, weight, height, nodes_involved, tumor_size, KI_67, fractions, nodes_removed
+        # for these, if < then floor() elif >= then ceil()
+        # TODO: if floor is used, change < to <=
+        pass
 
     @staticmethod
     def from_json_file(path: str) -> list[Rule]:
@@ -165,8 +186,8 @@ Antecedants:\n\t"""
         }
 
     @staticmethod
-    def list_from_dict(data: dict) -> list[Rule]:
-        return [Rule(rule_data) for rule_data in data["rules"]]
+    def list_from_dict(data: dict, attributes: list[str]) -> list[Rule]:
+        return [Rule(rule_data, attributes) for rule_data in data["rules"]]
 
 
 class GlobalRules:
@@ -195,12 +216,12 @@ class GlobalRules:
         return len(self.rules)
 
     @staticmethod
-    def from_json_file(path: str):
+    def from_json_file(path: str, attributes: list[str]):
         with open(path, "r") as fp:
             data = json.load(fp)
 
         return GlobalRules(
-            rules=Rule.list_from_dict(data),
+            rules=Rule.list_from_dict(data, attributes),
             positive_index_class=data.get("positive index class", None),
             threshold=data.get("threshold", None),
         )

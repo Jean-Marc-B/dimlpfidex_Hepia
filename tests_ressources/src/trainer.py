@@ -116,6 +116,6 @@ class Trainer:
             "--lowest_min_fidelity 1.0 "
             "--dropout_dim 0.0 "
             "--dropout_hyp 0.0 "
-            "--decision_threshold 0.06 "
+            "--decision_threshold 0.05 "
             "--positive_class_index 1"
         )
