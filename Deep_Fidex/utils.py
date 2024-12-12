@@ -958,6 +958,10 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
 
     else:
         predictions = CNNModel.predict(filtered_images, verbose=0)
+        # if sample_id == 56:
+        #     index = positions.index((8,8))
+        #     prediction_at_target = predictions[index]
+        #     print(f"La prédiction pour le sample_id {sample_id} à la position Height=8 et Width=8 et Classe=0 est : {prediction_at_target[0]}")
         return predictions, positions, nb_areas_per_filter
 
 ###############################################################
