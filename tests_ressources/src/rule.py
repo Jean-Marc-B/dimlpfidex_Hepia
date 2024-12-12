@@ -129,15 +129,11 @@ Output: {self.output}"""
 
     # designed for unicancer format
     def to_str_list(self):
-        base_rule = [
-            str(self.id),
-        ]
-
         list_str = [""] * 79
         for antecedant in self.antecedants:
             list_str[antecedant.attribute_id] = antecedant.to_string()
 
-        return base_rule + list_str
+        return list_str
 
     def pretty_repr(self, attributes: list[str]) -> str:
         labels = attributes[-2:]

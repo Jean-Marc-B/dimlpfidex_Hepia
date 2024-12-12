@@ -12,6 +12,7 @@ from src.rule import *
 import pandas as pd
 import numpy as np
 import math
+import csv
 import os
 
 
@@ -39,19 +40,22 @@ class Patient:
 
     def to_str_list(self) -> list[list[str]]:
         res = []
-        row = [
-            str(self.study_id),
-            str(self.site_idn),
-            str(self.site_name),
-            str(self.subj_id),
-            str(self.visit),
-            str(round(self.risk * 100, 4)),
-            str(round(self.low_interval * 100, 4)),
-            str(round(self.high_interval * 100, 4)),
-        ]
 
         for rule in self.selected_rules:
-            res.append(row + [str(rule.covering)] + rule.to_str_list())
+            row = [
+                str(self.study_id),
+                str(self.site_idn),
+                str(self.site_name),
+                str(self.subj_id),
+                str(self.visit),
+                str(rule.id),
+                str(round(self.risk * 100, 4)),
+                str(round(self.low_interval * 100, 4)),
+                str(round(self.high_interval * 100, 4)),
+                str(rule.covering),
+            ] + rule.to_str_list()
+
+            res.append(row)
 
         return res
 
@@ -211,28 +215,8 @@ class Patient:
         preds_filepath = os.path.join(self.absdir, "prediction.csv")
         self.risk = np.loadtxt(preds_filepath)[1]
 
-    def format_results(self) -> str:
-        string = ""
-
-        for row in self.to_str_list():
-            string += ",".join(row) + "\n"
-
-        return string
-
-    def write_results(self, attributes: list[str]) -> None:
-        unicancer_headers = ["VISIT", "STUDY_ID", "SITE_NAME", "SITENAME", "SUBJECT_ID"]
-        rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "RULE_ID"]
-        headers = unicancer_headers + rule_headers + attributes
-
-        today = datetime.today().strftime("%Y%m%d%H%M")
-
-        with open(
-            f"{self.project_abspath}/{constants.OUTPUT_DIRNAME}/{self.subj_id}_results_{today}.csv",
-            "w",
-        ) as fp:
-            fp.write(",".join(headers) + "\n")
-            for row in self.to_str_list():
-                fp.write(",".join(row) + "\n")
+    def format_results(self) -> list[list[str]]:
+        return [row for row in self.to_str_list()]
 
     def __repr__(self) -> str:
         if len(self.selected_rules) < 1:
@@ -330,14 +314,17 @@ def write_results(abspath: str, patients: list[Patient]) -> None:
 
     attributes = read_attributes_file(abspath)
     unicancer_headers = ["STUDYID", "SITEIDN", "SITENAME", "SUBJID", "VISIT"]
-    rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "COVERING", "RULE_ID"]
+    rule_headers = ["RULE_ID", "RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "COVERING"]
 
     headers = unicancer_headers + rule_headers + attributes[:-2]
 
-    string = ",".join(headers) + "\n"
+    data = [headers]
 
     for patient in patients:
-        string += patient.format_results()
+        for record in patient.format_results():
+            data.append(record)
 
-    with open(write_path, "w") as fp:
-        fp.write(string)
+    reorder_data_columns(data).to_csv(write_path, index=False)
+
+    # with open(write_path, "w") as fp:
+    #     fp.write(string)
