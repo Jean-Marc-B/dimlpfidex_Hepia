@@ -26,18 +26,20 @@ if __name__ == "__main__":
 
     print("Loading global rules...")
     global_rules = GlobalRules.from_json_file(
-        os.path.join(constants.MODEL_DIRNAME, "global_rules_denormalized.json")
+        os.path.join(constants.MODEL_DIRNAME, "global_rules_denormalized.json"),
+        read_attributes_file(abspath),
     )
-    nb_global_rules = len(global_rules)
 
-    npatients = len(patients)
-    print(f"Rule extraction is going to be performed on {npatients} patients")
+    nb_global_rules = len(global_rules)
+    nb_patients = len(patients)
+
+    print(f"Rule extraction is going to be performed on {nb_patients} patients")
     for i, patient in enumerate(patients):
-        print(f"Extracting rules for patient {i+1}/{npatients}...")
+        print(f"Extracting rules for patient {i+1}/{nb_patients}...")
         global_rules = patient.extract_rules(global_rules)
         print(f"Extraction done, {len(patient.selected_rules)} rules found")
 
-    print(f"Rule extraction done for {npatients} patients")
+    print(f"Rule extraction done for {nb_patients} patients")
     print(f"Writing UNICANCER results file...")
     write_results(abspath, patients)
     print(f"File successfully written")
