@@ -51,7 +51,7 @@ class Patient:
         ]
 
         for rule in self.selected_rules:
-            res.append(row + rule.to_str_list())
+            res.append(row + [str(rule.covering)] + rule.to_str_list())
 
         return res
 
@@ -94,10 +94,18 @@ class Patient:
         else:
             selected_rules_dict = read_json_file(f"{self.absdir}/extracted_rules.json")
 
-        self.selected_rules = Rule.list_from_dict(selected_rules_dict)
+        attributes = read_attributes_file(self.project_abspath)
+        self.selected_rules = Rule.list_from_dict(selected_rules_dict, attributes)
 
         # return updated global rules
-        return self.__process_selected_rules(global_rules)
+        updated_global_rules = self.__process_selected_rules(global_rules)
+
+        # write human readable file
+        human_readable_filepath = os.path.join(self.absdir, "readable_output.txt")
+        with open(human_readable_filepath, "w") as f:
+            f.write(self.pretty_repr(attributes))
+
+        return updated_global_rules
 
     def __get_normalization_config(self) -> str:
         return (
@@ -130,6 +138,7 @@ class Patient:
             f"--test_data_file {self.reldir}/input_data_normalized.csv "
             f"--test_pred_file {self.reldir}/prediction.csv "
             f"--weights_file {constants.MODEL_DIRNAME}/dimlpBT.wts "
+            f"--attributes_file {constants.MODEL_DIRNAME}/attributes.txt "
             f"--global_rules_file {constants.MODEL_DIRNAME}/global_rules.json "
             f"--console_file {self.reldir}/fidexglo_{today}.log "
             "--nb_attributes 79 "
@@ -147,12 +156,14 @@ class Patient:
         )
 
     def __get_denscls_config(self) -> str:
+        today = datetime.today().strftime("%Y_%m_%d")
         return (
             f"--root_folder {self.project_abspath} "
             f"--train_data_file {constants.MODEL_DIRNAME}/train_data_normalized.csv "
             f"--train_class_file {constants.MODEL_DIRNAME}/train_classes.csv "
             f"--test_data_file {self.reldir}/input_data_normalized.csv "
             f"--train_pred_outfile {constants.MODEL_DIRNAME}/train_pred_out.csv "
+            f"--attributes_file {constants.MODEL_DIRNAME}/attributes.txt "
             f"--weights_file {constants.MODEL_DIRNAME}/dimlpBT.wts "
             f"--stats_file {self.reldir}/densCls_stats.txt "
             f"--hidden_layers_file {constants.MODEL_DIRNAME}/hidden_layers.out "
@@ -160,7 +171,7 @@ class Patient:
             "--nb_attributes 79 "
             "--nb_classes 2 "
             f"--test_pred_outfile {self.reldir}/prediction.csv "
-            f"--console_file {self.reldir}/202412031114.log"
+            f"--console_file {self.reldir}/denscls_{today}.log"
         )
 
     def __process_selected_rules(self, global_rules: GlobalRules) -> GlobalRules:
@@ -190,12 +201,11 @@ class Patient:
 
         # setting risk (output of 2nd output neuron)
         self.risk = np.loadtxt(preds_filepath)[1]
-        
+
         # setting upper and lower confidence interval
         interval = (1.96 / math.sqrt(data["nbNets"])) * data["stds"][1]
         self.low_interval = data["avgs"][1] - interval
         self.high_interval = data["avgs"][1] + interval
-        
 
     def __set_risk(self):
         preds_filepath = os.path.join(self.absdir, "prediction.csv")
@@ -253,7 +263,10 @@ Selected rules: {rules_str}"""
             + "\n"
         )
 
-        return f"""Patient:
+        with pd.option_context("display.max_rows", None, "display.max_columns", None):
+            clinical_data_str = self.clinical_data.__repr__()
+
+        return f"""
 Study ID: {self.study_id}
 Site IDN: {self.site_idn}
 Site name: {self.site_name}
@@ -262,8 +275,10 @@ Visit: {self.visit}
 Risk: {self.risk}
 Low conf. int.: {self.low_interval}
 High conf. int.: {self.high_interval}
-Patient's data: 
-{self.clinical_data}
+
+Patient's initial data: 
+{clinical_data_str}
+
 Selected rules: 
 {rules_str}
         """
@@ -290,7 +305,6 @@ def write_patients(abspath: str) -> list[Patient]:
 
     return patients
 
-
 # this is for testing puroposes only
 def write_samples_file(abspath: str, n: int) -> list[Patient]:
     metadata_file = os.path.join(
@@ -310,15 +324,15 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
 
     return patients
 
-
 def write_results(abspath: str, patients: list[Patient]) -> None:
     today = datetime.today().strftime("%Y_%m_%d")
     write_path = os.path.join(abspath, constants.OUTPUT_DIRNAME, f"results_{today}.csv")
 
     attributes = read_attributes_file(abspath)
     unicancer_headers = ["STUDYID", "SITEIDN", "SITENAME", "SUBJID", "VISIT"]
-    rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "RULE_ID"]
-    headers = unicancer_headers + rule_headers + attributes
+    rule_headers = ["RISK", "LOW_INTERVAL", "HIGH_INTERVAL", "COVERING", "RULE_ID"]
+
+    headers = unicancer_headers + rule_headers + attributes[:-2]
 
     string = ",".join(headers) + "\n"
 
