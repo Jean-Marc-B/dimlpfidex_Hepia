@@ -277,7 +277,16 @@ def write_patients(abspath: str) -> list[Patient]:
         exit()
 
     # TODO: check if read_excel is adapted
-    metadata = pd.read_excel(input_filepath, index_col=False).iloc[:, :5]
+    ext = os.path.splitext(input_filepath)[1].lower()
+
+    if ext in [".xls", ".xlsx", ".xlsm", ".xlsb", ".odf", ".ods", ".odt"]:
+        metadata = pd.read_excel(input_filepath, index_col=False).iloc[:, :5]
+
+    elif ext == ".csv":
+        metadata = pd.read_csv(input_filepath, index_col=False).iloc[:, :5]
+    else:
+        raise NotImplementedError(f"Support for {ext} extension in {input_filepath} file is not implemented.")
+
     clinical_data = dh.obtain_data(input_filepath, training=False)
     clinical_data = clinical_data.assign(
         BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3)
