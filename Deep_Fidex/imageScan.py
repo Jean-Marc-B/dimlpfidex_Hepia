@@ -49,33 +49,34 @@ test_version = True # Whether to launch with minimal data
 
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
 histogram_stats = False
 activation_layer_stats = False
-probability_stats = True
+probability_stats = False
+probability_multi_networks_stats = True
 
-if histogram_stats + activation_layer_stats + probability_stats != 1:
-    raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats and probability_stats.")
+if histogram_stats + activation_layer_stats + probability_stats + probability_multi_networks_stats!= 1:
+    raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats, probability_stats and probability_multi_networks_stats.")
 
 
 with_stats_computation = True
 with_train_second_model = True
 
 # Rule computation:
-with_global_rules = True
+with_global_rules = False
 
 # Image generation:
-get_images = True # With histograms
+get_images = False # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 #dataset = "testDataset"
 
 if dataset == "MNIST":     # for MNIST images
@@ -142,13 +143,23 @@ elif activation_layer_stats:
     scan_folder += "Activations_Sum/"
 elif probability_stats:
     scan_folder += "Probability_Images/"
+elif probability_multi_networks_stats:
+    scan_folder += "Probability_Multi_Nets_Images/"
 
 #----------------------------
 # Files
-train_data_file = base_folder + "trainData.txt"
-train_class_file = base_folder + "trainClass.txt"
-test_data_file = base_folder + "testData.txt"
-test_class_file = base_folder + "testClass.txt"
+test_particle = ""
+if test_version:
+    test_particle = "_test_version"
+train_data_file = base_folder + "trainData" + test_particle + ".txt"
+train_class_file = base_folder + "trainClass" + test_particle + ".txt"
+test_data_file = base_folder + "testData" + test_particle + ".txt"
+test_class_file = base_folder + "testClass" + test_particle + ".txt"
+if test_version:
+    train_data_file = base_folder + "trainData_test_version.txt"
+    train_class_file = base_folder + "trainClass_test_version.txt"
+    test_data_file = base_folder + "testData_test_version.txt"
+    test_class_file = base_folder + "testClass_test_version.txt"
 model_file = base_folder + scan_folder + "scanModel.keras"
 train_pred_file = base_folder + scan_folder + "train_pred.out"
 test_pred_file = base_folder + scan_folder + "test_pred.out"
@@ -184,7 +195,7 @@ if histogram_stats:
 elif activation_layer_stats:
     train_stats_file = base_folder + scan_folder + "train_activation_sum.txt"
     test_stats_file = base_folder + scan_folder + "test_activation_sum.txt"
-elif probability_stats:
+elif probability_stats or probability_multi_networks_stats:
     train_stats_file = base_folder + scan_folder + "train_probability_images.txt"
     test_stats_file = base_folder + scan_folder + "test_probability_images.txt"
     train_stats_file_with_image = base_folder + scan_folder + "train_probability_images_with_original_img.txt"
@@ -207,9 +218,9 @@ if histogram_stats:
 
 #----------------------------
 # For second model training
-#second_model = "cnn"
-second_model = "randomForests"
-if not probability_stats:
+second_model = "cnn"
+#second_model = "randomForests"
+if not (probability_stats or probability_multi_networks_stats):
     # second_model = "randomForests"
     second_model = "gradientBoosting"
     # second_model = "dimlpTrn"
@@ -240,11 +251,14 @@ dropout_dim = 0.9
 global_rules_with_test_stats = base_folder + scan_folder + "globalRulesWithStats.json"
 global_rules_stats = base_folder + scan_folder + "global_rules_stats.txt"
 
-if probability_stats:
+if probability_stats or probability_multi_networks_stats:
     size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
     size_Width_proba_stat = size1D - filter_size[0][1] + 1
-    nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*(nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
-    output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
+    if probability_stats:
+        nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*(nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
+        output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
+    elif probability_multi_networks_stats:
+        nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*3 # We need 3 channels
 #----------------------------
 # Folder for output images
 rules_folder = base_folder + scan_folder + "Rules"
@@ -365,7 +379,7 @@ if with_stats_computation:
         output_data(test_sums, test_stats_file)
         print("Sums saved.")
 
-    elif probability_stats:
+    elif probability_stats or probability_multi_networks_stats:
         print("\nComputing train probability images of patches...\n")
         # Get sums for each train sample
 
@@ -394,14 +408,10 @@ if with_stats_computation:
 ##############################################################################
 # Train second model with stats
 
-if test_version:
-    train_class_file = base_folder + "trainClass_temp.txt"
-    test_class_file = base_folder + "testClass_temp.txt"
-
 if with_train_second_model:
     start_time_train_second_model = time.time()
 
-    if probability_stats:
+    if probability_stats or probability_multi_networks_stats:
         if not with_stats_computation:
             print("Loading probability stats...")
             train_probas = np.loadtxt(train_stats_file)
@@ -412,35 +422,62 @@ if with_train_second_model:
         #print(train_probas.shape) # (nb_train_samples, 4840) (22*22*10)
         #print(test_probas.shape) # (nb_test_samples, 4840)
 
-        print("Adding original image...")
+        if probability_stats or probability_multi_networks_stats:
 
-        train_probas = train_probas.reshape(nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
-        X_train_reshaped = tf.image.resize(X_train, (size_Height_proba_stat, size_Width_proba_stat))
-        train_probas = np.concatenate((train_probas, X_train_reshaped[:nb_train_samples]), axis=-1)
-        train_probas = train_probas.reshape(nb_train_samples, -1)
+            print("Adding original image...")
 
-        test_probas = test_probas.reshape(nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
-        X_test_reshaped = tf.image.resize(X_test, (size_Height_proba_stat, size_Width_proba_stat))
-        test_probas = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1)
-        test_probas = test_probas.reshape(nb_test_samples, -1)
+            train_probas = train_probas.reshape(nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
+            X_train_reshaped = tf.image.resize(X_train, (size_Height_proba_stat, size_Width_proba_stat))
+            train_probas = np.concatenate((train_probas, X_train_reshaped[:nb_train_samples]), axis=-1)
+            train_probas = train_probas.reshape(nb_train_samples, -1)
 
-        # Update stats data
-        output_data(train_probas, train_stats_file_with_image)
-        output_data(test_probas, test_stats_file_with_image)
+            test_probas = test_probas.reshape(nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
+            X_test_reshaped = tf.image.resize(X_test, (size_Height_proba_stat, size_Width_proba_stat))
+            test_probas = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1)
+            test_probas = test_probas.reshape(nb_test_samples, -1)
 
-        train_probas = np.loadtxt(train_stats_file_with_image)
-        train_probas = train_probas.astype('float32')
-        test_probas = np.loadtxt(test_stats_file_with_image)
-        test_probas = test_probas.astype('float32')
-        train_stats_file = train_stats_file_with_image
-        test_stats_file = test_stats_file_with_image
-        # print("Probas de 2024 depuis train_probas(modifié), pour le sample 12 : ", train_probas[56][2024])
-        # print("Probas de 2024 depuis test_probas(modifié), pour le sample 12 : ", test_probas[56][2024])
-        # print(train_probas.shape) #(nb_train_samples, 5324) (22*22*11)
-        # print(test_probas.shape)  #(nb_test_samples, 5324)
+            # Update stats data
+            output_data(train_probas, train_stats_file_with_image)
+            output_data(test_probas, test_stats_file_with_image)
 
+            train_probas = np.loadtxt(train_stats_file_with_image)
+            train_probas = train_probas.astype('float32')
+            test_probas = np.loadtxt(test_stats_file_with_image)
+            test_probas = test_probas.astype('float32')
+            train_stats_file = train_stats_file_with_image
+            test_stats_file = test_stats_file_with_image
+            # print("Probas de 2024 depuis train_probas(modifié), pour le sample 12 : ", train_probas[56][2024])
+            # print("Probas de 2024 depuis test_probas(modifié), pour le sample 12 : ", test_probas[56][2024])
+            # print(train_probas.shape) #(nb_train_samples, 5324) (22*22*11)
+            # print(test_probas.shape)  #(nb_test_samples, 5324)
 
-        print("original image added.")
+            print("original image added.")
+
+        # elif probability_multi_networks_stats:
+        #     print("Creating each data sets...")
+        #     train_probas = train_probas.reshape(nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
+        #     test_probas = test_probas.reshape(nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
+        #     for id_probas, probas in enumerate([train_probas, test_probas]):
+        #         if id_probas == 0:
+        #             original_img_BW_reshaped = tf.image.resize(X_train, (size_Height_proba_stat, size_Width_proba_stat))
+        #         else:
+        #             original_img_BW_reshaped = tf.image.resize(X_test, (size_Height_proba_stat, size_Width_proba_stat))
+        #         if nb_channels == 3:
+        #             original_img_BW_reshaped = tf.image.rgb_to_grayscale(original_img_BW_reshaped)
+        #         for i in range(nb_classes):
+        #             if id_probas == 0:
+        #                 data_filename = "train_probability_images_with_original_img_" + str(i) + ".txt"
+        #             else:
+        #                 data_filename = "test_probability_images_with_original_img_" + str(i) + ".txt"
+
+        #             built_data = np.empty((nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
+        #             built_data[:,:,:,0] = probas[:,:,:,i]
+        #             built_data[:,:,:,1] = 1-probas[:,:,:,i]
+        #             built_data[:,:,:,2] = original_img_BW_reshaped[..., 0]
+
+        #             output_data(built_data, base_folder + scan_folder + data_filename)
+
+        #     print("Data sets created...")
 
         if second_model == "cnn":
             train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_val, nbQuantLevels, hiknot, second_model_output_rules)
@@ -452,7 +489,10 @@ if with_train_second_model:
             second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
             second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
 
-            trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes+nb_channels, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train[0:nb_train_samples], test_probas_h1, Y_test[0:nb_test_samples], second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+            if probability_stats:
+                trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes+nb_channels, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+            elif probability_multi_networks_stats:
+                exit()
         else:
 
             command = (
