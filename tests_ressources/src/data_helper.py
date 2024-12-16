@@ -338,12 +338,14 @@ def __manage_N_retroactively(attributes: pd.DataFrame) -> pd.DataFrame:
 
 def __check_dtypes(data: pd.DataFrame) -> None:
     def unknown2nan(c, x):
-        if x == "UNKNOWN":
-            return np.nan
-        elif type(x) == np.float64 or type(x) == np.int64:
-            return x
-        else:
-            raise ValueError(f"Value '{x}' not valid for column {c}. Should be either of type [np.int64, np.float64] or have UNKNOWN value")
+        try:
+            x = float(x)
+            return float(x)
+        except ValueError:
+            if x == "UNKNOWN":
+                return np.nan
+            else:
+                raise ValueError(f"Value '{x}' not valid for column {c}. Should be either of type [np.int64, np.float64] or have UNKNOWN value")
 
     dtypes = data.dtypes
     for c in dtypes.index:
@@ -505,7 +507,7 @@ def __obtain_trial_data(file_path: str) -> pd.DataFrame:
     # same for sentinel node biopsy
     attributes["SENTINEL NODE BIOPSY"] = attributes["SENTINEL NODE BIOPSY"].apply(lambda x: __manage_categorical(x))
 
-    attributes = one_hot_encoding(attributes, dummy_na=True)
+    attributes = one_hot_encoding(attributes, dummy_na=False) # There should not be any empty value for categorical data
 
     # check missing columns and adding them filled with 0s since they are categorical and imply that one of the value is already present
     attributes.rename(
