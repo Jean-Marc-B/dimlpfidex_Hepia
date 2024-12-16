@@ -592,6 +592,10 @@ def image_to_rgb(image):
 
     return original_image_rgb
 
+# Convert image to black and white
+def image_to_black_and_white(image):
+    return np.dot(image[...,:3], [0.2989, 0.5870, 0.1140])
+
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
