@@ -57,7 +57,6 @@ def reorder_data_columns(data: list[list[str]]) -> pd.DataFrame:
             "SMOKER_FORMER",
             "SMOKER_NEVER",
             "SMOKER_UNKNOWN",
-            "SMOKER_FORMER",
             "SIDE_OF_PRIMARY_RIGHT",
             "SIDE_OF_PRIMARY_UNKNOWN",
             "SIDE_OF_PRIMARY_LEFT",
@@ -189,7 +188,11 @@ def read_json_file(path: str) -> dict:
 
 def init_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train", action="store_true")
+    parser.add_argument(
+        "--train",
+        help="Trains and extract global rules using dimlpBT and fidexGloRules algorithms. If set, must be followed by a float [0.0,1.0] representing the amount of data used as test",
+        type=float,
+    )
     parser.add_argument("--test", type=int)
 
     return parser.parse_args()
