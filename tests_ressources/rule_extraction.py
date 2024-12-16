@@ -11,17 +11,18 @@ if __name__ == "__main__":
     constants.check_directories_existance(abspath)
 
     if args.train:
+        if args.train < 0.0 or args.train < 1.0:
+            raise ValueError("Train argument cannot be outside of [0.0,1.0].")
+        
         trainer = Trainer(abspath)
         normalize = True
-        trainer.train(normalize)
+        trainer.train(normalize, args.train)
         exit(0)
 
     elif args.test:
-        # write_train_data(abspath, data, labels)
         patients = write_samples_file(abspath, args.test)
 
     else:
-        # write_train_data(abspath, data, labels)
         patients = write_patients(abspath)
 
     print("Loading global rules...")
