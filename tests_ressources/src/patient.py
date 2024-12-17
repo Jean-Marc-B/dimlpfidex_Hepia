@@ -12,7 +12,6 @@ from src.rule import *
 import pandas as pd
 import numpy as np
 import math
-import csv
 import os
 
 
@@ -179,17 +178,16 @@ class Patient:
         )
 
     def __process_selected_rules(self, global_rules: GlobalRules) -> GlobalRules:
-        updated_selected_rules = []
-
-        for rule in self.selected_rules:
+        for i in range(len(self.selected_rules)):
+            rule = self.selected_rules[i]
             id = global_rules.get_rule_id(rule)
+
             if id == -1:
-                id == len(global_rules.rules)
+                id = len(global_rules.rules)
                 global_rules.rules.append(rule)  # save generated rule if not found
 
-            updated_selected_rules.append(rule.set_id(id))
+            rule.set_id(id)
 
-        self.selected_rules = updated_selected_rules
         return global_rules
 
     def __rewrite_extracted_rules_file(self) -> None:
@@ -285,7 +283,9 @@ def write_patients(abspath: str) -> list[Patient]:
     elif ext == ".csv":
         metadata = pd.read_csv(input_filepath, index_col=False).iloc[:, :5]
     else:
-        raise NotImplementedError(f"Support for {ext} extension in {input_filepath} file is not implemented.")
+        raise NotImplementedError(
+            f"Support for {ext} extension in {input_filepath} file is not implemented."
+        )
 
     clinical_data = dh.obtain_data(input_filepath, training=False)
     clinical_data = clinical_data.assign(
@@ -297,6 +297,7 @@ def write_patients(abspath: str) -> list[Patient]:
         patients.append(Patient(metadata.iloc[i], clinical_data.iloc[i], abspath))
 
     return patients
+
 
 # this is for testing puroposes only
 def write_samples_file(abspath: str, n: int) -> list[Patient]:
@@ -317,6 +318,7 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
 
     return patients
 
+
 def write_results(abspath: str, patients: list[Patient]) -> None:
     today = datetime.today().strftime("%Y_%m_%d")
     write_path = os.path.join(abspath, constants.OUTPUT_DIRNAME, f"results_{today}.csv")
@@ -334,6 +336,3 @@ def write_results(abspath: str, patients: list[Patient]) -> None:
             data.append(record)
 
     reorder_data_columns(data).to_csv(write_path, index=False)
-
-    # with open(write_path, "w") as fp:
-    #     fp.write(string)
