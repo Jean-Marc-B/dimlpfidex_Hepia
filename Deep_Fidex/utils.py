@@ -596,6 +596,40 @@ def image_to_rgb(image):
 def image_to_black_and_white(image):
     return np.dot(image[...,:3], [0.2989, 0.5870, 0.1140])
 
+def compute_max_predictions(file_list, output_file, nb_samples):
+    """
+    Reads a file list of predictions and save in a file the index of max class probability in one hot format for each sample (line).
+    """
+    nb_classes = len(file_list)
+    max_probs = None
+    max_indices = None
+    nb_samples = -1
+
+    # Loop on each files (classes)
+    for class_id, file_name in enumerate(file_list):
+        print(f"Processing {file_name} for class {class_id}...")
+
+        # Read probas
+        current_probs = np.loadtxt(file_name, usecols=0)  # Take first value (class proba)
+
+        if max_probs is None:
+            nb_samples = len(current_probs)
+            max_probs = current_probs
+            max_indices = np.full(nb_samples, class_id)
+        else:
+            # Update max scores
+            mask = current_probs > max_probs
+            max_probs[mask] = current_probs[mask]
+            max_indices[mask] = class_id
+
+    print("Generating one-hot encoded output...")
+    one_hot_encoded = np.zeros((nb_samples, nb_classes), dtype=int)
+    one_hot_encoded[np.arange(nb_samples), max_indices] = 1
+
+    # Sauvegarder dans un fichier
+    np.savetxt(output_file, one_hot_encoded, fmt='%d')
+    print(f"Saved one-hot encoded predictions to {output_file}.")
+
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
