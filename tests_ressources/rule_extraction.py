@@ -1,8 +1,9 @@
+from src.global_rules import GlobalRules
 import src.constants as constants
 from src.utils import init_args
 from src.trainer import Trainer
 from src.patient import *
-from src.rule import *
+import time
 import os
 
 if __name__ == "__main__":
@@ -33,15 +34,22 @@ if __name__ == "__main__":
 
     nb_global_rules = len(global_rules)
     nb_patients = len(patients)
+    total_elapsed = 0.0
 
     print(f"Rule extraction is going to be performed on {nb_patients} patients")
     for i, patient in enumerate(patients):
         print(f"Extracting rules for patient {i+1}/{nb_patients}...")
-        global_rules = patient.extract_rules(global_rules)
-        print(f"Extraction done, {len(patient.selected_rules)} rules found")
 
-    print(f"Rule extraction done for {nb_patients} patients")
-    print(f"Writing UNICANCER results file...")
+        start = time.time()
+        global_rules = patient.extract_rules(global_rules)
+        end = time.time()
+        elapsed = end - start
+        total_elapsed += elapsed
+
+        print(f"Extraction done, {len(patient.selected_rules)} rules found in {elapsed:.3f} seconds")
+
+
+    print(f"Rule extraction done for {nb_patients} patients in {total_elapsed:.3f} seconds\nWriting UNICANCER results file...")
     write_results(abspath, patients)
     print(f"File successfully written")
 
