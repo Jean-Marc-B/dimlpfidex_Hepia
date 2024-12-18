@@ -596,39 +596,28 @@ def image_to_rgb(image):
 def image_to_black_and_white(image):
     return np.dot(image[...,:3], [0.2989, 0.5870, 0.1140])
 
-def compute_max_predictions(file_list, output_file, nb_samples):
+def gathering_predictions(file_list, output_file):
     """
-    Reads a file list of predictions and save in a file the index of max class probability in one hot format for each sample (line).
+    Reads a list of class predictions files, extracts the first value(prediction of the sample for this class) of each sample,
+    concatenates these values across all files, and saves them to a final output file.
     """
-    nb_classes = len(file_list)
-    max_probs = None
-    max_indices = None
-    nb_samples = -1
+    concatenated_data = []
 
-    # Loop on each files (classes)
+    # Loop over the files
     for class_id, file_name in enumerate(file_list):
         print(f"Processing {file_name} for class {class_id}...")
 
-        # Read probas
-        current_probs = np.loadtxt(file_name, usecols=0)  # Take first value (class proba)
+        # Read the current file
+        current_data = np.loadtxt(file_name, usecols=0)
 
-        if max_probs is None:
-            nb_samples = len(current_probs)
-            max_probs = current_probs
-            max_indices = np.full(nb_samples, class_id)
-        else:
-            # Update max scores
-            mask = current_probs > max_probs
-            max_probs[mask] = current_probs[mask]
-            max_indices[mask] = class_id
+        # Add to the concatenated list
+        concatenated_data.append(current_data)
 
-    print("Generating one-hot encoded output...")
-    one_hot_encoded = np.zeros((nb_samples, nb_classes), dtype=int)
-    one_hot_encoded[np.arange(nb_samples), max_indices] = 1
+    # Stack all first values horizontally
+    final_data = np.column_stack(concatenated_data)
 
-    # Sauvegarder dans un fichier
-    np.savetxt(output_file, one_hot_encoded, fmt='%d')
-    print(f"Saved one-hot encoded predictions to {output_file}.")
+    # Save to output file
+    np.savetxt(output_file, final_data, fmt='%.6f')
 
 ###############################################################
 # Train a CNN with a Resnet or with a small model
