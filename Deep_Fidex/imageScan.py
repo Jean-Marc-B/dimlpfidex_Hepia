@@ -74,14 +74,14 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
 #dataset = "testDataset"
 
 if dataset == "MNIST":     # for MNIST images
     size1D             = 28
     nb_channels         = 1
-    base_folder = "Mnist/"
+    base_folder = "../../data/Mnist/"
     data_type = "integer"
     classes = {
         0:"0",
@@ -99,7 +99,7 @@ if dataset == "MNIST":     # for MNIST images
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
-    base_folder = "Cifar/"
+    base_folder = "../../data/Cifar/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -494,7 +494,8 @@ if with_train_second_model:
                     current_model_train_pred = base_folder + scan_folder + models_folder + "second_model_train_pred_" + str(i) + ".txt"
                     data_filename = "train_probability_images_with_original_img_" + str(i) + ".txt"
                     class_filename = "Y_train_probability_images_with_original_img_" + str(i) + ".txt"
-                    output_data(built_data_train, base_folder + scan_folder + models_folder + data_filename)
+                    built_data_train_flatten = built_data_train.reshape(nb_train_samples, size_Height_proba_stat*size_Width_proba_stat*3)
+                    output_data(built_data_train_flatten, base_folder + scan_folder + models_folder + data_filename)
                     output_data(built_Y_train, base_folder + scan_folder + models_folder + class_filename)
 
                     built_data_test = np.empty((nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
@@ -507,7 +508,8 @@ if with_train_second_model:
                     current_model_test_pred = base_folder + scan_folder + models_folder + "second_model_test_pred_" + str(i) + ".txt"
                     data_filename = "test_probability_images_with_original_img_" + str(i) + ".txt"
                     class_filename = "Y_test_probability_images_with_original_img_" + str(i) + ".txt"
-                    output_data(built_data_test, base_folder + scan_folder + models_folder + data_filename)
+                    built_data_test_flatten = built_data_test.reshape(nb_test_samples, size_Height_proba_stat*size_Width_proba_stat*3)
+                    output_data(built_data_test_flatten, base_folder + scan_folder + models_folder + data_filename)
                     output_data(built_Y_test, base_folder + scan_folder + models_folder + class_filename)
 
                     current_model_stats = base_folder + scan_folder + models_folder + "second_model_stats_" + str(i) +".txt"
@@ -518,12 +520,13 @@ if with_train_second_model:
                     trainCNN(size_Height_proba_stat, size_Width_proba_stat, 3, 2, "VGG", nbIt_current, batch_size_second_model, second_model_file, second_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats, False, True)
 
                 # Create test and train predictions
-                train_files = [f"train_probability_images_with_original_img_{i}.txt" for i in range(nb_classes)]
-                test_files = [f"test_probability_images_with_original_img_{i}.txt" for i in range(nb_classes)]
 
-                # Calcul des prédictions maximales pour train et test
-                compute_max_predictions(train_files, second_model_train_pred, nb_train_samples)
-                compute_max_predictions(test_files, second_model_test_pred, nb_test_samples)
+                train_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_train_pred_{i}.txt" for i in range(nb_classes)]
+                test_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_test_pred_{i}.txt" for i in range(nb_classes)]
+
+                # Gathering predictions for train and test
+                gathering_predictions(train_pred_files, second_model_train_pred)
+                gathering_predictions(test_pred_files, second_model_test_pred)
 
 
                 print("Data sets created...")
