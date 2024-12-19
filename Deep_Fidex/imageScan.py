@@ -19,7 +19,7 @@ import os
 import sys
 import time
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-#os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import keras
 import numpy as np
 import shutil
@@ -53,29 +53,30 @@ with_train_cnn = True
 # Stats computation and second model training:
 histogram_stats = False
 activation_layer_stats = False
-probability_stats = False
-probability_multi_networks_stats = True
+probability_stats = True
+if probability_stats:
+    use_multi_networks_stats = True
 
-if histogram_stats + activation_layer_stats + probability_stats + probability_multi_networks_stats!= 1:
-    raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats, probability_stats and probability_multi_networks_stats.")
+if histogram_stats + activation_layer_stats + probability_stats!= 1:
+    raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats, probability_stats.")
 
 
 with_stats_computation = True
 with_train_second_model = True
 
 # Rule computation:
-with_global_rules = False
+with_global_rules = True
 
 # Image generation:
-get_images = False # With histograms
+get_images = True # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 #dataset = "testDataset"
 
 if dataset == "MNIST":     # for MNIST images
@@ -141,9 +142,11 @@ if histogram_stats:
 elif activation_layer_stats:
     scan_folder += "Activations_Sum/"
 elif probability_stats:
-    scan_folder += "Probability_Images/"
-elif probability_multi_networks_stats:
-    scan_folder += "Probability_Multi_Nets_Images/"
+    if use_multi_networks_stats:
+        scan_folder += "Probability_Multi_Nets_Images/"
+    else:
+        scan_folder += "Probability_Images/"
+
 
 #----------------------------
 # Files
@@ -194,7 +197,7 @@ if histogram_stats:
 elif activation_layer_stats:
     train_stats_file = base_folder + scan_folder + "train_activation_sum.txt"
     test_stats_file = base_folder + scan_folder + "test_activation_sum.txt"
-elif probability_stats or probability_multi_networks_stats:
+elif probability_stats:
     train_stats_file = base_folder + scan_folder + "train_probability_images.txt"
     test_stats_file = base_folder + scan_folder + "test_probability_images.txt"
     train_stats_file_with_image = base_folder + scan_folder + "train_probability_images_with_original_img.txt"
@@ -217,16 +220,17 @@ if histogram_stats:
 
 #----------------------------
 # For second model training
-second_model = "cnn"
-#second_model = "randomForests"
-if not (probability_stats or probability_multi_networks_stats):
+
+if probability_stats:
+    second_model = "cnn"
+    #second_model = "randomForests"
+    if use_multi_networks_stats:
+        second_model = "cnn"
+else:
     # second_model = "randomForests"
     second_model = "gradientBoosting"
     # second_model = "dimlpTrn"
     # second_model = "dimlpBT"
-
-if probability_multi_networks_stats:
-    second_model = "cnn"
 
 if second_model in {"randomForests", "gradientBoosting"}:
     using_decision_tree_model = True
@@ -252,7 +256,7 @@ dropout_dim = 0.9
 global_rules_with_test_stats = base_folder + scan_folder + "globalRulesWithStats.json"
 global_rules_stats = base_folder + scan_folder + "global_rules_stats.txt"
 
-if probability_stats or probability_multi_networks_stats:
+if probability_stats:
     size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
     size_Width_proba_stat = size1D - filter_size[0][1] + 1
     output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
@@ -377,7 +381,7 @@ if with_stats_computation:
         output_data(test_sums, test_stats_file)
         print("Sums saved.")
 
-    elif probability_stats or probability_multi_networks_stats:
+    elif probability_stats:
         print("\nComputing train probability images of patches...\n")
         # Get sums for each train sample
 
@@ -409,7 +413,7 @@ if with_stats_computation:
 if with_train_second_model:
     start_time_train_second_model = time.time()
 
-    if probability_stats or probability_multi_networks_stats:
+    if probability_stats:
         if not with_stats_computation:
             print("Loading probability stats...")
             train_probas = np.loadtxt(train_stats_file)
@@ -460,76 +464,76 @@ if with_train_second_model:
             second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
 
             if probability_stats:
-                trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes+nb_channels, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
-            elif probability_multi_networks_stats:
-
-                # Create nb_classes networks and gather best probability among them.
-
-                if test_version:
-                    nbIt_current = 2
+                if not use_multi_networks_stats:
+                    trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes+nb_channels, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
                 else:
-                    nbIt_current = 80
-                models_folder = "Models/"
-                # Create folder for all models
-                if os.path.exists(base_folder + scan_folder + models_folder):
-                    shutil.rmtree(base_folder + scan_folder + models_folder)
-                os.makedirs(base_folder + scan_folder + models_folder)
-                # Create models folder
-                for i in range(nb_classes):
-                    print("Creating dataset n°",i,"...")
+                    # Create nb_classes networks and gather best probability among them.
 
-                    original_img_BW_reshaped_train = X_train_reshaped
-                    original_img_BW_reshaped_test = X_test_reshaped
-                    if nb_channels == 3:
-                        original_img_BW_reshaped_train = tf.image.rgb_to_grayscale(original_img_BW_reshaped_train)
-                        original_img_BW_reshaped_test = tf.image.rgb_to_grayscale(original_img_BW_reshaped_test)
+                    if test_version:
+                        nbIt_current = 2
+                    else:
+                        nbIt_current = 80
+                    models_folder = "Models/"
+                    # Create folder for all models
+                    if os.path.exists(base_folder + scan_folder + models_folder):
+                        shutil.rmtree(base_folder + scan_folder + models_folder)
+                    os.makedirs(base_folder + scan_folder + models_folder)
+                    # Create models folder
+                    for i in range(nb_classes):
+                        print("Creating dataset n°",i,"...")
 
-                    built_data_train = np.empty((nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
-                    built_data_train[:,:,:,0] = train_probas_h1[:,:,:,i]
-                    built_data_train[:,:,:,1] = 1-train_probas_h1[:,:,:,i]
-                    built_data_train[:,:,:,2] = original_img_BW_reshaped_train[..., 0]
-                    built_Y_train = np.zeros((nb_train_samples, 2), dtype=int)
-                    built_Y_train[Y_train[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
-                    built_Y_train[Y_train[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
-                    current_model_train_pred = base_folder + scan_folder + models_folder + "second_model_train_pred_" + str(i) + ".txt"
-                    data_filename = "train_probability_images_with_original_img_" + str(i) + ".txt"
-                    class_filename = "Y_train_probability_images_with_original_img_" + str(i) + ".txt"
-                    built_data_train_flatten = built_data_train.reshape(nb_train_samples, size_Height_proba_stat*size_Width_proba_stat*3)
-                    output_data(built_data_train_flatten, base_folder + scan_folder + models_folder + data_filename)
-                    output_data(built_Y_train, base_folder + scan_folder + models_folder + class_filename)
+                        original_img_BW_reshaped_train = X_train_reshaped
+                        original_img_BW_reshaped_test = X_test_reshaped
+                        if nb_channels == 3:
+                            original_img_BW_reshaped_train = tf.image.rgb_to_grayscale(original_img_BW_reshaped_train)
+                            original_img_BW_reshaped_test = tf.image.rgb_to_grayscale(original_img_BW_reshaped_test)
 
-                    built_data_test = np.empty((nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
-                    built_data_test[:,:,:,0] = test_probas_h1[:,:,:,i]
-                    built_data_test[:,:,:,1] = 1-test_probas_h1[:,:,:,i]
-                    built_data_test[:,:,:,2] = original_img_BW_reshaped_test[..., 0]
-                    built_Y_test = np.zeros((nb_test_samples, 2), dtype=int)
-                    built_Y_test[Y_test[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
-                    built_Y_test[Y_test[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
-                    current_model_test_pred = base_folder + scan_folder + models_folder + "second_model_test_pred_" + str(i) + ".txt"
-                    data_filename = "test_probability_images_with_original_img_" + str(i) + ".txt"
-                    class_filename = "Y_test_probability_images_with_original_img_" + str(i) + ".txt"
-                    built_data_test_flatten = built_data_test.reshape(nb_test_samples, size_Height_proba_stat*size_Width_proba_stat*3)
-                    output_data(built_data_test_flatten, base_folder + scan_folder + models_folder + data_filename)
-                    output_data(built_Y_test, base_folder + scan_folder + models_folder + class_filename)
+                        built_data_train = np.empty((nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
+                        built_data_train[:,:,:,0] = train_probas_h1[:,:,:,i]
+                        built_data_train[:,:,:,1] = 1-train_probas_h1[:,:,:,i]
+                        built_data_train[:,:,:,2] = original_img_BW_reshaped_train[..., 0]
+                        built_Y_train = np.zeros((nb_train_samples, 2), dtype=int)
+                        built_Y_train[Y_train[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
+                        built_Y_train[Y_train[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
+                        current_model_train_pred = base_folder + scan_folder + models_folder + "second_model_train_pred_" + str(i) + ".txt"
+                        data_filename = "train_probability_images_with_original_img_" + str(i) + ".txt"
+                        class_filename = "Y_train_probability_images_with_original_img_" + str(i) + ".txt"
+                        built_data_train_flatten = built_data_train.reshape(nb_train_samples, size_Height_proba_stat*size_Width_proba_stat*3)
+                        output_data(built_data_train_flatten, base_folder + scan_folder + models_folder + data_filename)
+                        output_data(built_Y_train, base_folder + scan_folder + models_folder + class_filename)
 
-                    current_model_stats = base_folder + scan_folder + models_folder + "second_model_stats_" + str(i) +".txt"
-                    current_model_file = base_folder + scan_folder + models_folder + "scanSecondModel_" + str(i) +".keras"
-                    current_model_checkpoint_weights = base_folder + scan_folder + models_folder + "weightsSecondModel_" + str(i) +".weights.h5"
+                        built_data_test = np.empty((nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
+                        built_data_test[:,:,:,0] = test_probas_h1[:,:,:,i]
+                        built_data_test[:,:,:,1] = 1-test_probas_h1[:,:,:,i]
+                        built_data_test[:,:,:,2] = original_img_BW_reshaped_test[..., 0]
+                        built_Y_test = np.zeros((nb_test_samples, 2), dtype=int)
+                        built_Y_test[Y_test[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
+                        built_Y_test[Y_test[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
+                        current_model_test_pred = base_folder + scan_folder + models_folder + "second_model_test_pred_" + str(i) + ".txt"
+                        data_filename = "test_probability_images_with_original_img_" + str(i) + ".txt"
+                        class_filename = "Y_test_probability_images_with_original_img_" + str(i) + ".txt"
+                        built_data_test_flatten = built_data_test.reshape(nb_test_samples, size_Height_proba_stat*size_Width_proba_stat*3)
+                        output_data(built_data_test_flatten, base_folder + scan_folder + models_folder + data_filename)
+                        output_data(built_Y_test, base_folder + scan_folder + models_folder + class_filename)
 
-                    print("Dataset n°",i," created.")
-                    trainCNN(size_Height_proba_stat, size_Width_proba_stat, 3, 2, "VGG", nbIt_current, batch_size_second_model, second_model_file, second_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats, False, True)
+                        current_model_stats = base_folder + scan_folder + models_folder + "second_model_stats_" + str(i) +".txt"
+                        current_model_file = base_folder + scan_folder + models_folder + "scanSecondModel_" + str(i) +".keras"
+                        current_model_checkpoint_weights = base_folder + scan_folder + models_folder + "weightsSecondModel_" + str(i) +".weights.h5"
 
-                # Create test and train predictions
+                        print("Dataset n°",i," created.")
+                        trainCNN(size_Height_proba_stat, size_Width_proba_stat, 3, 2, "VGG", nbIt_current, batch_size_second_model, current_model_file, current_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats, False, True)
+                        print("Dataset n°",i," trained.")
+                    # Create test and train predictions
 
-                train_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_train_pred_{i}.txt" for i in range(nb_classes)]
-                test_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_test_pred_{i}.txt" for i in range(nb_classes)]
+                    train_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_train_pred_{i}.txt" for i in range(nb_classes)]
+                    test_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_test_pred_{i}.txt" for i in range(nb_classes)]
 
-                # Gathering predictions for train and test
-                gathering_predictions(train_pred_files, second_model_train_pred)
-                gathering_predictions(test_pred_files, second_model_test_pred)
+                    # Gathering predictions for train and test
+                    gathering_predictions(train_pred_files, second_model_train_pred)
+                    gathering_predictions(test_pred_files, second_model_test_pred)
 
 
-                print("Data sets created...")
+                    print("Data sets created and all models trained.")
 
         else:
 
