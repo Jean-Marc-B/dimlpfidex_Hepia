@@ -21,6 +21,7 @@ import os
 import time
 import re
 import matplotlib.pyplot as plt
+import gc
 from constants import HISTOGRAM_ANTECEDENT_PATTERN
 
 nbStairsPerUnit    = 30
@@ -607,17 +608,24 @@ def gathering_predictions(file_list, output_file):
     for class_id, file_name in enumerate(file_list):
         print(f"Processing {file_name} for class {class_id}...")
 
-        # Read the current file
-        current_data = np.loadtxt(file_name, usecols=0)
+        with open(file_name, 'r') as file:
+            current_data = np.loadtxt(file, usecols=0)
 
         # Add to the concatenated list
         concatenated_data.append(current_data)
+        del current_data
 
-    # Stack all first values horizontally
+    # Stack all probs values horizontally
     final_data = np.column_stack(concatenated_data)
 
+    # Normalize each row so that the sum of values across columns equals 1
+    row_sums = final_data.sum(axis=1, keepdims=True)  # Compute the sum of each row
+    final_data = final_data / row_sums  # Element-wise division for normalization
+
     # Save to output file
-    np.savetxt(output_file, final_data, fmt='%.6f')
+    with open(output_file, 'w') as output:
+        np.savetxt(output, final_data, fmt='%.6f')
+        print(f"{output_file} written.")
 
 ###############################################################
 # Train a CNN with a Resnet or with a small model
@@ -651,6 +659,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
     # To avoid memory problems on GPU we clear GPU memory before training
     clear_session()
+    gc.collect()
+    tf.keras.backend.clear_session()
 
     if model not in ["resnet", "VGG", "small"]:
         raise ValueError("The model needs to be one of resnet, VGG or small")
