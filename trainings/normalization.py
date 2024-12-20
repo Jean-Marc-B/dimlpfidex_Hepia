@@ -254,9 +254,9 @@ def get_pattern_from_rule_file(rule_file, possible_patterns):
 
     return pattern
 
-def denormalize_rule(line, pattern, antecedent_pattern, dimlp_rule, with_attribute_names, normalization_indices, attributes, sigmas, mus):
+def denormalize_rule(line, pattern, antecedent_pattern, dimlp_rule, with_attribute_names, normalization_indices, attributes, sigmas, mus, normalize=False):
     """
-    This function denormalizes a given rule line based on specified rule patterns and normalization parameters.
+    This function denormalizes or normalizes(if normalize is true) a given rule line based on specified rule patterns and normalization parameters.
     If the line don't correspond to the pattern, it's left unchanged.
     Otherwise, it parses the rule line using the provided regular expression patterns, identifies each antecedent corresponding to indices that we need to denormalize,
     and applies denormalization to the numeric values using the provided sigma (standard deviation) and mu (mean) values.
@@ -280,6 +280,8 @@ def denormalize_rule(line, pattern, antecedent_pattern, dimlp_rule, with_attribu
     :type sigmas: list of float
     :param mus: A list of mean or median values for denormalization, corresponding to each attribute of normalization_indices.
     :type mus: list of float
+    :param normalize: Whether to normalize rules instead of denormalizing them.
+    :type normalize: bool
     :return: The denormalized rule line.
     :rtype: str
     """
@@ -298,7 +300,13 @@ def denormalize_rule(line, pattern, antecedent_pattern, dimlp_rule, with_attribu
             if attribute_id in normalization_indices:
                 #Denormalize this antecedent
                 idx = normalization_indices.index(attribute_id)
-                value = value*sigmas[idx]+mus[idx]
+                if normalize: # Normalization
+                    if sigmas[idx] == 0:
+                        value = 0
+                    else:
+                        value = (float(value) - mus[idx]) / sigmas[idx]
+                else: # Denormalization
+                    value = value*sigmas[idx]+mus[idx]
             # Reconstuct rule
             new_line += f"{antecedent_match.group(1)}{attribute}{antecedent_match.group('inequality')}{value:.6f}{antecedent_match.group('last_part')}"
         new_line += match.group("last_part")
@@ -338,6 +346,7 @@ def get_and_check_parameters(init_args):
     parser.add_argument("--nb_classes", type=lambda x: int_type(x, min=1), help="Number of classes in the dataset", metavar="<int [1,inf[>")
     parser.add_argument("--data_files", type=lambda x: [sanitizepath(args.root_folder, file) for file in list_type(x, dict(func=str))], metavar="<list<str>>", help="List of paths to data files to normalize, they are normalized with respect to the first one if normalization_file is not specified", action=TaggableAction, tag="Normalization")
     parser.add_argument("--rule_files", type=lambda x: [sanitizepath(args.root_folder, file) for file in list_type(x, dict(func=str))], metavar="<list<str>>", help="List of paths to rule files to denormalize, denormalization is possible only if a normalization_file file or mus, sigmas and normalization_indices are given. Either 'data_files' or 'rule_files' must be specified", action=TaggableAction, tag="Normalization")
+    parser.add_argument("--normalize_rules", type=bool_type, help="Whether to normalize rules instead of denormalizing them", metavar="<bool>", default=False, action=TaggableAction, tag="Normalization")
     parser.add_argument("--missing_values", type=str, help="String representing a missing value in your data, put 'NaN' (or any string not present in your data) if you do not have any missing value, mandatory for normalization", metavar="<str>", action=TaggableAction, tag="Normalization")
     parser.add_argument("--normalization_file", type=lambda x: sanitizepath(args.root_folder, x), help="Path to the file containing the mean and standard deviation of some attributes. Used to normalize data or denormalize the rules if specified", metavar="<str>", action=TaggableAction, tag="Normalization")
     parser.add_argument("--mus", type=lambda x: list_type(x, dict(func=float_type)), metavar="<list<float>>", help="Mean or median of each attribute index of interest", action=TaggableAction, tag="Normalization")
@@ -481,12 +490,15 @@ def normalization(args: str = None):
                 raise ValueError("Error : rule files specified but there is no normalization_file or mus, sigmas and normalization_indices")
             if args.output_rule_files is None:
                 args.output_rule_files = []
+                name_particle = "denormalized"
+                if args.normalize_rules:
+                    name_particle = "normalized"
                 for rule_file in args.rule_files:
                     base, ext = os.path.splitext(rule_file)
                     if ext:
-                        args.output_rule_files.append(f"{base}_denormalized{ext}")
+                        args.output_rule_files.append(f"{base}_{name_particle}{ext}")
                     else:
-                        args.output_rule_files.append(f"{rule_file}_denormalized")
+                        args.output_rule_files.append(f"{rule_file}_{name_particle}")
             if len(args.output_rule_files) != len(args.rule_files):
                 raise ValueError("Error : the size of output_rule_files is not equal to the size of rule_files")
 
@@ -568,7 +580,13 @@ def normalization(args: str = None):
                                     if 'attribute' in antecedent and 'value' in antecedent:
                                         if antecedent['attribute'] in args.normalization_indices:
                                             idx = args.normalization_indices.index(antecedent['attribute'])
-                                            antecedent['value'] = antecedent['value']*args.sigmas[idx]+args.mus[idx]
+                                            if args.normalize_rules: # Normalization
+                                                if args.sigmas[idx] == 0:
+                                                    antecedent['value'] = 0
+                                                else:
+                                                    antecedent['value'] = (float(antecedent['value']) - args.mus[idx]) / args.sigmas[idx]
+                                            else: # Denormalization
+                                                antecedent['value'] = antecedent['value']*args.sigmas[idx]+args.mus[idx]
                                     else:
                                         raise KeyError("There is an antecedant without 'attribute' or 'value' in JSON file. The rules file is not on a correct format.")
 
@@ -619,7 +637,7 @@ def normalization(args: str = None):
                                 with open(output_rule_file, "w") as output_file:
                                     for line in file:
                                         #Denormalize rule
-                                        new_line = denormalize_rule(line.rstrip("\n"), pattern, antecedent_pattern, dimlp_rules, with_attribute_names, args.normalization_indices, attributes, args.sigmas, args.mus) + "\n"
+                                        new_line = denormalize_rule(line.rstrip("\n"), pattern, antecedent_pattern, dimlp_rules, with_attribute_names, args.normalization_indices, attributes, args.sigmas, args.mus, args.normalize_rules) + "\n"
                                         output_file.write(new_line) # Write line in output file
 
                             except FileNotFoundError:
