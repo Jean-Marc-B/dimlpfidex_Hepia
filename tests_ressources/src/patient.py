@@ -143,7 +143,7 @@ class Patient:
             f"--test_pred_file {self.reldir}/prediction.csv "
             f"--weights_file {constants.MODEL_DIRNAME}/dimlpBT.wts "
             f"--attributes_file {constants.MODEL_DIRNAME}/attributes.txt "
-            f"--global_rules_file {constants.MODEL_DIRNAME}/global_rules.json "
+            f"--global_rules_file {constants.MODEL_DIRNAME}/global_rules_normalized.json "
             f"--console_file {self.reldir}/fidexglo_{today}.log "
             "--nb_attributes 79 "
             "--nb_classes 2 "
