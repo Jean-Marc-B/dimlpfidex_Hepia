@@ -7,12 +7,14 @@ import time
 import os
 
 
-def normalize_global_rules(abspath: str) -> str:
+def normalize_global_rules(abspath: str) -> None:
     normalization(
         f"--root_folder {abspath} "
-        f"--rule_files {constants.MODEL_DIRNAME}/global_rules.json "
+        f"--rule_files {constants.MODEL_DIRNAME}/global_rules_denormalized.json "
+        f"--output_rule_files {constants.MODEL_DIRNAME}/global_rules_normalized.json "
         f"--normalization_file {constants.MODEL_DIRNAME}/normalization_stats.txt "
         "--nb_attributes 79 "
+        "--normalize_rules True "
         f"--attributes_file {constants.MODEL_DIRNAME}/attributes.txt"
     )
 
@@ -73,4 +75,5 @@ if __name__ == "__main__":
         print(f"{difference} new rule(s) have been generated, saving...")
         global_rules.save(abspath)
 
+    normalize_global_rules(abspath) # TODO test
     print("Rule extraction program done")
