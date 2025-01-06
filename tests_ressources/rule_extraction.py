@@ -7,7 +7,7 @@ import time
 import os
 
 
-def denormalize_global_rules(abspath: str) -> str:
+def normalize_global_rules(abspath: str) -> str:
     normalization(
         f"--root_folder {abspath} "
         f"--rule_files {constants.MODEL_DIRNAME}/global_rules.json "
