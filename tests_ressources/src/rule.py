@@ -99,11 +99,11 @@ Antecedants:\n\t"""
         pass
 
     @staticmethod
-    def from_json_file(path: str) -> list[Rule]:
+    def from_json_file(path: str, attributes: list[str]) -> list[Rule]:
         with open(path, "r") as fp:
             data = json.load(fp)
 
-        return Rule.list_from_dict(data["rules"])
+        return Rule.list_from_dict(data, attributes)
 
     @staticmethod
     def list_to_dict(rule_list: list[Rule]) -> dict:
