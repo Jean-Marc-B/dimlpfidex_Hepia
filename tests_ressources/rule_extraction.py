@@ -74,6 +74,6 @@ if __name__ == "__main__":
         difference = len(global_rules) - nb_global_rules
         print(f"{difference} new rule(s) have been generated, saving...")
         global_rules.save(abspath)
-
-    normalize_global_rules(abspath) # TODO test
+        normalize_global_rules(abspath) 
+        
     print("Rule extraction program done")
