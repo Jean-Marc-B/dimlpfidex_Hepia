@@ -6,6 +6,17 @@ from src.patient import *
 import time
 import os
 
+
+def denormalize_global_rules(abspath: str) -> str:
+    normalization(
+        f"--root_folder {abspath} "
+        f"--rule_files {constants.MODEL_DIRNAME}/global_rules.json "
+        f"--normalization_file {constants.MODEL_DIRNAME}/normalization_stats.txt "
+        "--nb_attributes 79 "
+        f"--attributes_file {constants.MODEL_DIRNAME}/attributes.txt"
+    )
+
+
 if __name__ == "__main__":
     args = init_args()
     abspath = os.path.abspath(os.path.dirname(__file__))
@@ -14,7 +25,7 @@ if __name__ == "__main__":
     if args.train:
         if args.train < 0.0 or args.train < 1.0:
             raise ValueError("Train argument cannot be outside of [0.0,1.0].")
-        
+
         trainer = Trainer(abspath)
         normalize = True
         trainer.train(normalize, args.train)
@@ -46,10 +57,13 @@ if __name__ == "__main__":
         elapsed = end - start
         total_elapsed += elapsed
 
-        print(f"Extraction done, {len(patient.selected_rules)} rules found in {elapsed:.3f} seconds")
+        print(
+            f"Extraction done, {len(patient.selected_rules)} rules found in {elapsed:.3f} seconds"
+        )
 
-
-    print(f"Rule extraction done for {nb_patients} patients in {total_elapsed:.3f} seconds\nWriting UNICANCER results file...")
+    print(
+        f"Rule extraction done for {nb_patients} patients in {total_elapsed:.3f} seconds\nWriting UNICANCER results file..."
+    )
     write_results(abspath, patients)
     print(f"File successfully written")
 
