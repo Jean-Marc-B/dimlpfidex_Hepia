@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.global_rules import GlobalRules
 from dimlpfidex.fidex import fidexGlo
 from dimlpfidex.dimlp import densCls
 from src.utils import read_json_file
@@ -274,7 +275,6 @@ def write_patients(abspath: str) -> list[Patient]:
         print(f"ERROR: No input file inside {input_dirpath} was found")
         exit()
 
-    # TODO: check if read_excel is adapted
     ext = os.path.splitext(input_filepath)[1].lower()
 
     if ext in [".xls", ".xlsx", ".xlsm", ".xlsb", ".odf", ".ods", ".odt"]:
