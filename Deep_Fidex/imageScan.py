@@ -43,7 +43,7 @@ start_time = time.time()
 
 
 # What to launch
-test_version = False # Whether to launch with minimal data
+test_version = True # Whether to launch with minimal data
 
 
 
@@ -68,7 +68,7 @@ with_train_second_model = True
 with_global_rules = False
 
 # Image generation:
-get_images = True # With histograms
+get_images = False # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
@@ -226,6 +226,7 @@ if probability_stats:
     #second_model = "randomForests"
     if use_multi_networks_stats:
         second_model = "cnn"
+        with_hsl = True # Only if we have 3 chanels
 else:
     # second_model = "randomForests"
     second_model = "gradientBoosting"
@@ -482,16 +483,24 @@ if with_train_second_model:
                 for i in range(nb_classes):
                     print("Creating dataset n°",i,"...")
 
-                    original_img_BW_reshaped_train = X_train_reshaped
-                    original_img_BW_reshaped_test = X_test_reshaped
+                    original_img_transformed_reshaped_train = X_train_reshaped
+                    original_img_transformed_reshaped_test = X_test_reshaped
                     if nb_channels == 3:
-                        original_img_BW_reshaped_train = tf.image.rgb_to_grayscale(original_img_BW_reshaped_train)
-                        original_img_BW_reshaped_test = tf.image.rgb_to_grayscale(original_img_BW_reshaped_test)
+                        if with_hsl: # Transform in HSL(hsv in fact)
+                            original_img_transformed_reshaped_train = tf.image.rgb_to_hsv(original_img_transformed_reshaped_train)
+                            original_img_transformed_reshaped_test = tf.image.rgb_to_hsv(original_img_transformed_reshaped_test)
+                        else: # Transform in black and white
+                            original_img_transformed_reshaped_train = tf.image.rgb_to_grayscale(original_img_transformed_reshaped_train)
+                            original_img_transformed_reshaped_test = tf.image.rgb_to_grayscale(original_img_transformed_reshaped_test)
 
                     built_data_train = np.empty((nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
                     built_data_train[:,:,:,0] = train_probas_h1[:,:,:,i]
-                    built_data_train[:,:,:,1] = 1-train_probas_h1[:,:,:,i]
-                    built_data_train[:,:,:,2] = original_img_BW_reshaped_train[..., 0]
+                    if with_hsl and nb_channels == 3:
+                        built_data_train[:,:,:,1] = original_img_transformed_reshaped_train[..., 0]
+                        built_data_train[:,:,:,2] = original_img_transformed_reshaped_train[..., 1]
+                    else:
+                        built_data_train[:,:,:,1] = 1-train_probas_h1[:,:,:,i]
+                        built_data_train[:,:,:,2] = original_img_transformed_reshaped_train[..., 0]
                     built_Y_train = np.zeros((nb_train_samples, 2), dtype=int)
                     built_Y_train[Y_train[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
                     built_Y_train[Y_train[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
@@ -504,8 +513,12 @@ if with_train_second_model:
 
                     built_data_test = np.empty((nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
                     built_data_test[:,:,:,0] = test_probas_h1[:,:,:,i]
-                    built_data_test[:,:,:,1] = 1-test_probas_h1[:,:,:,i]
-                    built_data_test[:,:,:,2] = original_img_BW_reshaped_test[..., 0]
+                    if with_hsl and nb_channels == 3:
+                        built_data_test[:,:,:,1] = original_img_transformed_reshaped_test[..., 0]
+                        built_data_test[:,:,:,2] = original_img_transformed_reshaped_test[..., 1]
+                    else:
+                        built_data_test[:,:,:,1] = 1-test_probas_h1[:,:,:,i]
+                        built_data_test[:,:,:,2] = original_img_transformed_reshaped_test[..., 0]
                     built_Y_test = np.zeros((nb_test_samples, 2), dtype=int)
                     built_Y_test[Y_test[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
                     built_Y_test[Y_test[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
@@ -537,7 +550,7 @@ if with_train_second_model:
                 # Compute and save statistics of the second (gathering of all models) model
                 second_model_train_preds = np.argmax(np.loadtxt(second_model_train_pred), axis=1)
                 second_model_test_preds = np.argmax(np.loadtxt(second_model_test_pred), axis=1)
-                print(second_model_test_preds[0])
+
                 train_accuracy = 0
                 for i in range(nb_train_samples):
                     if np.argmax(Y_train[i]) == second_model_train_preds[i]:
