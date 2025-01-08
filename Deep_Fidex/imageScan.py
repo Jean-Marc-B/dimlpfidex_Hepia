@@ -775,7 +775,7 @@ if get_images:
             scale_w = size1D / size_Width_proba_stat
             for antecedent in rule_to_print.antecedents: # TODO : handle stride, different filter sizes, etc
                 # area_index (size_Height_proba_stat, size_Width_proba_stat) : 0 : (1,1), 1: (1,2), ...
-                channel_id = antecedent.attribute % (nb_classes + nb_channels)
+                channel_id = antecedent.attribute % (nb_classes + nb_channels) # (probas of each class + image rgb concatenated)
                 area_number = antecedent.attribute // (nb_classes + nb_channels)
                 # channel_id = attribut_de_test % (nb_classes + nb_channels)
                 # area_number = attribut_de_test // (nb_classes + nb_channels)
@@ -785,11 +785,11 @@ if get_images:
                 # print("Height : ", area_Height)
                 # print("Width : ", area_Width)
                 # exit()
-                if channel_id < nb_classes:
+                if channel_id < nb_classes: #Proba of area
                     class_name = classes[channel_id]
                     antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+filter_size[0][0]-1}]x[{area_Width}-{area_Width+filter_size[0][1]-1}]"
                 else:
-                    channel = channel_id - nb_classes
+                    channel = channel_id - nb_classes #Pixel in concatenated original rgb image
                     # Conversion of resized coordinates into originales
                     height_original = round(area_Height * scale_h)
                     width_original = round(area_Width * scale_w)
