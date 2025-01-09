@@ -5,12 +5,14 @@ import copy
 
 class Antecedant:
     def __init__(
-        self, attribute_id: dict, inequality: str, value: float, attributes: list[str]
+        self, attribute_id: dict, inequality: bool, value: float, attributes: list[str]
     ) -> None:
         self.attribute_id = attribute_id
         self.attribute_name = attributes[attribute_id]
         self.inequality = inequality
+        self.inequality_str = ">=" if self.inequality else "<"
         self.value = value
+        self.precision = 4
 
     def __repr__(self) -> str:
         ineq_str = ">=" if self.inequality else "<"
@@ -36,25 +38,24 @@ class Antecedant:
         }
 
     def pretty_repr(self) -> str:
-        ineq_str = ">=" if self.inequality else "<"
-
-        return f"{self.attribute_name} {ineq_str} {self.value:.4f}"
+        return f"{self.attribute_name} {self.inequality_str} {self.value:.4f}"
 
     # designed for unicancer format
     def to_string(self) -> str:
-        ineq_str = ">=" if self.inequality else "<"
-        return f"{ineq_str}{self.value:.4f}"
+        return f"{self.inequality_str}{round(self.value, self.precision)}"
 
     @staticmethod
     def list_to_dict(antecedants_list: list[Antecedant]) -> dict:
         return [antecedant.to_dict() for antecedant in antecedants_list]
 
     def round(self) -> Antecedant:
-        res = copy.deepcopy(self)
+        new_antecedant = copy.deepcopy(self)
+        new_antecedant.precision = 0
 
-        if res.inequality:
-            res.value = math.ceil(res.value)
+        if new_antecedant.inequality:
+            new_antecedant.value = int(math.ceil(new_antecedant.value))
         else:
-            res.value = math.floor(res.value)
+            new_antecedant.value = int(math.floor(new_antecedant.value))
+            new_antecedant.inequality_str = "<="
 
-        return res
+        return new_antecedant

@@ -42,6 +42,8 @@ class Patient:
         res = []
 
         for rule in self.selected_rules:
+            rule = rule.postprocess()
+
             row = [
                 str(self.study_id),
                 str(self.site_idn),

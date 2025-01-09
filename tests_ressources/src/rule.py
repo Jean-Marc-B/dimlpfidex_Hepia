@@ -2,6 +2,7 @@ from __future__ import annotations
 from src.antecedant import Antecedant
 import json
 import math
+import copy
 
 class Rule:
     def __init__(self, json_data: dict, attributes: list[str]) -> None:
@@ -88,15 +89,65 @@ Antecedants:\n\t"""
 
         return string
 
-    def postprocess(self):
-        # nodes_examined = nodes_removed
-        # TODO: sentinel_node_biopsy exlue planned_axillary_dissection (do not touch yet)
-
+    def postprocess(self) -> Rule:
+        # TODO: sentinel_node_biopsy exludes planned_axillary_dissection (do not touch yet)
         # TODO: get rid of double negated unknown features 
-        # TODO: age, weight, height, nodes_involved, tumor_size, KI_67, fractions, nodes_removed
-        # for these, if < then floor() elif >= then ceil()
-        # TODO: if floor is used, change < to <=
-        pass
+        #
+        # for age, weight, height, nodes_involved, tumor_size, KI_67, fractions, nodes_removed:
+        # => if < then floor() elif >= then ceil()
+        # => floor is used, then change < inequality symbol to <=
+        
+        new_rule = copy.deepcopy(self)
+
+        antecedants_to_round = [
+            "NODES_INVOLVED", 
+            "AGE", 
+            "WEIGHT", 
+            "HEIGHT", 
+            "TUMOR_SIZE", 
+            "KI_67", 
+            "FRACTIONS"
+        ]
+
+        antecedants_to_ignore_if_negative = [
+            "TYPE_SURGERY_UNKNOWN",
+            "TREATED_BREAST_RADIO_UNKNOWN",
+            "SMOKER_UNKNOWN",
+            "SIDE_OF_PRIMARY_UNKNOWN",
+            "PR_STATUS_UNKNOWN",
+            "NEOADJUVANT_CHEMOTHERAPY_UNKNOWN",
+            "MENOPAUSAL_UNKNOWN",
+            "IMRT_UNKNOWN",
+            "HISTOLOGICAL_TYPE_UNKNOWN",
+            "HER_2_STATUS_UNKNOWN",
+            "ER_STATUS_UNKNOWN",
+            "DIABETIES_UNKNOWN",
+            "CLINICAL_T_STAGE_UNKNOWN",
+            "CLINICAL_N_STAGE_UNKNOWN",
+            "BOOST_UNKNOWN",
+            "BASELINE_ARM_LYMPHEDEMA_UNKNOWN",
+            "ADJUVANT_CHEMOTHERAPY_UNKNOWN",
+            "3D_CRT_UNKNOWN"
+        ]
+        
+        new_antecedants = []
+
+        for antecedant in new_rule.antecedants:
+            if antecedant.attribute_name in antecedants_to_ignore_if_negative:
+                if antecedant.value < 0.5 and antecedant.inequality == False:
+                    continue
+
+            if antecedant.attribute_name in antecedants_to_round:
+                # nodes_examined = nodes_removed
+                # if new_rule.antecedants[i].attribute_name == "NODES_INVOLVED":
+                #     new_rule.antecedants[i].attribute_name = "NODES_REMOVED"
+                antecedant = antecedant.round()
+
+            new_antecedants.append(antecedant)
+            
+        new_rule.antecedants = new_antecedants
+
+        return new_rule
 
     @staticmethod
     def from_json_file(path: str, attributes: list[str]) -> list[Rule]:
