@@ -2,8 +2,9 @@ from dimlpfidex.fidex import fidexGloRules
 from src.patient import write_train_data
 from dimlpfidex.dimlp import dimlpBT
 from trainings import normalization
-from datetime import datetime
 import src.constants as constants
+from datetime import datetime
+import src.data_helper as dh
 import pandas as pd
 import os
 
@@ -18,8 +19,8 @@ class Trainer:
         self.project_abspath = abspath
         self.reldir = constants.MODEL_DIRNAME
         self.absdir = os.path.join(self.project_abspath, self.reldir)
-        self.nb_features = datas.shape[1]
         self.labels = labels
+        self.nb_features = 79
         self.nb_classes = 2
         self.datas = datas
         self.nb_nets = 30
@@ -28,6 +29,14 @@ class Trainer:
     def train(self, normalize: bool = True, split: float = 0.0):
         if self.datas is not None and self.labels is not None:
             write_train_data(self.project_abspath, self.datas, self.labels, split)
+        else:
+            dataset_path = os.path.join(
+                self.project_abspath, "dataset", "clinical_complete_rev1.csv"
+            )
+            data, labels = dh.obtain_data(dataset_path)
+            data, labels = dh.filter_clinical(dataset_path, labels)
+            print(data, labels)
+            exit()
 
         if normalize:
             print("Normalizing datas...")
