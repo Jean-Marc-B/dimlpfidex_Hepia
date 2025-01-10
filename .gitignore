@@ -152,6 +152,8 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv39
+.python-version
 env/
 venv/
 ENV/
@@ -194,7 +196,7 @@ Deep_Fidex/Mnist/
 Deep_Fidex/Cifar80/
 Deep_Fidex/CifarLeakyReluResnet/
 
-tests_ressources/model/
+tests_ressources/model*/
 tests_ressources/dataset/
 tests_ressources/input/
 tests_ressources/output/
