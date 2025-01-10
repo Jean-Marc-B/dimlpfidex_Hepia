@@ -140,7 +140,7 @@ class Patient:
             f"--root_folder {self.project_abspath} "
             f"--train_data_file {constants.MODEL_DIRNAME}/train_data_normalized.csv "
             f"--train_class_file {constants.MODEL_DIRNAME}/train_classes.csv "
-            f"--train_pred_file {constants.MODEL_DIRNAME}/dimlpBTTrain.out "
+            f"--train_pred_file {constants.MODEL_DIRNAME}/dimlpbt_train_predictions.out "
             f"--test_data_file {self.reldir}/input_data_normalized.csv "
             f"--test_pred_file {self.reldir}/prediction.csv "
             f"--weights_file {constants.MODEL_DIRNAME}/dimlpBT.wts "
@@ -303,13 +303,24 @@ def write_patients(abspath: str) -> list[Patient]:
 
 # this is for testing puroposes only
 def write_samples_file(abspath: str, n: int) -> list[Patient]:
-    metadata_file = os.path.join(
-        abspath, "input", "PRE-ACT-01_Flow2_20241115_HES-SO.xlsx"
-    )
-    data_file = os.path.join(abspath, constants.MODEL_DIRNAME, "train_data.csv")
+    data_file = os.path.join(abspath, constants.MODEL_DIRNAME, "test_data.csv")
 
-    metadata = pd.read_excel(metadata_file, index_col=False).iloc[0, :5]
+    metadata = pd.Series(
+        data={
+            "STUDYID":  "PRE-ACT-01-DRAFT",
+            "SITEIDN":  "FRA-98",
+            "SITENAME": "UNICANCER_TEST",
+            "SUBJID":   "FRA-98-002",
+            "VISIT":    "BASELINE",
+        }
+    )
     data = pd.read_csv(data_file, sep=" ", header=None)
+    max_test_samples = data.shape[0]
+
+    if max_test_samples < n:
+        raise ValueError(
+            f"The number of test samples specified cannot be greater than {max_test_samples}"
+        )
 
     sample_data = data.sample(n)
 
