@@ -24,9 +24,10 @@ if __name__ == "__main__":
     abspath = os.path.abspath(os.path.dirname(__file__))
     constants.check_directories_existance(abspath)
 
-    if args.train:
-        if args.train < 0.0 or args.train < 1.0:
-            raise ValueError("Train argument cannot be outside of [0.0,1.0].")
+
+    if args.train is not None:
+        if args.train < 0.0 or args.train > 1.0:
+            raise ValueError("Train argument value cannot be outside of [0.0,1.0].")
 
         trainer = Trainer(abspath)
         normalize = True
@@ -75,5 +76,5 @@ if __name__ == "__main__":
         print(f"{difference} new rule(s) have been generated, saving...")
         global_rules.save(abspath)
         normalize_global_rules(abspath) 
-        
+
     print("Rule extraction program done")
