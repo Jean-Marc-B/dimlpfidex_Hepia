@@ -33,10 +33,15 @@ class Trainer:
             dataset_path = os.path.join(
                 self.project_abspath, "dataset", "clinical_complete_rev1.csv"
             )
-            data, labels = dh.obtain_data(dataset_path)
-            data, labels = dh.filter_clinical(dataset_path, labels)
-            print(data, labels)
-            exit()
+
+            datas, labels = dh.obtain_data(dataset_path, training=True)
+            self.datas, self.labels = dh.filter_clinical(datas, labels)
+
+            self.datas = self.datas.assign(
+                BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3)
+            )
+
+            write_train_data(self.project_abspath, self.datas, self.labels, split)
 
         if normalize:
             print("Normalizing datas...")
@@ -123,8 +128,8 @@ class Trainer:
             "--max_iterations 20 "
             "--min_fidelity 1.0 "
             "--lowest_min_fidelity 1.0 "
-            "--dropout_dim 0.0 "
-            "--dropout_hyp 0.0 "
+            "--dropout_dim 0.5 "
+            "--dropout_hyp 0.5 "
             "--decision_threshold 0.05 "
             "--positive_class_index 1"
         )
