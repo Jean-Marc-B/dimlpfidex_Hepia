@@ -4,6 +4,7 @@ import json
 import math
 import copy
 
+
 class Rule:
     def __init__(self, json_data: dict, attributes: list[str]) -> None:
         try:
@@ -91,22 +92,22 @@ Antecedants:\n\t"""
 
     def postprocess(self) -> Rule:
         # TODO: sentinel_node_biopsy exludes planned_axillary_dissection (do not touch yet)
-        # TODO: get rid of double negated unknown features 
+        # TODO: get rid of double negated unknown features
         #
         # for age, weight, height, nodes_involved, tumor_size, KI_67, fractions, nodes_removed:
         # => if < then floor() elif >= then ceil()
         # => floor is used, then change < inequality symbol to <=
-        
+
         new_rule = copy.deepcopy(self)
 
         antecedants_to_round = [
-            "NODES_INVOLVED", 
-            "AGE", 
-            "WEIGHT", 
-            "HEIGHT", 
-            "TUMOR_SIZE", 
-            "KI_67", 
-            "FRACTIONS"
+            "NODES_INVOLVED",
+            "AGE",
+            "WEIGHT",
+            "HEIGHT",
+            "TUMOR_SIZE",
+            "KI_67",
+            "FRACTIONS",
         ]
 
         antecedants_to_ignore_if_negative = [
@@ -127,9 +128,9 @@ Antecedants:\n\t"""
             "BOOST_UNKNOWN",
             "BASELINE_ARM_LYMPHEDEMA_UNKNOWN",
             "ADJUVANT_CHEMOTHERAPY_UNKNOWN",
-            "3D_CRT_UNKNOWN"
+            "3D_CRT_UNKNOWN",
         ]
-        
+
         new_antecedants = []
 
         for antecedant in new_rule.antecedants:
@@ -144,7 +145,7 @@ Antecedants:\n\t"""
                 antecedant = antecedant.round()
 
             new_antecedants.append(antecedant)
-            
+
         new_rule.antecedants = new_antecedants
 
         return new_rule
