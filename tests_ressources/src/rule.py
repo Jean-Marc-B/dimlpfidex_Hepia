@@ -171,6 +171,31 @@ Antecedants:\n\t"""
             "outputClass": self.output,
         }
 
+    def filter_redundancies(self) -> Rule:
+        new_rule = copy.deepcopy(self)
+
+        non_redundant_antecedants = []
+    
+        for antecedant in new_rule.antecedants:
+            if not non_redundant_antecedants:
+                non_redundant_antecedants.append(antecedant)
+            else:
+                last_antecedant = non_redundant_antecedants[-1]
+
+                if (antecedant.attribute_name == last_antecedant.attribute_name and 
+                    antecedant.inequality == last_antecedant.inequality):
+                    if antecedant.inequality and antecedant.value <= last_antecedant.value:
+                        continue 
+                    if not antecedant.inequality and antecedant.value >= last_antecedant.value:
+                        continue
+                    
+               
+                non_redundant_antecedants.append(antecedant)
+
+        new_rule.antecedants = non_redundant_antecedants
+        
+        return new_rule 
+
     @staticmethod
     def list_from_dict(data: dict, attributes: list[str]) -> list[Rule]:
         return [Rule(rule_data, attributes) for rule_data in data["rules"]]
