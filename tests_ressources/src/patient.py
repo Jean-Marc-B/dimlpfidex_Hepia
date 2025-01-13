@@ -30,7 +30,17 @@ class Patient:
         self.project_abspath = abspath
         self.reldir = os.path.join(constants.PATIENTS_DATA_DIRNAME, self.subj_id)
         self.absdir = os.path.join(abspath, self.reldir)
-        Path(self.absdir).mkdir(mode=0o777, exist_ok=True)
+
+        # if a patient ID is a duplicate, then a copy of its folder is created inside patients_data folder
+        i = 2
+        suffix = ""
+        while not create_folder(self.absdir + suffix):
+            suffix = f"_{i}"
+            i += 1
+            print(f"Creating a copy with this name instead: {self.reldir + suffix}")
+        
+        self.reldir += suffix
+        self.absdir += suffix
 
         # properties to be set during rule extraction
         self.risk = -1
