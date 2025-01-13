@@ -1,23 +1,22 @@
 import src.constants as constants
 import src.data_helper as dh
+from pathlib import Path
 import pandas as pd
 import argparse
 import json
-import csv
 import os
 
 
-def load_clinical_data(path: str) -> tuple[pd.DataFrame, pd.Series]:
-    datas, labels = dh.obtain_data(path)
-    datas, labels = dh.filter_clinical(datas, labels)
-
-    # adding BMI column
-    datas = datas.assign(BMI=lambda x: round(x.WEIGHT / (x.HEIGHT / 100.0) ** 2, 3))
-
-    return datas, labels
-
-
 def get_most_recent_input_file(absolute_path: str) -> str:
+    """From a given absolute path leading to a directory, it scans the directory and return the most
+    recently added file name or an empty string
+
+    Args:
+        absolute_path (str): path leading to the wanted directory
+
+    Returns:
+        str: file name of the most recently added file or an empty string
+    """
     # get all filepaths inside input/ folder
     list_filepaths = [
         os.path.join(absolute_path, filename) for filename in os.listdir(absolute_path)
@@ -32,6 +31,17 @@ def get_most_recent_input_file(absolute_path: str) -> str:
 
 
 def reorder_data_columns(data: list[list[str]]) -> pd.DataFrame:
+    """This function is specially crafted on demand of UNICANCER. 
+    It takes the results to be written in the program output file, 
+    converts it to a DataFrame and reorders all columns to a specific order
+    asked by UNICANCER. 
+
+    Args:
+        data (list[list[str]]): Data representing the patients and their rules
+
+    Returns:
+        pd.DataFrame: The same data as input but with rule's antecedant collumns reordered. As DataFrame
+    """
     df = pd.DataFrame(data[1:], columns=data[0], dtype="string")
     df = df.loc[
         :,
@@ -131,15 +141,24 @@ def reorder_data_columns(data: list[list[str]]) -> pd.DataFrame:
     return df
 
 
-def write_attributes_file(abspath: str, attributes: list[str]) -> list[str]:
-    file_path = os.path.join(abspath, constants.MODEL_DIRNAME, "attributes.txt")
-    attributes = attributes + ["LYMPHODEMA_NO", "LYMPHODEMA_YES"]
+def create_folder(path: str) -> bool:
+    """Creates inside the specified path a folder, the last target inside
+    the path is the folder to be created. It does not create missing parents.
+    The function returns whether it succeded or not. 
 
-    with open(file_path, "w") as f:
-        for attribute in attributes:
-            f.write(attribute + "\n")
+    Args:
+        path (str): path leading to the folder to be created (the folder name must be inside too).
 
-    return attributes
+    Returns:
+        bool: whether the folder creation succeded or not.
+    """
+    try:
+        Path(path).mkdir(mode=0o777)
+        return True
+
+    except FileExistsError:
+        print(f"WARNING: {path} already exists.")
+        return False
 
 
 def read_attributes_file(abspath: str) -> list[str]:
