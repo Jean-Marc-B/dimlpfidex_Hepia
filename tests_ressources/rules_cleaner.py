@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     cleaned_global_rules = []
     for rule in global_rules.rules:
-        cleaned_global_rules.append(rule.remove_duplicated_antecedants())
+        cleaned_global_rules.append(rule.filter_redundancies())
 
     global_rules.rules = cleaned_global_rules
 

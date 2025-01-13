@@ -175,26 +175,32 @@ Antecedants:\n\t"""
     def filter_redundancies(self) -> Rule:
         new_rule = copy.deepcopy(self)
 
-        non_redundant_antecedants = []
-    
-        for antecedant in new_rule.antecedants:
-            if not non_redundant_antecedants:
-                non_redundant_antecedants.append(antecedant)
-            else:
-                last_antecedant = non_redundant_antecedants[-1]
+        for i in range(len(self.antecedants)):
+            current = self.antecedants[i]
+            for j in range(i+1, len(self.antecedants)):
+                to_compare = self.antecedants[j]
 
-                if (antecedant.attribute_name == last_antecedant.attribute_name and 
-                    antecedant.inequality == last_antecedant.inequality):
-                    if antecedant.inequality and antecedant.value <= last_antecedant.value:
-                        continue 
-                    if not antecedant.inequality and antecedant.value >= last_antecedant.value:
-                        continue
+                if current.attribute_name != to_compare.attribute_name: 
+                    continue
+
+                if current.inequality != to_compare.inequality:
+                    continue
+
+                inequality = current.inequality
+
+                if inequality: # >=
+                    if current.value >= to_compare.value:
+                        new_rule.antecedants[j] = None
+                    else:
+                        new_rule.antecedants[i] = None
+                else: # <
+                    if current.value < to_compare.value:
+                        new_rule.antecedants[j] = None
+                    else:
+                        new_rule.antecedants[i] = None
+
+        new_rule.antecedants = [a for a in new_rule.antecedants if a is not None]
                     
-               
-                non_redundant_antecedants.append(antecedant)
-
-        new_rule.antecedants = non_redundant_antecedants
-        
         return new_rule 
 
     @staticmethod
