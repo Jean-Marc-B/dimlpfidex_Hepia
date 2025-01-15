@@ -6,6 +6,16 @@ import copy
 
 
 class Rule:
+    """Rule class represents a fidex rule. A rule contains various data:
+    - ID
+    - Covering size (amount of samples covered by this rule)
+    - List of covered samples
+    - Fidelity (a value representing a proportion of matches between the rule output and its own output)
+    - Confidence
+    - Accuracy
+    - Output class 
+    - A list of Antecedants objects (see antecedants.py)
+    """
     def __init__(self, json_data: dict, attributes: list[str]) -> None:
         try:
             self.id = -1
@@ -68,8 +78,12 @@ Output: {self.output}"""
         self.id = id
         return self
 
-    # designed for unicancer format
-    def to_str_list(self):
+    def to_str_list(self) -> list[str]:
+        """Returns a Rule into a list of string. Format designed for UNICANCER.
+
+        Returns:
+            list[str]: Rule data converted into list
+        """
         list_str = [""] * 79
         for antecedant in self.antecedants:
             list_str[antecedant.attribute_id] = antecedant.to_string()
@@ -77,6 +91,14 @@ Output: {self.output}"""
         return list_str
 
     def pretty_repr(self, attributes: list[str]) -> str:
+        """Returns a prettier (at least readable) representation of a rule
+
+        Args:
+            attributes (list[str]): path leading to the file.
+
+        Returns:
+            list[str]: Rule data converted into list
+        """
         labels = attributes[-2:]
         string = f"""
 ID: {self.id}
@@ -91,12 +113,17 @@ Antecedants:\n\t"""
         return string
 
     def postprocess(self) -> Rule:
+        """Processes the rule's antecedants in order to apply theses changes:
+        - Ignore attributes "(...)_UNKNOWN" that are < 0.5 (meaning not unknown) 
+        - Round specific values (if < then the value is floor(), elif >= then ceil() is used. 
+        Also, if floor is used, then change < inequality symbol to <=).
         # TODO: sentinel_node_biopsy exludes planned_axillary_dissection (do not touch yet)
         # TODO: get rid of double negated unknown features
-        #
-        # for age, weight, height, nodes_involved, tumor_size, KI_67, fractions, nodes_removed:
-        # => if < then floor() elif >= then ceil()
-        # => floor is used, then change < inequality symbol to <=
+        # TODO: NODES_REMOVED = NODES_EXAMINED ?
+        
+        Returns:
+            Rule: a new rule containing applied changes
+        """
 
         new_rule = copy.deepcopy(self)
 
@@ -152,6 +179,15 @@ Antecedants:\n\t"""
 
     @staticmethod
     def from_json_file(path: str, attributes: list[str]) -> list[Rule]:
+        """Create a list of rule from a JSON rule file
+
+        Args:
+            path (str): file to read
+            attributes (list[str]): list of attributes to be used when creating rules
+
+        Returns:
+            list[Rule]: List containing created rules
+        """
         with open(path, "r") as fp:
             data = json.load(fp)
 
@@ -173,6 +209,12 @@ Antecedants:\n\t"""
         }
 
     def filter_redundancies(self) -> Rule:
+        """Checks and removes if there is redundancies in the rule's antecedants.
+        Example: NODES_EXAMINED > 6.5 and NODES_EXAMINED > 17.2 (in this case, only the second one is kept) 
+
+        Returns:
+            Rule: a new rule without redundancies
+        """
         new_rule = copy.deepcopy(self)
 
         for i in range(len(self.antecedants)):
