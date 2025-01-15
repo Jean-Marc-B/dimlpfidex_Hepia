@@ -38,7 +38,7 @@ class Patient:
             suffix = f"_{i}"
             i += 1
             print(f"Creating a copy with this name instead: {self.reldir + suffix}")
-        
+
         self.reldir += suffix
         self.absdir += suffix
 
@@ -81,7 +81,7 @@ class Patient:
         to_write.to_csv(input_filepath, sep=" ", header=False, index=False)
 
         normalized_file_path = f"{self.reldir}/input_data_normalized.csv"
-        normalization(self.__get_normalization_config())
+        self.exec_normalization()
 
         # one hotting classes (useless but must be done in order to work with densCls)
         to_write = pd.read_csv(normalized_file_path, sep=" ", header=None)
@@ -95,15 +95,15 @@ class Patient:
         if normalize:
             self.__prepare_input_for_extraction()
 
-        densCls(self.__get_denscls_config())
-        fidexGlo(self.__get_fidexglo_config())
+        self.exec_prediction()
+        self.exec_rule_extraction()
 
         self.__set_metrics()
         self.__set_risk()
         self.__rewrite_extracted_rules_file()
 
         if normalize:
-            normalization(self.__get_denormalization_config())
+            self.exec_denormalization()
             selected_rules_dict = read_json_file(
                 f"{self.absdir}/extracted_rules_denormalized.json"
             )
@@ -122,6 +122,58 @@ class Patient:
             f.write(self.pretty_repr(attributes))
 
         return updated_global_rules
+
+    def exec_prediction(self) -> None:
+        config = self.__get_denscls_config()
+        status = densCls(config)
+
+        if status != 0:
+            print(
+                "-" * 20
+                + "AN ERROR OCCURED"
+                + "-" * 20
+                + f"\nStopping model prediction process for patient ID {self.subj_id} for the reason above."
+            )
+            exit(1)
+
+    def exec_rule_extraction(self) -> None:
+        config = self.__get_fidexglo_config()
+        status = fidexGlo(config)
+
+        if status != 0:
+            print(
+                "-" * 20
+                + "AN ERROR OCCURED"
+                + "-" * 20
+                + f"\nStopping rule extraction process for patient ID {self.subj_id} for the reason above."
+            )
+            exit(1)
+
+    def exec_normalization(self) -> None:
+        config = self.__get_normalization_config()
+        status = normalization(config)
+
+        if status != 0:
+            print(
+                "-" * 20
+                + "AN ERROR OCCURED"
+                + "-" * 20
+                + f"\nStopping data normalization process for patient ID {self.subj_id} for the reason above."
+            )
+            exit(1)
+
+    def exec_denormalization(self) -> None:
+        config = self.__get_denormalization_config()
+        status = normalization(config)
+
+        if status != 0:
+            print(
+                "-" * 20
+                + "AN ERROR OCCURED"
+                + "-" * 20
+                + f"\nStopping data denormalization process for patient ID {self.subj_id} for the reason above."
+            )
+            exit(1)
 
     def __get_normalization_config(self) -> str:
         return (
@@ -317,11 +369,11 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
 
     metadata = pd.Series(
         data={
-            "STUDYID":  "PRE-ACT-01-DRAFT",
-            "SITEIDN":  "FRA-98",
+            "STUDYID": "PRE-ACT-01-DRAFT",
+            "SITEIDN": "FRA-98",
             "SITENAME": "UNICANCER_TEST",
-            "SUBJID":   "FRA-98-002",
-            "VISIT":    "BASELINE",
+            "SUBJID": "FRA-98-002",
+            "VISIT": "BASELINE",
         }
     )
     data = pd.read_csv(data_file, sep=" ", header=None)
