@@ -162,6 +162,14 @@ def create_folder(path: str) -> bool:
 
 
 def read_attributes_file(abspath: str) -> list[str]:
+    """Reads a specific file named 'attributes.txt'. It contains column names. 
+
+    Args:
+        abspath (str): path leading to the file.
+
+    Returns:
+        list[str]: list of attributes.
+    """
     file_path = os.path.join(abspath, constants.MODEL_DIRNAME, "attributes.txt")
 
     with open(file_path, "r") as f:
@@ -171,6 +179,16 @@ def read_attributes_file(abspath: str) -> list[str]:
 def write_train_data(
     abspath: str, data: pd.DataFrame, labels: pd.Series, split: float = 0.0
 ) -> None:
+    """Writes data used for training or prediction into a CSV file in the fashion. 
+    If split other than 0.0, a test file will be created with the amount of data 
+    specified as testing data.
+
+    Args:
+        abspath (str): path leading to the directory where files will be written, WARNING: do not specify file name.
+        data (pd.DataFrame): data to be written
+        labels (pd.Series): labels to be written
+        split (float, optional): Amount of data used for testing purposes (ex: 0.1 means 10% of data will be used as test data). Defaults to 0.0.
+    """
     labels = pd.get_dummies(labels).astype("uint")
     train_data_file = os.path.join(abspath, constants.MODEL_DIRNAME, "train_data.csv")
     train_labels_file = os.path.join(
@@ -201,11 +219,24 @@ def write_train_data(
 
 
 def read_json_file(path: str) -> dict:
+    """Reads a JSON formatted file and returns a dict with its content
+
+    Args:
+        path (str): path to file to be read
+
+    Returns:
+        dict: content of file
+    """
     with open(path) as fp:
         return json.load(fp)
 
 
-def init_args():
+def init_args() -> argparse.Namespace:
+    """Initialize argparse made arguments to let the user define options.
+
+    Returns:
+        _type_: Namespace with created arguments
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--train",
