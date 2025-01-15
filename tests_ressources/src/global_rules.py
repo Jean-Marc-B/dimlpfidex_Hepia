@@ -44,9 +44,9 @@ class GlobalRules:
             abspath, constants.MODEL_DIRNAME, "global_rules_denormalized.json"
         )
 
-        self.__to_json_file(global_rules_path)
+        self.to_json_file(global_rules_path)
 
-    def __to_json_file(
+    def to_json_file(
         self,
         path: str,
     ) -> None:
