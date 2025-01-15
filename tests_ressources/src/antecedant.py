@@ -4,6 +4,14 @@ import copy
 
 
 class Antecedant:
+    """Antecedant class representing an attribute being compared to a value. It is composed by:
+    - attribute_id is the id used to find its correpondance in a list of attributes names
+    - attribute_name
+    - inequality is the boolean representation of the inequality (false = '<' and true is '>=')
+    - inequality_str is the comparison operand, can be >=, < or <=
+    - value is a float
+    - precision of the value when shown
+    """
     def __init__(
         self, attribute_id: dict, inequality: bool, value: float, attributes: list[str]
     ) -> None:
@@ -40,8 +48,12 @@ class Antecedant:
     def pretty_repr(self) -> str:
         return f"{self.attribute_name} {self.inequality_str} {self.value:.4f}"
 
-    # designed for unicancer format
     def to_string(self) -> str:
+        """Returns the UNICANCER format for a antecedant.
+
+        Returns:
+            str: formatted string of an antecedant 
+        """
         return f"{self.inequality_str}{round(self.value, self.precision)}"
 
     @staticmethod
@@ -49,6 +61,11 @@ class Antecedant:
         return [antecedant.to_dict() for antecedant in antecedants_list]
 
     def round(self) -> Antecedant:
+        """Rounds an antecedant value depending on its inequality
+
+        Returns:
+            Antecedant: a new antecedant with the value rounded and a potentially new inequality operand  
+        """
         new_antecedant = copy.deepcopy(self)
         new_antecedant.precision = 0
 
