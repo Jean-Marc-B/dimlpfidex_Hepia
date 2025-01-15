@@ -10,7 +10,8 @@ if __name__ == "__main__":
 
     attributes = utils.read_attributes_file(abspath)
     global_rules_path = os.path.join(abspath, constants.MODEL_DIRNAME, "global_rules_denormalized.json")
-    global_rules_out_path = os.path.join(abspath, constants.MODEL_DIRNAME, f"global_rules_cleaned_{today}.txt")
+    global_rules_json_out_path = os.path.join(abspath, constants.MODEL_DIRNAME, f"global_rules_cleaned_{today}.json")
+    global_rules_readable_out_path = os.path.join(abspath, constants.MODEL_DIRNAME, f"global_rules_cleaned_{today}.txt")
 
     global_rules = GlobalRules.from_json_file(global_rules_path, attributes)
 
@@ -20,5 +21,7 @@ if __name__ == "__main__":
 
     global_rules.rules = cleaned_global_rules
 
-    with open(global_rules_out_path, "w") as f:
+    global_rules.to_json_file(global_rules_json_out_path)
+
+    with open(global_rules_readable_out_path, "w") as f:
         f.write(global_rules.pretty_repr(attributes))
