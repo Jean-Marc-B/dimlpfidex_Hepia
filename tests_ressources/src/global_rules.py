@@ -4,6 +4,11 @@ import json
 import os
 
 class GlobalRules:
+    """List of rules that came from the pre-training process, usually contains:
+    - list of rules
+    - decision threshold (value defining the barrier between negative and positive output)
+    - postive class index (which neuron index represent a positive output)
+    """
     def __init__(
         self,
         rules: list[Rule],
@@ -40,6 +45,12 @@ class GlobalRules:
         )
 
     def save(self, abspath: str):
+        """Writes/overwrites a file named 'global_rules_denormalized.json' stored in the
+        given abspath
+
+        Args:
+            abspath (str): path leading to the global rules file
+        """
         global_rules_path = os.path.join(
             abspath, constants.MODEL_DIRNAME, "global_rules_denormalized.json"
         )
@@ -64,7 +75,17 @@ class GlobalRules:
         with open(path, "w") as fp:
             json.dump(json_data, fp, indent=4)
 
-    def get_rule_id(self, target: Rule):
+
+    def get_rule_id(self, target: Rule) -> int:
+        """Computes the rule ID (usefull for UNICANCER) . 
+        Returns -1 if rule is not inside the global rules set.
+
+        Args:
+            target (Rule): targeted rule
+
+        Returns:
+            int: Rule's ID or -1 if none found
+        """
         for rule in self.rules:
             if rule == target:
                 return rule.id
