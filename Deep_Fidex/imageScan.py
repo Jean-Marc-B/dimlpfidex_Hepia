@@ -5,7 +5,7 @@ Created on Mon Oct 14 15:24:08 2024
 @author: jean-marc.boutay
 
 This script performs the training and evaluation of a Convolutional Neural Network (CNN) on a specified dataset
-(either MNIST or CIFAR). It includes options for training the CNN, computing histograms from CNN predictions on filtered areas,
+(either MNIST, CIFAR or HAPPY). It includes options for training the CNN, computing histograms from CNN predictions on filtered areas,
 training a secondary model (e.g., random forests) based on these histograms and extracting global classification rules.
 The script also generates images highlighting important areas of the input images based on the learned rules,
 saving these images and information for further analysis. Various hyperparameters and file paths are specified to manage
@@ -19,7 +19,7 @@ import os
 import sys
 import time
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import keras
 import numpy as np
 import shutil
@@ -48,7 +48,7 @@ test_version = True # Whether to launch with minimal data
 
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -60,23 +60,25 @@ if probability_stats:
 if histogram_stats + activation_layer_stats + probability_stats!= 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats, probability_stats.")
 
-
-with_stats_computation = False
+# Computation of statistics
+with_stats_computation = True
+# Train second model (with statistics data)
 with_train_second_model = True
 
 # Rule computation:
-with_global_rules = False
+with_global_rules = True
 
 # Image generation:
-get_images = False # With histograms
+get_images = True # With histograms
 simple_heat_map = False # Only evaluation on patches
 
 
 ##############################################################################
 
 # Which dataset to launch
-#dataset = "MNIST"
-dataset = "CIFAR"
+dataset = "MNIST"
+#dataset = "CIFAR"
+#dataset = "HAPPY"
 #dataset = "testDataset"
 
 if dataset == "MNIST":     # for MNIST images
@@ -113,6 +115,16 @@ elif dataset == "CIFAR":     # for Cifar images
         7: "horse",
         8: "ship",
         9: "truck",
+    }
+
+elif dataset == "HAPPY":     # for Happy images
+    size1D             = 48
+    nb_channels         = 1
+    base_folder = "../../data/Happy/"
+    data_type = "float"
+    classes = {
+        0: "happy",
+        1: "not happy",
     }
 
 elif dataset == "testDataset":
@@ -226,7 +238,8 @@ if probability_stats:
     #second_model = "randomForests"
     if use_multi_networks_stats:
         second_model = "cnn"
-        with_hsl = True # Only if we have 3 chanels
+        with_hsl = False # Only if we have 3 chanels
+        with_rg = True
 else:
     # second_model = "randomForests"
     second_model = "gradientBoosting"
@@ -270,6 +283,106 @@ rules_folder = base_folder + scan_folder + "Rules"
 heat_maps_folder = base_folder + scan_folder + "Heat_maps"
 ##############################################################################
 
+##############################################################################
+
+# Display parameters
+print("\n--------------------------------------------------------------------------")
+print("Parameters :")
+print("--------------------------------------------------------------------------\n")
+print(f"Dataset : {dataset}")
+print(f"Size : {size1D}x{size1D}x{nb_channels}")
+print(f"Data type : {data_type}")
+print(f"Number of attributes : ", {nb_stats_attributes})
+
+print("Statistic :")
+if histogram_stats:
+    print("Histogram")
+elif activation_layer_stats:
+    print("Activation layer")
+elif probability_stats:
+    if use_multi_networks_stats:
+        print("Probability with multiple networks")
+    else:
+        print("Probability")
+else:
+    print("UNKNOWN")
+
+print("\n-------------")
+print("Files :")
+print("-------------")
+print(f"Train data file : {train_data_file}")
+print(f"Train class file : {train_class_file}")
+print(f"Train prediction file : {train_pred_file}")
+print(f"Test data file : {train_data_file}")
+print(f"Test class file : {train_class_file}")
+print(f"Test prediction file : {train_pred_file}")
+print(f"Model file : {model_file}")
+
+if with_train_cnn:
+    print("\n-------------")
+    print("Training :")
+    print("-------------")
+    print(f"Model checkpoint weights : {model_checkpoint_weights}")
+    print(f"Model stats file : {model_stats}")
+    print(f"Model : {model}")
+    print(f"Number of iterations : {nbIt}")
+    print(f"Batch size : {batch_size}")
+    if activation_layer_stats:
+        if with_leaky_relu:
+            print("With Leaky Relu")
+        else:
+            print("Without Leaky Relu")
+
+if get_images or simple_heat_map or with_stats_computation:
+    print("\n-------------")
+    print("Statistics :")
+    print("-------------")
+    print(f"Filter size : {filter_size}",)
+    print(f"Stride : {stride}",)
+if with_stats_computation:
+    print(f"Train statistics file : {train_stats_file}")
+    print(f"Test statistics file : {test_stats_file}")
+    if probability_stats:
+        print(f"Train statistics file with image : {train_stats_file_with_image}")
+        print(f"Test statistics file with image: {test_stats_file_with_image}")
+    elif histogram_stats:
+        print(f"Number of bins : {nb_bins}")
+        print(f"Probability threshold : {probability_thresholds}")
+if (simple_heat_map and (not (with_stats_computation and histogram_stats))):
+    print(f"Probability threshold : {probability_thresholds}")
+
+if with_train_second_model:
+    print("\n-------------")
+    print("Second training :")
+    print("-------------")
+    print(f"Second model : {second_model}")
+    if probability_stats and use_multi_networks_stats:
+        if with_hsl:
+            print("Using HSL")
+        else:
+            print("Not using HSL")
+    print(f"Batch size second model: {batch_size_second_model}")
+    print(f"Second model statistics file : {second_model_stats}")
+    print(f"Second model train predictions file : {second_model_train_pred}")
+    print(f"Second model output rules file : {second_model_output_rules}")
+
+if with_global_rules:
+    print("\n-------------")
+    print("Fidex rules generation :")
+    print("-------------")
+    print(f"Global rules file : {global_rules_file}")
+    print(f"Hiknot : {hiknot}")
+    print(f"Number of quantization levels : {nbQuantLevels}")
+    print(f"K : {K_val}")
+    print(f"Dropout hyperplans : {dropout_hyp}")
+    print(f"Dropout dimensions : {dropout_dim}")
+    print(f"Global rules file with test statistics : {global_rules_with_test_stats}")
+    print(f"Global rules statistics : {global_rules_stats}")
+
+print("\n--------------------------------------------------------------------------")
+
+##############################################################################
+
 # Get data
 
 print("\nLoading data...")
@@ -298,6 +411,11 @@ Y_test  = Y_test.astype('int32')
 
 print("Data loaded.\n")
 
+
+# Normalize if necessary
+if data_type != "integer":
+    X_train = normalize_data(X_train)
+    X_test = normalize_data(X_test)
 ##############################################################################
 
 # Train CNN model
@@ -486,7 +604,7 @@ if with_train_second_model:
                         if with_hsl: # Transform in HSL(hsv in fact)
                             original_img_transformed_reshaped_train = tf.image.rgb_to_hsv(original_img_transformed_reshaped_train)
                             original_img_transformed_reshaped_test = tf.image.rgb_to_hsv(original_img_transformed_reshaped_test)
-                        else: # Transform in black and white
+                        elif not with_rg: # Transform in black and white
                             original_img_transformed_reshaped_train = tf.image.rgb_to_grayscale(original_img_transformed_reshaped_train)
                             original_img_transformed_reshaped_test = tf.image.rgb_to_grayscale(original_img_transformed_reshaped_test)
 
@@ -494,10 +612,11 @@ if with_train_second_model:
                     built_data_train = np.empty((nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
                     # Add probas on first channel
                     built_data_train[:,:,:,0] = train_probas_h1[:,:,:,i]
-                    # Add H and S on last 2 channels
-                    if with_hsl and nb_channels == 3:
+                    # Add H and S on last 2 channels (or R and G)
+                    if (with_hsl or with_rg) and nb_channels == 3:
                         built_data_train[:,:,:,1] = original_img_transformed_reshaped_train[..., 0]
                         built_data_train[:,:,:,2] = original_img_transformed_reshaped_train[..., 1]
+
                     else: # Add 1-probas and B&W on last 2 channels
                         built_data_train[:,:,:,1] = 1-train_probas_h1[:,:,:,i]
                         built_data_train[:,:,:,2] = original_img_transformed_reshaped_train[..., 0]
@@ -521,7 +640,7 @@ if with_train_second_model:
                     # Add probas on first channel
                     built_data_test[:,:,:,0] = test_probas_h1[:,:,:,i]
                     # Add H and S on last 2 channels
-                    if with_hsl and nb_channels == 3:
+                    if (with_hsl or with_rg) and nb_channels == 3:
                         built_data_test[:,:,:,1] = original_img_transformed_reshaped_test[..., 0]
                         built_data_test[:,:,:,2] = original_img_transformed_reshaped_test[..., 1]
                     else: # Add 1-probas and B&W on last 2 channels
@@ -729,6 +848,7 @@ if with_global_rules:
 # Get images explaining and illustrating the samples and rules
 
 if get_images:
+    print("Generation of images...")
     # Get rules and attributes
     global_rules = getRules(global_rules_file)
     if histogram_stats:
@@ -740,11 +860,11 @@ if get_images:
     os.makedirs(rules_folder)
 
     # For each rule we get filter images for train samples covering the rule
-    good_classes = [3]
+    good_classes = [2,3,5]
     conteur = 0
     for id,rule in enumerate(global_rules[0:50]):
 
-        # if conteur == 10:
+        # if conteur == 50:
         #     exit()
         # if rule.target_class not in good_classes:
         #     continue
@@ -818,11 +938,11 @@ if get_images:
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             if histogram_stats:
-                highlighted_image = highlight_area_histograms(CNNModel, img, filter_size, stride, rule, classes)
+                highlighted_image = highlight_area_histograms(CNNModel, img, data_type, filter_size, stride, rule, classes)
             elif activation_layer_stats:
-                highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
+                highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, data_type, rule, filter_size, stride, classes)
             elif probability_stats:
-                highlighted_image = highlight_area_probability_image(img, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels)
+                highlighted_image = highlight_area_probability_image(img, data_type, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels)
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 
@@ -837,7 +957,7 @@ if simple_heat_map: # Only for one filter !
     os.makedirs(heat_maps_folder)
 
     for id,img in enumerate(X_test[0:100]):
-        heat_maps_img = get_heat_maps(CNNModel, img, filter_size, stride, probability_thresholds, classes)
+        heat_maps_img = get_heat_maps(CNNModel, img, data_type, filter_size, stride, probability_thresholds, classes)
         heat_maps_img.savefig(f"{heat_maps_folder}/sample_{id}.png")
 
 

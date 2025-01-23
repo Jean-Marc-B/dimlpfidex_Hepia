@@ -593,6 +593,19 @@ def image_to_rgb(image):
 
     return original_image_rgb
 
+#Normalize data to range [0,255]
+def normalize_data(data):
+
+    min_val = np.min(data)
+    max_val = np.max(data)
+
+    if max_val - min_val == 0:  # Éviter la division par zéro
+        return np.zeros_like(data, dtype=np.uint8)
+
+    # Normaliser entre 0 et 255, puis convertir en uint8
+    normalized_data = (data - min_val) / (max_val - min_val) * 255
+    return normalized_data.astype(np.uint8)
+
 # Convert image to black and white
 def image_to_black_and_white(image):
     return np.dot(image[...,:3], [0.2989, 0.5870, 0.1140])
@@ -1057,7 +1070,7 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
 
 ###############################################################
 
-def highlight_area_histograms(CNNModel, image, filter_size, stride, rule, classes):
+def highlight_area_histograms(CNNModel, image, data_type, filter_size, stride, rule, classes):
     """
     Highlights important areas in an image based on the rule's antecedents using the CNN model.
 
@@ -1241,7 +1254,7 @@ def get_top_ids(array, X=10, largest=True):
 
 ###############################################################
 
-def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
+def highlight_area_activations_sum(CNNModel, intermediate_model, image, data_type, rule, filter_size, stride, classes):
 
     nb_top_filters = 20 # Number of filters to show in an image
 
@@ -1378,7 +1391,7 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, fi
 
 ###############################################################
 
-def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
+def highlight_area_probability_image(image, data_type, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
 
     nb_classes = len(classes)
 
@@ -1466,7 +1479,6 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
     combined_image[mask_green_combined] = [0, 255, 0]
     # Red Pixels
     combined_image[mask_red_combined] = [255, 0, 0]
-
     # Plotting
 
     # Determine the number of rows and columns for the subplots
@@ -1534,7 +1546,7 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
 ###############################################################
 
 # Only for one filter !
-def get_heat_maps(CNNModel, image, filter_size, stride, probability_thresholds, classes):
+def get_heat_maps(CNNModel, image, data_type, filter_size, stride, probability_thresholds, classes):
     """
     Generates heat maps for each class in an image by applying a sliding filter, computing predictions,
     and overlaying the class-specific heat maps on the original image.
