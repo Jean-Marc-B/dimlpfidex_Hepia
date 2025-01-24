@@ -19,7 +19,7 @@ import os
 import sys
 import time
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import keras
 import numpy as np
 import shutil
@@ -48,7 +48,7 @@ test_version = True # Whether to launch with minimal data
 
 
 # Training CNN:
-with_train_cnn = True
+with_train_cnn = False
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -61,12 +61,12 @@ if histogram_stats + activation_layer_stats + probability_stats!= 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats, probability_stats.")
 
 # Computation of statistics
-with_stats_computation = True
+with_stats_computation = False
 # Train second model (with statistics data)
-with_train_second_model = True
+with_train_second_model = False
 
 # Rule computation:
-with_global_rules = True
+with_global_rules = False
 
 # Image generation:
 get_images = True # With histograms
@@ -76,8 +76,8 @@ simple_heat_map = False # Only evaluation on patches
 ##############################################################################
 
 # Which dataset to launch
-dataset = "MNIST"
-#dataset = "CIFAR"
+#dataset = "MNIST"
+dataset = "CIFAR"
 #dataset = "HAPPY"
 #dataset = "testDataset"
 
@@ -102,7 +102,7 @@ if dataset == "MNIST":     # for MNIST images
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
-    base_folder = "../../data/Cifar/"
+    base_folder = "Cifar/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -120,7 +120,7 @@ elif dataset == "CIFAR":     # for Cifar images
 elif dataset == "HAPPY":     # for Happy images
     size1D             = 48
     nb_channels         = 1
-    base_folder = "../../data/Happy/"
+    base_folder = "Happy/"
     data_type = "float"
     classes = {
         0: "happy",
@@ -938,11 +938,11 @@ if get_images:
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             if histogram_stats:
-                highlighted_image = highlight_area_histograms(CNNModel, img, data_type, filter_size, stride, rule, classes)
+                highlighted_image = highlight_area_histograms(CNNModel, img, filter_size, stride, rule, classes)
             elif activation_layer_stats:
-                highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, data_type, rule, filter_size, stride, classes)
+                highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
             elif probability_stats:
-                highlighted_image = highlight_area_probability_image(img, data_type, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels)
+                highlighted_image = highlight_area_probability_image(img, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels)
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 
@@ -957,7 +957,7 @@ if simple_heat_map: # Only for one filter !
     os.makedirs(heat_maps_folder)
 
     for id,img in enumerate(X_test[0:100]):
-        heat_maps_img = get_heat_maps(CNNModel, img, data_type, filter_size, stride, probability_thresholds, classes)
+        heat_maps_img = get_heat_maps(CNNModel, img, filter_size, stride, probability_thresholds, classes)
         heat_maps_img.savefig(f"{heat_maps_folder}/sample_{id}.png")
 
 
