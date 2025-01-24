@@ -43,12 +43,12 @@ start_time = time.time()
 
 
 # What to launch
-test_version = True # Whether to launch with minimal data
+test_version = False # Whether to launch with minimal data
 
 
 
 # Training CNN:
-with_train_cnn = False
+with_train_cnn = True
 
 # Stats computation and second model training:
 histogram_stats = False
@@ -61,16 +61,25 @@ if histogram_stats + activation_layer_stats + probability_stats!= 1:
     raise ValueError("Error, you need to specify one of histogram_stats, activation_layer_stats, probability_stats.")
 
 # Computation of statistics
-with_stats_computation = False
+with_stats_computation = True
 # Train second model (with statistics data)
-with_train_second_model = False
+with_train_second_model = True
 
 # Rule computation:
 with_global_rules = False
 
 # Image generation:
-get_images = True # With histograms
+get_images = False # With histograms
 simple_heat_map = False # Only evaluation on patches
+
+if with_global_rules:
+    if any((with_train_cnn,
+            with_stats_computation,
+            with_train_second_model,
+            get_images)):
+        raise ValueError("Global rules have to be computed alone because we don't want to use a GPU during global rules generation.")
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # No GPU when generating rules
 
 
 ##############################################################################
@@ -102,7 +111,7 @@ if dataset == "MNIST":     # for MNIST images
 elif dataset == "CIFAR":     # for Cifar images
     size1D             = 32
     nb_channels         = 3
-    base_folder = "Cifar/"
+    base_folder = "../../data/CifarProbasMultRG_5x5/"
     data_type = "integer"
     classes = {
         0: "airplane",
@@ -120,7 +129,7 @@ elif dataset == "CIFAR":     # for Cifar images
 elif dataset == "HAPPY":     # for Happy images
     size1D             = 48
     nb_channels         = 1
-    base_folder = "../data/Happy/"
+    base_folder = "../../data/Happy/"
     data_type = "float"
     classes = {
         0: "happy",
@@ -218,7 +227,7 @@ elif probability_stats:
     train_stats_file_with_image = files_folder + "train_probability_images_with_original_img.txt"
     test_stats_file_with_image = files_folder + "test_probability_images_with_original_img.txt"
 
-filter_size = [[7,7]] # Size of filter(s) applied to the image
+filter_size = [[5,5]] # Size of filter(s) applied to the image
 if np.asarray(filter_size).ndim == 1:
     filter_size = [filter_size]
 # Exemples : 7x7 : [7,7] 5x5 and 7x7 : [[5,5],[7,7]]
