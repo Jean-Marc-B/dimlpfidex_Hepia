@@ -600,11 +600,11 @@ def normalize_data(data):
     max_val = np.max(data)
 
     if max_val - min_val == 0:  # Éviter la division par zéro
-        return np.zeros_like(data, dtype=np.uint8)
+        return np.zeros_like(data, dtype=np.int32)
 
     # Normaliser entre 0 et 255, puis convertir en uint8
     normalized_data = (data - min_val) / (max_val - min_val) * 255
-    return normalized_data.astype(np.uint8)
+    return normalized_data.astype(np.int32)
 
 # Convert image to black and white
 def image_to_black_and_white(image):
@@ -1070,7 +1070,7 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
 
 ###############################################################
 
-def highlight_area_histograms(CNNModel, image, data_type, filter_size, stride, rule, classes):
+def highlight_area_histograms(CNNModel, image, filter_size, stride, rule, classes):
     """
     Highlights important areas in an image based on the rule's antecedents using the CNN model.
 
@@ -1157,8 +1157,8 @@ def highlight_area_histograms(CNNModel, image, data_type, filter_size, stride, r
     combined_image = original_image_rgb.copy().astype(np.float32)
 
     # Apply the combined filters
-    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + red_overlay, 0, 255)  # Ajout du rouge
-    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1] + green_overlay, 0, 255)  # Ajout du vert
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0].astype(float) + red_overlay.astype(float), 0, 255)  # Ajout du rouge
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1].astype(float) + green_overlay.astype(float), 0, 255)  # Ajout du vert
 
     combined_image = combined_image.astype(np.uint8)
 
@@ -1202,10 +1202,10 @@ def highlight_area_histograms(CNNModel, image, data_type, filter_size, stride, r
         # Apply filter green for >= or red for <
         if antecedent.inequality:
             # Apply green filter
-            individual_image[:, :, 1] = np.clip(individual_image[:, :, 1] + normalized_intensity, 0, 255)
+            individual_image[:, :, 1] = np.clip(individual_image[:, :, 1].astype(float) + normalized_intensity.astype(float), 0, 255)
         else:
             # Apply red filter
-            individual_image[:, :, 0] = np.clip(individual_image[:, :, 0] + normalized_intensity, 0, 255)
+            individual_image[:, :, 0] = np.clip(individual_image[:, :, 0].astype(float) + normalized_intensity.astype(float), 0, 255)
 
         individual_image = individual_image.astype(np.uint8)
 
@@ -1254,7 +1254,7 @@ def get_top_ids(array, X=10, largest=True):
 
 ###############################################################
 
-def highlight_area_activations_sum(CNNModel, intermediate_model, image, data_type, rule, filter_size, stride, classes):
+def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
 
     nb_top_filters = 20 # Number of filters to show in an image
 
@@ -1323,8 +1323,8 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, data_typ
 
     # Combine green and red intensities into a single image
     combined_image = original_image_rgb.copy()
-    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1] + combined_green_intensity * 255, 0, 255)  # Green channel
-    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + combined_red_intensity * 255, 0, 255)    # Red channel
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1].astype(float) + combined_green_intensity.astype(float) * 255, 0, 255)  # Green channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0].astype(float) + combined_red_intensity.astype(float) * 255, 0, 255)    # Red channel
 
     # Plotting
 
@@ -1368,9 +1368,9 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, data_typ
         # Create filter image
         filtered_image = original_image_rgb.copy()
         if antecedent.inequality:
-            filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1] + intensity_map * 255, 0, 255)
+            filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1].astype(float) + intensity_map.astype(float) * 255, 0, 255)
         else:
-            filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0] + intensity_map * 255, 0, 255)
+            filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0].astype(float) + intensity_map.astype(float) * 255, 0, 255)
 
         filtered_image = filtered_image.astype(np.uint8)
         ineq = ">=" if antecedent.inequality else "<"
@@ -1391,7 +1391,7 @@ def highlight_area_activations_sum(CNNModel, intermediate_model, image, data_typ
 
 ###############################################################
 
-def highlight_area_probability_image(image, data_type, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
+def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
 
     nb_classes = len(classes)
 
@@ -1415,12 +1415,10 @@ def highlight_area_probability_image(image, data_type, rule, size1D, size_Height
         area_Width = area_number % size_Width_proba_stat
         filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
 
-        if channel_id < nb_classes:
+        if channel_id < nb_classes: # Attrubute corresponds to an area
             # Get attribute information
             area_Height_end = area_Height+filter_size[0][0]-1
             area_Width_end = area_Width+filter_size[0][1]-1
-            # print(area_Height, "-", area_Height_end)
-            # print(area_Width, "-", area_Width_end)
 
             if antecedent.inequality:  # >=
                 filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
@@ -1428,7 +1426,7 @@ def highlight_area_probability_image(image, data_type, rule, size1D, size_Height
             else:  # <
                 filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
                 combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
-        else:
+        else: # Antecedant corresponds to a pixel
             height_original = round(area_Height * scale_h)
             width_original = round(area_Width * scale_w)
             if antecedent.inequality:  # >=
@@ -1446,10 +1444,10 @@ def highlight_area_probability_image(image, data_type, rule, size1D, size_Height
         mask_green_combined |= mask_green
         mask_red_combined |= mask_red
 
-        filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8)
+        filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8) # Normalize to be between 0 and 255.
         filtered_image = original_image_rgb.copy()
-        filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1] + filtered_image_intensity[:, :, 1], 0, 255)  # Green channel
-        filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0] + filtered_image_intensity[:, :, 0], 0, 255)  # Red channel
+        filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1].astype(float) + filtered_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel type unint16 is mandatory otherwise addition will be cyclic (255+1=0)
+        filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0].astype(float) + filtered_image_intensity[:, :, 0].astype(float), 0, 255)  # Red channel
 
         # Green Pixels
         filtered_image[mask_green] = [0, 255, 0]
@@ -1467,13 +1465,13 @@ def highlight_area_probability_image(image, data_type, rule, size1D, size_Height
     combined_max_value = np.max(combined_masked_intensity)
 
     if combined_max_value > 0:
-        combined_image_intensity = np.clip(combined_image_intensity / combined_max_value * 255, 0, 255)
+        combined_image_intensity = np.clip(combined_image_intensity / combined_max_value * 255, 0, 255) # Normalize to be between 0 and 255
     else:
         combined_image_intensity = np.zeros_like(combined_image_intensity)
 
     combined_image = original_image_rgb.copy()
-    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1] + combined_image_intensity[:, :, 1], 0, 255)  # Green channel
-    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0] + combined_image_intensity[:, :, 0], 0, 255)  # Red channel
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1].astype(float) + combined_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0].astype(float) + combined_image_intensity[:, :, 0].astype(float), 0, 255)  # Red channel
 
     # Green Pixels
     combined_image[mask_green_combined] = [0, 255, 0]
@@ -1546,7 +1544,7 @@ def highlight_area_probability_image(image, data_type, rule, size1D, size_Height
 ###############################################################
 
 # Only for one filter !
-def get_heat_maps(CNNModel, image, data_type, filter_size, stride, probability_thresholds, classes):
+def get_heat_maps(CNNModel, image, filter_size, stride, probability_thresholds, classes):
     """
     Generates heat maps for each class in an image by applying a sliding filter, computing predictions,
     and overlaying the class-specific heat maps on the original image.
@@ -1622,7 +1620,7 @@ def get_heat_maps(CNNModel, image, data_type, filter_size, stride, probability_t
         # Apply red filter
         heat_map_img = original_image_rgb.copy().astype(np.float32)
         #heat_map_img = np.zeros((image.shape[0], image.shape[1], 3), dtype=np.float32)
-        heat_map_img[:, :, 0] = np.clip(heat_map_img[:, :, 0] + normalized_intensity, 0, 255)
+        heat_map_img[:, :, 0] = np.clip(heat_map_img[:, :, 0].astype(float) + normalized_intensity.astype(float), 0, 255)
         heat_map_img = heat_map_img.astype(np.uint8)
 
 
