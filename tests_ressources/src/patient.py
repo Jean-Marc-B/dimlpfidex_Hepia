@@ -7,7 +7,6 @@ from trainings import normalization
 import src.constants as constants
 from datetime import datetime
 import src.data_helper as dh
-from pathlib import Path
 from src.utils import *
 from src.rule import *
 import pandas as pd
@@ -17,6 +16,14 @@ import os
 
 
 class Patient:
+    """Patient object stores a representation of the patient data and metadata.
+    This class is used to
+    - pre-process a patient's data
+    - feed and execute the predictor
+    - feed and execute the rule exctraction process
+    - post-process the output to the desired format
+    """
+
     def __init__(
         self, metadata: pd.Series, clinical_data: pd.Series, abspath: str
     ) -> None:
@@ -49,6 +56,12 @@ class Patient:
         self.selected_rules = []
 
     def to_str_list(self) -> list[list[str]]:
+        """Formats a patient's metadata and selected rules.
+        Returns a string respecting the UNICANCER output format.
+
+        Returns:
+            list[list[str]]: List of strings concerning the patient and its selected rules
+        """
         res = []
 
         for rule in self.selected_rules:
@@ -71,7 +84,7 @@ class Patient:
 
         return res
 
-    def __prepare_input_for_extraction(self) -> str:
+    def __prepare_input_for_extraction(self) -> None:
         input_filepath = os.path.join(self.absdir, "input_data.csv")
 
         # one hotting classes (useless but must be done in order to work with densCls)
@@ -243,6 +256,14 @@ class Patient:
         )
 
     def __process_selected_rules(self, global_rules: GlobalRules) -> GlobalRules:
+        """Adds ids to the selected rules and adds any generated rules to the global rule set. 
+
+        Args:
+            global_rules (GlobalRules): Set of global rules
+
+        Returns:
+            GlobalRules: potentially modified set of global rules
+        """
         for i in range(len(self.selected_rules)):
             rule = self.selected_rules[i]
             id = global_rules.get_rule_id(rule)
@@ -263,6 +284,7 @@ class Patient:
             json.dump({"rules": selected_rules}, fp, indent=4)
 
     def __set_metrics(self):
+        """recovers stds and avgs from densCls output and computes the high and low interval for a patient's prediction"""
         data = read_json_file(os.path.join(self.absdir, "densClsMetrics.json"))
         preds_filepath = os.path.join(self.absdir, "prediction.csv")
 
@@ -332,6 +354,18 @@ Selected rules:
 
 
 def write_patients(abspath: str) -> list[Patient]:
+    """reads input files and converts all records into patients objects.
+
+    Args:
+        abspath (str): path leading to project directory
+
+    Raises:
+        NotImplementedError: raises an error if there is an unrecognised file extension. Supported files are:
+        .xls, .xlsx, .xlsm, .xlsb, .odf, .ods, .odt and .csv
+
+    Returns:
+        list[Patient]: list of generated patients
+    """
     input_dirpath = os.path.join(abspath, constants.INPUT_DIRNAME)
     input_filepath = get_most_recent_input_file(input_dirpath)
 
@@ -363,8 +397,19 @@ def write_patients(abspath: str) -> list[Patient]:
     return patients
 
 
-# this is for testing puroposes only
 def write_samples_file(abspath: str, n: int) -> list[Patient]:
+    """Writes fake data for testing purposes.
+
+    Args:
+        abspath (str): path leading to project
+        n (int): number of test samples to genenerate
+
+    Raises:
+        ValueError: raises an error if 'n' is greater than the number of testing samples
+
+    Returns:
+        list[Patient]: generated patients
+    """
     data_file = os.path.join(abspath, constants.MODEL_DIRNAME, "test_data.csv")
 
     metadata = pd.Series(
@@ -395,6 +440,12 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
 
 
 def write_results(abspath: str, patients: list[Patient]) -> None:
+    """Writes program output in a file (csv format file with all patient's selected rules).
+
+    Args:
+        abspath (str): script absolute base path
+        patients (list[Patient]): list of patients to be written
+    """
     today = datetime.today().strftime("%Y_%m_%d")
     write_path = os.path.join(abspath, constants.OUTPUT_DIRNAME, f"results_{today}.csv")
 
