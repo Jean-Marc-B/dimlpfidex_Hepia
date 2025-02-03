@@ -1,7 +1,7 @@
 
 import numpy as np
 import tensorflow as tf
-from stairObj import StairObj
+from .stairObj import StairObj
 from keras import backend as K
 from keras.models     import Sequential
 from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU, Resizing
@@ -12,8 +12,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.backend import clear_session
 
 from keras.callbacks  import ModelCheckpoint
-from rule import Rule
-from antecedent import Antecedent
+from .rule import Rule
+from .antecedent import Antecedent
 import json
 import math
 from PIL import Image
@@ -22,7 +22,7 @@ import time
 import re
 import matplotlib.pyplot as plt
 import gc
-from constants import HISTOGRAM_ANTECEDENT_PATTERN
+from .constants import HISTOGRAM_ANTECEDENT_PATTERN
 
 nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
