@@ -27,8 +27,8 @@ import re
 import copy
 from tensorflow.keras import Model
 import tensorflow as tf
-from constants import HISTOGRAM_ANTECEDENT_PATTERN
-from utils import *
+from utils.constants import HISTOGRAM_ANTECEDENT_PATTERN
+from utils.utils import *
 np.random.seed(seed=None)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -77,8 +77,8 @@ simple_heat_map = False # Only evaluation on patches
 
 # Which dataset to launch
 #dataset = "MNIST"
-dataset = "CIFAR"
-#dataset = "HAPPY"
+#dataset = "CIFAR"
+dataset = "HAPPY"
 #dataset = "testDataset"
 
 if dataset == "MNIST":     # for MNIST images
@@ -120,7 +120,7 @@ elif dataset == "CIFAR":     # for Cifar images
 elif dataset == "HAPPY":     # for Happy images
     size1D             = 48
     nb_channels         = 1
-    base_folder = "Happy/"
+    base_folder = "../data/Happy/"
     data_type = "float"
     classes = {
         0: "happy",
@@ -146,9 +146,9 @@ nb_classes = len(classes)
 
 #----------------------------
 # Folders
-scan_folder = "ScanFull/"
+scan_folder = "evaluation/ScanFull/"
 if test_version:
-    scan_folder = "Scan/"
+    scan_folder = "evaluation/Scan/"
 if histogram_stats:
     scan_folder += "Histograms/"
 elif activation_layer_stats:
@@ -159,31 +159,34 @@ elif probability_stats:
     else:
         scan_folder += "Probability_Images/"
 
+plot_folder = base_folder + scan_folder + "plots/"
+files_folder = base_folder + scan_folder + "files/"
+data_folder = base_folder + "data/"
 
 #----------------------------
 # Files
 test_particle = ""
 if test_version:
     test_particle = "_test_version"
-train_data_file = base_folder + "trainData" + test_particle + ".txt"
-train_class_file = base_folder + "trainClass" + test_particle + ".txt"
-test_data_file = base_folder + "testData" + test_particle + ".txt"
-test_class_file = base_folder + "testClass" + test_particle + ".txt"
+train_data_file = data_folder + "trainData" + test_particle + ".txt"
+train_class_file = data_folder + "trainClass" + test_particle + ".txt"
+test_data_file = data_folder + "testData" + test_particle + ".txt"
+test_class_file = data_folder + "testClass" + test_particle + ".txt"
 if test_version:
-    train_data_file = base_folder + "trainData_test_version.txt"
-    train_class_file = base_folder + "trainClass_test_version.txt"
-    test_data_file = base_folder + "testData_test_version.txt"
-    test_class_file = base_folder + "testClass_test_version.txt"
-model_file = base_folder + scan_folder + "scanModel.keras"
-train_pred_file = base_folder + scan_folder + "train_pred.out"
-test_pred_file = base_folder + scan_folder + "test_pred.out"
+    train_data_file = data_folder + "trainData_test_version.txt"
+    train_class_file = data_folder + "trainClass_test_version.txt"
+    test_data_file = data_folder + "testData_test_version.txt"
+    test_class_file = data_folder + "testClass_test_version.txt"
+model_file = files_folder + "scanModel.keras"
+train_pred_file = files_folder + "train_pred.out"
+test_pred_file = files_folder + "test_pred.out"
 
-attributes_file = base_folder + scan_folder + "attributes.txt"
+attributes_file = files_folder + "attributes.txt"
 
 #----------------------------
 # If we train :
-model_checkpoint_weights = base_folder + scan_folder + "weightsModel.weights.h5"
-model_stats = base_folder + scan_folder + "stats_model.txt"
+model_checkpoint_weights = files_folder + "weightsModel.weights.h5"
+model_stats = files_folder + "stats_model.txt"
 if test_version:
     model="small"
     nbIt = 4
@@ -204,16 +207,16 @@ else:
 # For stats computation
 
 if histogram_stats:
-    train_stats_file = base_folder + scan_folder + "train_hist.txt"
-    test_stats_file = base_folder + scan_folder + "test_hist.txt"
+    train_stats_file = files_folder + "train_hist.txt"
+    test_stats_file = files_folder + "test_hist.txt"
 elif activation_layer_stats:
-    train_stats_file = base_folder + scan_folder + "train_activation_sum.txt"
-    test_stats_file = base_folder + scan_folder + "test_activation_sum.txt"
+    train_stats_file = files_folder + "train_activation_sum.txt"
+    test_stats_file = files_folder + "test_activation_sum.txt"
 elif probability_stats:
-    train_stats_file = base_folder + scan_folder + "train_probability_images.txt"
-    test_stats_file = base_folder + scan_folder + "test_probability_images.txt"
-    train_stats_file_with_image = base_folder + scan_folder + "train_probability_images_with_original_img.txt"
-    test_stats_file_with_image = base_folder + scan_folder + "test_probability_images_with_original_img.txt"
+    train_stats_file = files_folder + "train_probability_images.txt"
+    test_stats_file = files_folder + "test_probability_images.txt"
+    train_stats_file_with_image = files_folder + "train_probability_images_with_original_img.txt"
+    test_stats_file_with_image = files_folder + "test_probability_images_with_original_img.txt"
 
 filter_size = [[7,7]] # Size of filter(s) applied to the image
 if np.asarray(filter_size).ndim == 1:
@@ -251,24 +254,24 @@ if second_model in {"randomForests", "gradientBoosting"}:
 else:
     using_decision_tree_model = False
 
-second_model_stats = base_folder + scan_folder + "second_model_stats.txt"
-second_model_train_pred = base_folder + scan_folder + "second_model_train_pred.txt"
-second_model_test_pred = base_folder + scan_folder + "second_model_test_pred.txt"
+second_model_stats = files_folder + "second_model_stats.txt"
+second_model_train_pred = files_folder + "second_model_train_pred.txt"
+second_model_test_pred = files_folder + "second_model_test_pred.txt"
 if using_decision_tree_model:
-    second_model_output_rules = base_folder + scan_folder + "second_model_rules.rls"
+    second_model_output_rules = files_folder + "second_model_rules.rls"
 else:
-    second_model_output_rules = base_folder + scan_folder + "second_model_weights.wts"
+    second_model_output_rules = files_folder + "second_model_weights.wts"
 
 #----------------------------
 # For Fidex
-global_rules_file = base_folder + scan_folder + "globalRules.json"
+global_rules_file = files_folder + "globalRules.json"
 hiknot = 5
 nbQuantLevels = 100
 K_val = 1.0
 dropout_hyp = 0.9
 dropout_dim = 0.9
-global_rules_with_test_stats = base_folder + scan_folder + "globalRulesWithStats.json"
-global_rules_stats = base_folder + scan_folder + "global_rules_stats.txt"
+global_rules_with_test_stats = files_folder + "globalRulesWithStats.json"
+global_rules_stats = files_folder + "global_rules_stats.txt"
 
 if probability_stats:
     size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
@@ -277,10 +280,10 @@ if probability_stats:
     nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*(nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
 #----------------------------
 # Folder for output images
-rules_folder = base_folder + scan_folder + "Rules"
+rules_folder = plot_folder + "Rules"
 
 # Folder for heat maps
-heat_maps_folder = base_folder + scan_folder + "Heat_maps"
+heat_maps_folder = plot_folder + "Heat_maps"
 ##############################################################################
 
 ##############################################################################
@@ -576,8 +579,8 @@ if with_train_second_model:
             test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+output_size)
             #print(train_probas.shape)  # (nb_train_samples, 22, 22, 10)
             #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
-            second_model_file = base_folder + scan_folder + "scanSecondModel.keras"
-            second_model_checkpoint_weights = base_folder + scan_folder + "weightsSecondModel.weights.h5"
+            second_model_file = files_folder + "scanSecondModel.keras"
+            second_model_checkpoint_weights = files_folder + "weightsSecondModel.weights.h5"
 
             if not use_multi_networks_stats: # Train with a CNN now
                 trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes+nb_channels, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
@@ -590,9 +593,9 @@ if with_train_second_model:
                     nbIt_current = 80
                 models_folder = "Models/"
                 # Create folder for all models
-                if os.path.exists(base_folder + scan_folder + models_folder):
-                    shutil.rmtree(base_folder + scan_folder + models_folder)
-                os.makedirs(base_folder + scan_folder + models_folder)
+                if os.path.exists(files_folder + models_folder):
+                    shutil.rmtree(files_folder + models_folder)
+                os.makedirs(files_folder + models_folder)
 
                 # Create each dataset
                 for i in range(nb_classes):
@@ -626,14 +629,14 @@ if with_train_second_model:
                     built_Y_train = np.zeros((nb_train_samples, 2), dtype=int)
                     built_Y_train[Y_train[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
                     built_Y_train[Y_train[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
-                    current_model_train_pred = base_folder + scan_folder + models_folder + "second_model_train_pred_" + str(i) + ".txt"
+                    current_model_train_pred = files_folder + models_folder + "second_model_train_pred_" + str(i) + ".txt"
                     data_filename = "train_probability_images_with_original_img_" + str(i) + ".txt"
                     class_filename = "Y_train_probability_images_with_original_img_" + str(i) + ".txt"
                     built_data_train_flatten = built_data_train.reshape(nb_train_samples, size_Height_proba_stat*size_Width_proba_stat*3)
 
                     # output new train data
-                    output_data(built_data_train_flatten, base_folder + scan_folder + models_folder + data_filename)
-                    output_data(built_Y_train, base_folder + scan_folder + models_folder + class_filename)
+                    output_data(built_data_train_flatten, files_folder + models_folder + data_filename)
+                    output_data(built_Y_train, files_folder + models_folder + class_filename)
 
                     # Create test data for each model
                     built_data_test = np.empty((nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
@@ -651,18 +654,18 @@ if with_train_second_model:
                     built_Y_test = np.zeros((nb_test_samples, 2), dtype=int)
                     built_Y_test[Y_test[:, i] == 1, 0] = 1  # If condition is True, set [1, 0]
                     built_Y_test[Y_test[:, i] != 1, 1] = 1  # If condition is False, set [0, 1]
-                    current_model_test_pred = base_folder + scan_folder + models_folder + "second_model_test_pred_" + str(i) + ".txt"
+                    current_model_test_pred = files_folder + models_folder + "second_model_test_pred_" + str(i) + ".txt"
                     data_filename = "test_probability_images_with_original_img_" + str(i) + ".txt"
                     class_filename = "Y_test_probability_images_with_original_img_" + str(i) + ".txt"
                     built_data_test_flatten = built_data_test.reshape(nb_test_samples, size_Height_proba_stat*size_Width_proba_stat*3)
 
                     # output new test data
-                    output_data(built_data_test_flatten, base_folder + scan_folder + models_folder + data_filename)
-                    output_data(built_Y_test, base_folder + scan_folder + models_folder + class_filename)
+                    output_data(built_data_test_flatten, files_folder + models_folder + data_filename)
+                    output_data(built_Y_test, files_folder + models_folder + class_filename)
 
-                    current_model_stats = base_folder + scan_folder + models_folder + "second_model_stats_" + str(i) +".txt"
-                    current_model_file = base_folder + scan_folder + models_folder + "scanSecondModel_" + str(i) +".keras"
-                    current_model_checkpoint_weights = base_folder + scan_folder + models_folder + "weightsSecondModel_" + str(i) +".weights.h5"
+                    current_model_stats = files_folder + models_folder + "second_model_stats_" + str(i) +".txt"
+                    current_model_file = files_folder + models_folder + "scanSecondModel_" + str(i) +".keras"
+                    current_model_checkpoint_weights = files_folder + models_folder + "weightsSecondModel_" + str(i) +".weights.h5"
 
                     print("Dataset n°",i," created.")
                     # Train new model
@@ -670,8 +673,8 @@ if with_train_second_model:
                     print("Dataset n°",i," trained.")
                 # Create test and train predictions
 
-                train_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_train_pred_{i}.txt" for i in range(nb_classes)]
-                test_pred_files = [f"{base_folder}{scan_folder}{models_folder}second_model_test_pred_{i}.txt" for i in range(nb_classes)]
+                train_pred_files = [f"{files_folder}{models_folder}second_model_train_pred_{i}.txt" for i in range(nb_classes)]
+                test_pred_files = [f"{files_folder}{models_folder}second_model_test_pred_{i}.txt" for i in range(nb_classes)]
 
                 # Gathering predictions for train and test
                 print("Gathering train predictions...")
