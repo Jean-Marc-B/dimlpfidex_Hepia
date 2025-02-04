@@ -1,0 +1,10 @@
+# Liste des datasets autorisés
+AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset"]
+
+# Liste des statistiques autorisées
+AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_multi_nets"]
+
+# Autres paramètres
+DEFAULT_MODEL_PATH = "models/"
+DEFAULT_TRAINING_EPOCHS = 10
+DEFAULT_BATCH_SIZE = 32
