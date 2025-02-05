@@ -60,13 +60,13 @@ def parse_arguments():
     )
 
     # Optionals arguments
-    parser.add_argument("--test", action="store_true", help="Test mode")
+    parser.add_argument("--test", action="store_true", help="Test mode") # Launch with minimal version
     parser.add_argument("--train_cnn", action="store_true", help="Train a CNN")
-    parser.add_argument("--stats", action="store_true", help="Compute statistics")
+    parser.add_argument("--stats", action="store_true", help="Compute statistics") # Stats computation
     parser.add_argument("--train_second_model", action="store_true", help="Train a second model")
     parser.add_argument("--rules", action="store_true", help="Compute global rules")
     parser.add_argument("--images", action="store_true", help="Generate explaining images")
-    parser.add_argument("--heatmap", action="store_true", help="Generate a heatmap")
+    parser.add_argument("--heatmap", action="store_true", help="Generate a heatmap") # Only evaluation on patches
 
     return parser.parse_args()
 
@@ -75,34 +75,8 @@ if __name__ == "__main__":
     start_time = time.time()
     args = parse_arguments()
 
-    # What to launch
-    test_version = True # Whether to launch with minimal data
+    # Check on inline parameters
 
-    # TODO : CHECK chaque args.statistic et args.dataset
-
-    """
-    # Training CNN:
-    with_train_cnn = True
-
-    # Stats computation and second model training:
-    histogram_stats = False
-    activation_layer_stats = False
-    probability_stats = True
-    if probability_stats:
-        use_multi_networks_stats = True
-
-    # Computation of statistics
-    with_stats_computation = True
-    # Train second model (with statistics data)
-    with_train_second_model = True
-
-    # Rule computation:
-    with_global_rules = False
-
-    # Image generation:
-    get_images = False # With histograms
-    simple_heat_map = False # Only evaluation on patches
-"""
     if args.rules:
         if any((args.train_cnn,
                 args.stats,
@@ -112,16 +86,15 @@ if __name__ == "__main__":
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # No GPU when generating rules
 
+    # Get Parameter configuration
+    cfg = config.load_config(args, script_dir)
+    exit()
 
     ##############################################################################
 
     # Which dataset to launch
-    dataset = "MNIST"
-    #dataset = "CIFAR"
-    #dataset = "HAPPY"
-    #dataset = "testDataset"
 
-    if dataset == "MNIST":     # for MNIST images
+    if args.dataset == "MNIST":     # for MNIST images
         size1D             = 28
         nb_channels         = 1
         base_folder = os.path.join(os.path.dirname(script_dir), "data", "Mnist")
@@ -139,7 +112,7 @@ if __name__ == "__main__":
             9:"9",
         }
 
-    elif dataset == "CIFAR":     # for Cifar images
+    elif args.dataset == "CIFAR":     # for Cifar images
         size1D             = 32
         nb_channels         = 3
         base_folder = os.path.join(os.path.dirname(script_dir), "data", "Cifar")
@@ -157,7 +130,7 @@ if __name__ == "__main__":
             9: "truck",
         }
 
-    elif dataset == "HAPPY":     # for Happy images
+    elif args.dataset == "HAPPY":     # for Happy images
         size1D             = 48
         nb_channels         = 1
         base_folder = os.path.join(os.path.dirname(script_dir), "data", "Happy")
@@ -167,7 +140,7 @@ if __name__ == "__main__":
             1: "not happy",
         }
 
-    elif dataset == "testDataset":
+    elif args.dataset == "testDataset":
         size1D = 20
         nb_channels = 1
         base_folder = "Test/"
@@ -187,17 +160,16 @@ if __name__ == "__main__":
     #----------------------------
     # Folders
     scan_folder = os.path.join("evaluation", "ScanFull")
-    if test_version:
+    if args.test:
         scan_folder = os.path.join("evaluation", "Scan")
     if args.statistic == "histogram":
         scan_folder = os.path.join(scan_folder, "Histograms")
     elif args.statistic == "activation_layer":
         scan_folder = os.path.join(scan_folder, "Activations_Sum")
-    elif probability_stats:
-        if use_multi_networks_stats:
+    elif args.statistic == "probability_multi_nets":
             scan_folder = os.path.join(scan_folder, "Probability_Multi_Nets_Images")
-        else:
-            scan_folder = os.path.join(scan_folder, "Probability_Images")
+    else:
+        scan_folder = os.path.join(scan_folder, "Probability_Images")
 
     plot_folder = os.path.join(base_folder, scan_folder, "plots")
     files_folder = os.path.join(base_folder, scan_folder, "files")
@@ -205,7 +177,7 @@ if __name__ == "__main__":
 
     #----------------------------
     # Files
-    test_particle = "_test_version" if test_version else ""
+    test_particle = "_test_version" if args.test else ""
 
     # Data files
     train_data_file = os.path.join(data_folder, f"trainData{test_particle}.txt")
@@ -225,7 +197,7 @@ if __name__ == "__main__":
     # If we train :
     model_checkpoint_weights = os.path.join(files_folder, "weightsModel.weights.h5")
     model_stats = os.path.join(files_folder, "stats_model.txt")
-    if test_version:
+    if args.test:
         model="small"
         nbIt = 4
         batch_size = 32
@@ -250,7 +222,7 @@ if __name__ == "__main__":
     elif args.statistic == "activation_layer":
         train_stats_file = os.path.join(files_folder, "train_activation_sum.txt")
         test_stats_file = os.path.join(files_folder, "test_activation_sum.txt")
-    elif probability_stats:
+    elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
         train_stats_file = os.path.join(files_folder, "train_probability_images.txt")
         test_stats_file = os.path.join(files_folder, "test_probability_images.txt")
         train_stats_file_with_image = os.path.join(files_folder, "train_probability_images_with_original_img.txt")
@@ -274,13 +246,13 @@ if __name__ == "__main__":
     #----------------------------
     # For second model training
 
-    if probability_stats:
+    if args.statistic == "probability":
         second_model = "cnn"
         #second_model = "randomForests"
-        if use_multi_networks_stats:
-            second_model = "cnn"
-            with_hsl = False # Only if we have 3 chanels
-            with_rg = True
+    elif args.statistic == "probability_multi_nets":
+        second_model = "cnn"
+        with_hsl = False # Only if we have 3 chanels
+        with_rg = True
     else:
         # second_model = "randomForests"
         second_model = "gradientBoosting"
@@ -311,7 +283,7 @@ if __name__ == "__main__":
     global_rules_with_test_stats = os.path.join(files_folder, "globalRulesWithStats.json")
     global_rules_stats = os.path.join(files_folder, "global_rules_stats.txt")
 
-    if probability_stats:
+    if args.statistic == "probability" or args.statistic == "probability_multi_nets":
         size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
         size_Width_proba_stat = size1D - filter_size[0][1] + 1
         output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
@@ -340,10 +312,9 @@ if __name__ == "__main__":
         print("Histogram")
     elif args.statistic == "activation_layer":
         print("Activation layer")
-    elif probability_stats:
-        if use_multi_networks_stats:
+    elif args.statistic == "probability_multi_nets":
             print("Probability with multiple networks")
-        else:
+    elif args.statistic == "probability":
             print("Probability")
     else:
         print("UNKNOWN")
@@ -383,7 +354,7 @@ if __name__ == "__main__":
     if args.stats:
         print(f"Train statistics file : {train_stats_file}")
         print(f"Test statistics file : {test_stats_file}")
-        if probability_stats:
+        if args.statistic == "probability" or args.statistic == "probability_multi_nets":
             print(f"Train statistics file with image : {train_stats_file_with_image}")
             print(f"Test statistics file with image: {test_stats_file_with_image}")
         elif args.statistic == "histogram":
@@ -397,7 +368,7 @@ if __name__ == "__main__":
         print("Second training :")
         print("-------------")
         print(f"Second model : {second_model}")
-        if probability_stats and use_multi_networks_stats:
+        if args.statistic == "probability_multi_nets":
             if with_hsl:
                 print("Using HSL")
             else:
@@ -481,7 +452,7 @@ if __name__ == "__main__":
 
 
     ##############################################################################
-    if test_version:
+    if args.test:
         nb_train_samples = 100
         nb_test_samples = 100
     else:
@@ -541,7 +512,7 @@ if __name__ == "__main__":
             output_data(test_sums, test_stats_file)
             print("Sums saved.")
 
-        elif probability_stats: # We create an image out of the probabilities (for each class) of cropped areas of the original image
+        elif args.statistic == "probability" or args.statistic == "probability_multi_nets": # We create an image out of the probabilities (for each class) of cropped areas of the original image
             print("\nComputing train probability images of patches...\n")
             # Get sums for each train sample
 
@@ -573,7 +544,7 @@ if __name__ == "__main__":
     if args.train_second_model:
         start_time_train_second_model = time.time()
 
-        if probability_stats: # We create an image out of the probabilities (for each class) of cropped areas of the original image
+        if args.statistic == "probability" or args.statistic == "probability_multi_nets": # We create an image out of the probabilities (for each class) of cropped areas of the original image
             # Load probas of areas from file if necessary
             if not args.stats:
                 print("Loading probability stats...")
@@ -620,12 +591,12 @@ if __name__ == "__main__":
                 second_model_file = os.path.join(files_folder, "scanSecondModel.keras")
                 second_model_checkpoint_weights = os.path.join(files_folder, "weightsSecondModel.weights.h5")
 
-                if not use_multi_networks_stats: # Train with a CNN now
+                if args.statistic == "probability": # Train with a CNN now
                     trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes+nb_channels, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
 
                 else: # Create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
 
-                    if test_version:
+                    if args.test:
                         nbIt_current = 2
                     else:
                         nbIt_current = 80
@@ -801,7 +772,7 @@ if __name__ == "__main__":
             #     case "dimlpBT":
             #         command += '--nb_dimlp_nets 15 '
             #         command += '--hidden_layers [25] '
-            #         if test_version:
+            #         if args.test:
             #             command += '--nb_epochs 10 '
             #         status = dimlp.dimlpBT(command)
 
@@ -814,7 +785,7 @@ if __name__ == "__main__":
             elif second_model == "dimlpBT":
                 command += '--nb_dimlp_nets 15 '
                 command += '--hidden_layers [25] '
-                if test_version:
+                if args.test:
                     command += '--nb_epochs 10 '
                 status = dimlp.dimlpBT(command)
 
@@ -834,7 +805,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
 
-    if probability_stats:
+    if args.statistic == "probability" or args.statistic == "probability_multi_nets":
         train_stats_file = train_stats_file_with_image
         test_stats_file = test_stats_file_with_image
 
@@ -921,7 +892,7 @@ if __name__ == "__main__":
                 rule.include_X = False
                 for ant in rule.antecedents:
                     ant.attribute = attributes[ant.attribute] # Get true name of attribute
-            elif probability_stats:
+            elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
                 rule.include_X = False
 
             # Create folder for this rule
@@ -945,7 +916,7 @@ if __name__ == "__main__":
                         antecedent.attribute = f"P_{class_name}>={pred_threshold}"
                     else:
                         raise ValueError("Wrong antecedent...")
-            elif probability_stats:
+            elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
                 # attribut_de_test = 2024 # -> classe :  0, Height :  8, Width :  8
 
                 # Change antecedent with area and class involved
@@ -987,7 +958,7 @@ if __name__ == "__main__":
                     highlighted_image = highlight_area_histograms(CNNModel, img, filter_size, stride, rule, classes)
                 elif args.statistic == "activation_layer":
                     highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
-                elif probability_stats:
+                elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
                     highlighted_image = highlight_area_probability_image(img, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels)
                 highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
