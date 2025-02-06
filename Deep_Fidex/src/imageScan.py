@@ -27,6 +27,7 @@ import re
 import copy
 import argparse
 import utils.config as config
+from utils.config import *
 from tensorflow.keras import Model
 import tensorflow as tf
 from utils.constants import HISTOGRAM_ANTECEDENT_PATTERN
@@ -88,310 +89,6 @@ if __name__ == "__main__":
 
     # Get Parameter configuration
     cfg = config.load_config(args, script_dir)
-    exit()
-
-    ##############################################################################
-
-    # Which dataset to launch
-
-    if args.dataset == "MNIST":     # for MNIST images
-        size1D             = 28
-        nb_channels         = 1
-        base_folder = os.path.join(os.path.dirname(script_dir), "data", "Mnist")
-        data_type = "integer"
-        classes = {
-            0:"0",
-            1:"1",
-            2:"2",
-            3:"3",
-            4:"4",
-            5:"5",
-            6:"6",
-            7:"7",
-            8:"8",
-            9:"9",
-        }
-
-    elif args.dataset == "CIFAR":     # for Cifar images
-        size1D             = 32
-        nb_channels         = 3
-        base_folder = os.path.join(os.path.dirname(script_dir), "data", "Cifar")
-        data_type = "integer"
-        classes = {
-            0: "airplane",
-            1: "automobile",
-            2: "bird",
-            3: "cat",
-            4: "deer",
-            5: "dog",
-            6: "frog",
-            7: "horse",
-            8: "ship",
-            9: "truck",
-        }
-
-    elif args.dataset == "HAPPY":     # for Happy images
-        size1D             = 48
-        nb_channels         = 1
-        base_folder = os.path.join(os.path.dirname(script_dir), "data", "Happy")
-        data_type = "float"
-        classes = {
-            0: "happy",
-            1: "not happy",
-        }
-
-    elif args.dataset == "testDataset":
-        size1D = 20
-        nb_channels = 1
-        base_folder = "Test/"
-        data_type = "integer"
-        classes = {
-            0: "cl0",
-            1: "cl1",
-        }
-
-    nb_classes = len(classes)
-
-
-    ##############################################################################
-
-    # Parameters
-
-    #----------------------------
-    # Folders
-    scan_folder = os.path.join("evaluation", "ScanFull")
-    if args.test:
-        scan_folder = os.path.join("evaluation", "Scan")
-    if args.statistic == "histogram":
-        scan_folder = os.path.join(scan_folder, "Histograms")
-    elif args.statistic == "activation_layer":
-        scan_folder = os.path.join(scan_folder, "Activations_Sum")
-    elif args.statistic == "probability_multi_nets":
-            scan_folder = os.path.join(scan_folder, "Probability_Multi_Nets_Images")
-    else:
-        scan_folder = os.path.join(scan_folder, "Probability_Images")
-
-    plot_folder = os.path.join(base_folder, scan_folder, "plots")
-    files_folder = os.path.join(base_folder, scan_folder, "files")
-    data_folder = os.path.join(base_folder, "data")
-
-    #----------------------------
-    # Files
-    test_particle = "_test_version" if args.test else ""
-
-    # Data files
-    train_data_file = os.path.join(data_folder, f"trainData{test_particle}.txt")
-    train_class_file = os.path.join(data_folder, f"trainClass{test_particle}.txt")
-    test_data_file = os.path.join(data_folder, f"testData{test_particle}.txt")
-    test_class_file = os.path.join(data_folder, f"testClass{test_particle}.txt")
-
-    # Model files
-    model_file = os.path.join(files_folder, "scanModel.keras")
-    train_pred_file = os.path.join(files_folder, "train_pred.out")
-    test_pred_file = os.path.join(files_folder, "test_pred.out")
-
-    # Attributes file
-    attributes_file = os.path.join(files_folder, "attributes.txt")
-
-    #----------------------------
-    # If we train :
-    model_checkpoint_weights = os.path.join(files_folder, "weightsModel.weights.h5")
-    model_stats = os.path.join(files_folder, "stats_model.txt")
-    if args.test:
-        model="small"
-        nbIt = 4
-        batch_size = 32
-        batch_size_second_model = 32
-    else:
-        model = "VGG"
-        nbIt = 80
-        batch_size = 64 # To avoid memory problems on GPU
-        batch_size_second_model = 64
-
-    if args.statistic == "activation_layer":
-        with_leaky_relu = True
-    else:
-        with_leaky_relu = False
-
-    #----------------------------
-    # For stats computation
-
-    if args.statistic == "histogram":
-        train_stats_file = os.path.join(files_folder, "train_hist.txt")
-        test_stats_file = os.path.join(files_folder, "test_hist.txt")
-    elif args.statistic == "activation_layer":
-        train_stats_file = os.path.join(files_folder, "train_activation_sum.txt")
-        test_stats_file = os.path.join(files_folder, "test_activation_sum.txt")
-    elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
-        train_stats_file = os.path.join(files_folder, "train_probability_images.txt")
-        test_stats_file = os.path.join(files_folder, "test_probability_images.txt")
-        train_stats_file_with_image = os.path.join(files_folder, "train_probability_images_with_original_img.txt")
-        test_stats_file_with_image = os.path.join(files_folder, "test_probability_images_with_original_img.txt")
-
-    filter_size = [[5,5]] # Size of filter(s) applied to the image
-    if np.asarray(filter_size).ndim == 1:
-        filter_size = [filter_size]
-    # Exemples : 7x7 : [7,7] 5x5 and 7x7 : [[5,5],[7,7]]
-    stride = [[1,1]] # shift between each filter (need to specify one per filter size)
-    if np.asarray(stride).ndim == 1:
-        stride = [stride]
-    if len(stride) != len(filter_size):
-        raise ValueError("Error : There is not the same amout of strides and filter sizes.")
-
-    nb_bins = 9 # Number of bins wanted (ex: NProb>=0.1, NProb>=0.2, etc.)
-    probability_thresholds = getProbabilityThresholds(nb_bins)
-    if args.statistic == "histogram":
-        nb_stats_attributes = nb_classes*nb_bins
-
-    #----------------------------
-    # For second model training
-
-    if args.statistic == "probability":
-        second_model = "cnn"
-        #second_model = "randomForests"
-    elif args.statistic == "probability_multi_nets":
-        second_model = "cnn"
-        with_hsl = False # Only if we have 3 chanels
-        with_rg = True
-    else:
-        # second_model = "randomForests"
-        second_model = "gradientBoosting"
-        # second_model = "dimlpTrn"
-        # second_model = "dimlpBT"
-
-    if second_model in {"randomForests", "gradientBoosting"}:
-        using_decision_tree_model = True
-    else:
-        using_decision_tree_model = False
-
-    second_model_stats = os.path.join(files_folder, "second_model_stats.txt")
-    second_model_train_pred = os.path.join(files_folder, "second_model_train_pred.txt")
-    second_model_test_pred = os.path.join(files_folder, "second_model_test_pred.txt")
-    if using_decision_tree_model:
-        second_model_output_rules = os.path.join(files_folder, "second_model_rules.rls")
-    else:
-        second_model_output_rules = os.path.join(files_folder, "second_model_weights.wts")
-
-    #----------------------------
-    # For Fidex
-    global_rules_file = os.path.join(files_folder, "globalRules.json")
-    hiknot = 5
-    nbQuantLevels = 100
-    K_val = 1.0
-    dropout_hyp = 0.9
-    dropout_dim = 0.9
-    global_rules_with_test_stats = os.path.join(files_folder, "globalRulesWithStats.json")
-    global_rules_stats = os.path.join(files_folder, "global_rules_stats.txt")
-
-    if args.statistic == "probability" or args.statistic == "probability_multi_nets":
-        size_Height_proba_stat = size1D - filter_size[0][0] + 1 # Size of new image with probabilities from original image
-        size_Width_proba_stat = size1D - filter_size[0][1] + 1
-        output_size = (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
-        nb_stats_attributes = size_Height_proba_stat*size_Width_proba_stat*(nb_classes + nb_channels) # Add nb_channels if adding the image for second cnn training
-    #----------------------------
-    # Folder for output images
-    rules_folder = os.path.join(plot_folder, "Rules")
-
-    # Folder for heat maps
-    heat_maps_folder = os.path.join(plot_folder, "Heat_maps")
-    ##############################################################################
-
-    ##############################################################################
-
-    # Display parameters
-    print("\n--------------------------------------------------------------------------")
-    print("Parameters :")
-    print("--------------------------------------------------------------------------\n")
-    print(f"Dataset : {dataset}")
-    print(f"Size : {size1D}x{size1D}x{nb_channels}")
-    print(f"Data type : {data_type}")
-    print(f"Number of attributes : ", {nb_stats_attributes})
-
-    print("Statistic :")
-    if args.statistic == "histogram":
-        print("Histogram")
-    elif args.statistic == "activation_layer":
-        print("Activation layer")
-    elif args.statistic == "probability_multi_nets":
-            print("Probability with multiple networks")
-    elif args.statistic == "probability":
-            print("Probability")
-    else:
-        print("UNKNOWN")
-
-    print("\n-------------")
-    print("Files :")
-    print("-------------")
-    print(f"Train data file : {train_data_file}")
-    print(f"Train class file : {train_class_file}")
-    print(f"Train prediction file : {train_pred_file}")
-    print(f"Test data file : {train_data_file}")
-    print(f"Test class file : {train_class_file}")
-    print(f"Test prediction file : {train_pred_file}")
-    print(f"Model file : {model_file}")
-
-    if args.train_cnn:
-        print("\n-------------")
-        print("Training :")
-        print("-------------")
-        print(f"Model checkpoint weights : {model_checkpoint_weights}")
-        print(f"Model stats file : {model_stats}")
-        print(f"Model : {model}")
-        print(f"Number of iterations : {nbIt}")
-        print(f"Batch size : {batch_size}")
-        if args.statistic == "activation_layer":
-            if with_leaky_relu:
-                print("With Leaky Relu")
-            else:
-                print("Without Leaky Relu")
-
-    if args.images or args.heatmap or args.stats:
-        print("\n-------------")
-        print("Statistics :")
-        print("-------------")
-        print(f"Filter size : {filter_size}",)
-        print(f"Stride : {stride}",)
-    if args.stats:
-        print(f"Train statistics file : {train_stats_file}")
-        print(f"Test statistics file : {test_stats_file}")
-        if args.statistic == "probability" or args.statistic == "probability_multi_nets":
-            print(f"Train statistics file with image : {train_stats_file_with_image}")
-            print(f"Test statistics file with image: {test_stats_file_with_image}")
-        elif args.statistic == "histogram":
-            print(f"Number of bins : {nb_bins}")
-            print(f"Probability threshold : {probability_thresholds}")
-    if (args.heatmap and (not (args.stats and args.statistic == "histogram"))):
-        print(f"Probability threshold : {probability_thresholds}")
-
-    if args.train_second_model:
-        print("\n-------------")
-        print("Second training :")
-        print("-------------")
-        print(f"Second model : {second_model}")
-        if args.statistic == "probability_multi_nets":
-            if with_hsl:
-                print("Using HSL")
-            else:
-                print("Not using HSL")
-        print(f"Batch size second model: {batch_size_second_model}")
-        print(f"Second model statistics file : {second_model_stats}")
-        print(f"Second model train predictions file : {second_model_train_pred}")
-        print(f"Second model output rules file : {second_model_output_rules}")
-
-    if args.rules:
-        print("\n-------------")
-        print("Fidex rules generation :")
-        print("-------------")
-        print(f"Global rules file : {global_rules_file}")
-        print(f"Hiknot : {hiknot}")
-        print(f"Number of quantization levels : {nbQuantLevels}")
-        print(f"K : {K_val}")
-        print(f"Dropout hyperplans : {dropout_hyp}")
-        print(f"Dropout dimensions : {dropout_dim}")
-        print(f"Global rules file with test statistics : {global_rules_with_test_stats}")
-        print(f"Global rules statistics : {global_rules_stats}")
-
-    print("\n--------------------------------------------------------------------------")
 
     ##############################################################################
 
@@ -399,33 +96,33 @@ if __name__ == "__main__":
 
     print("\nLoading data...")
 
-    train   = np.loadtxt(train_data_file)
-    X_train = train.reshape(train.shape[0], size1D, size1D, nb_channels)
-    if data_type == "integer":
+    train   = np.loadtxt(cfg["train_data_file"])
+    X_train = train.reshape(train.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
+    if cfg["data_type"] == "integer":
         X_train = X_train.astype('int32')
     else:
         X_train = X_train.astype('float32')
     print(X_train.shape)
 
-    test   = np.loadtxt(test_data_file)
-    X_test = test.reshape(test.shape[0], size1D, size1D, nb_channels)
-    if data_type == "integer":
+    test   = np.loadtxt(cfg["test_data_file"])
+    X_test = test.reshape(test.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
+    if cfg["data_type"] == "integer":
         X_test = X_test.astype('int32')
     else:
         X_test = X_test.astype('float32')
     print(X_test.shape)
 
-    Y_train = np.loadtxt(train_class_file)
+    Y_train = np.loadtxt(cfg["train_class_file"])
     Y_train = Y_train.astype('int32')
 
-    Y_test  = np.loadtxt(test_class_file)
+    Y_test  = np.loadtxt(cfg["test_class_file"])
     Y_test  = Y_test.astype('int32')
 
     print("Data loaded.\n")
 
 
     # Normalize if necessary
-    if data_type != "integer":
+    if cfg["data_type"] != "integer":
         X_train = normalize_data(X_train)
         X_test = normalize_data(X_test)
     ##############################################################################
@@ -433,22 +130,22 @@ if __name__ == "__main__":
     # Train CNN model
     if args.train_cnn:
         start_time_train_cnn = time.time()
-        trainCNN(size1D, size1D, nb_channels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu)
+        trainCNN(cfg["size1D"], cfg["size1D"], cfg["nb_channels"], cfg["nb_classes"], cfg["model"], cfg["nbIt"], cfg["batch_size"], cfg["model_file"], cfg["model_checkpoint_weights"], X_train, Y_train, X_test, Y_test, cfg["train_pred_file"], cfg["test_pred_file"], cfg["model_stats"], cfg["with_leaky_relu"])
         end_time_train_cnn = time.time()
         full_time_train_cnn = end_time_train_cnn - start_time_train_cnn
         full_time_train_cnn = "{:.6f}".format(full_time_train_cnn).rstrip("0").rstrip(".")
         print(f"\nTrain first CNN time = {full_time_train_cnn} sec")
 
     print("Loading model...")
-    CNNModel = keras.saving.load_model(model_file)
+    CNNModel = keras.saving.load_model(cfg["model_file"])
     print("Model loaded.")
     if args.statistic == "activation_layer": # Get intermediate model
         input_channels = CNNModel.input_shape[-1]
-        dummy_input = np.zeros((1, size1D, size1D, input_channels))
+        dummy_input = np.zeros((1, cfg["size1D"], cfg["size1D"], input_channels))
         _ = CNNModel(dummy_input)
         flatten_layer_output = CNNModel.get_layer("flatten").output
         intermediate_model = Model(inputs=CNNModel.inputs, outputs=flatten_layer_output)
-        nb_stats_attributes = intermediate_model.output_shape[1]
+        cfg["nb_stats_attributes"] = intermediate_model.output_shape[1]
 
 
     ##############################################################################
@@ -467,22 +164,22 @@ if __name__ == "__main__":
 
             # Get histograms for each train sample
 
-            train_histograms = compute_histograms(nb_train_samples, X_train, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
+            train_histograms = compute_histograms(nb_train_samples, X_train, cfg["size1D"], cfg["nb_channels"], CNNModel, cfg["nb_classes"], FILTER_SIZE, STRIDE, NB_BINS)
             print("\nTrain histograms computed.\n")
 
             print("Computing test histograms...")
 
             # Get histograms for each test sample
-            test_histograms = compute_histograms(nb_test_samples, X_test, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins)
+            test_histograms = compute_histograms(nb_test_samples, X_test, cfg["size1D"], cfg["nb_channels"], CNNModel, cfg["nb_classes"], FILTER_SIZE, STRIDE, NB_BINS)
 
             print("\nTest histograms computed.")
             # Save in histograms in .npy file
             print("\nSaving histograms...")
-            train_histograms = train_histograms.reshape(nb_train_samples, nb_stats_attributes)
-            test_histograms = test_histograms.reshape(nb_test_samples, nb_stats_attributes)
+            train_histograms = train_histograms.reshape(nb_train_samples, cfg["nb_stats_attributes"])
+            test_histograms = test_histograms.reshape(nb_test_samples, cfg["nb_stats_attributes"])
             print(train_histograms.shape)
-            output_data(train_histograms, train_stats_file)
-            output_data(test_histograms, test_stats_file)
+            output_data(train_histograms, cfg["train_stats_file"])
+            output_data(test_histograms, cfg["test_stats_file"])
             print("Histograms saved.")
 
 
@@ -492,7 +189,7 @@ if __name__ == "__main__":
             print("\nComputing train sums of activation layer patches...")
             # Get sums for each train sample
 
-            train_sums = compute_activation_sums(nb_train_samples, X_train, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
+            train_sums = compute_activation_sums(nb_train_samples, X_train, cfg["size1D"], cfg["nb_channels"], CNNModel, intermediate_model, cfg["nb_stats_attributes"], FILTER_SIZE, STRIDE)
             # Normalization
             mean = np.mean(train_sums, axis=0)
             std = np.std(train_sums, axis=0)
@@ -502,35 +199,35 @@ if __name__ == "__main__":
             print("\nComputing test sums of activation layer patches...")
             # Get sums for each test sample
 
-            test_sums = compute_activation_sums(nb_test_samples, X_test, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride)
+            test_sums = compute_activation_sums(nb_test_samples, X_test, cfg["size1D"], cfg["nb_channels"], CNNModel, intermediate_model, cfg["nb_stats_attributes"], FILTER_SIZE, STRIDE)
             # Normalization
             test_sums = (test_sums - mean) / std
             print("\nTest sum of activation layer patches computed.\n")
 
             print("\nSaving sums...")
-            output_data(train_sums, train_stats_file)
-            output_data(test_sums, test_stats_file)
+            output_data(train_sums, cfg["train_stats_file"])
+            output_data(test_sums, cfg["test_stats_file"])
             print("Sums saved.")
 
         elif args.statistic == "probability" or args.statistic == "probability_multi_nets": # We create an image out of the probabilities (for each class) of cropped areas of the original image
             print("\nComputing train probability images of patches...\n")
             # Get sums for each train sample
 
-            train_probas = compute_proba_images(nb_train_samples, X_train, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride)
+            train_probas = compute_proba_images(nb_train_samples, X_train, cfg["size1D"], cfg["nb_channels"], cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
             print(train_probas.shape)
             print("\nComputed train probability images of patches.")
 
             print("\nComputing test probability images of patches...\n")
             # Get sums for each train sample
 
-            test_probas = compute_proba_images(nb_test_samples, X_test, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride)
+            test_probas = compute_proba_images(nb_test_samples, X_test, cfg["size1D"], cfg["nb_channels"], cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
             print(test_probas.shape)
             print("\nComputed test probability images of patches.")
 
             print("\nSaving probability images...")
 
-            output_data(train_probas, train_stats_file)
-            output_data(test_probas, test_stats_file)
+            output_data(train_probas, cfg["train_stats_file"])
+            output_data(test_probas, cfg["test_stats_file"])
             print("Probability images saved.")
 
         end_time_stats_computation = time.time()
@@ -548,22 +245,22 @@ if __name__ == "__main__":
             # Load probas of areas from file if necessary
             if not args.stats:
                 print("Loading probability stats...")
-                train_probas = np.loadtxt(train_stats_file)
+                train_probas = np.loadtxt(cfg["train_stats_file"])
                 train_probas = train_probas.astype('float32')
-                test_probas = np.loadtxt(test_stats_file)
+                test_probas = np.loadtxt(cfg["test_stats_file"])
                 test_probas = test_probas.astype('float32')
                 print("Probability stats loaded.")
             #print(train_probas.shape) # (nb_train_samples, 4840) (22*22*10)
             #print(test_probas.shape) # (nb_test_samples, 4840)
 
             print("Adding original image...")
-            train_probas = train_probas.reshape(nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
-            X_train_reshaped = tf.image.resize(X_train, (size_Height_proba_stat, size_Width_proba_stat)) # Resize original image to the proba size
+            train_probas = train_probas.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
+            X_train_reshaped = tf.image.resize(X_train, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
             train_probas = np.concatenate((train_probas, X_train_reshaped[:nb_train_samples]), axis=-1) # Concatenate the probas and the original image resized
             train_probas = train_probas.reshape(nb_train_samples, -1) # flatten for export
 
-            test_probas = test_probas.reshape(nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, nb_classes)
-            X_test_reshaped = tf.image.resize(X_test, (size_Height_proba_stat, size_Width_proba_stat)) # Resize original image to the proba size
+            test_probas = test_probas.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
+            X_test_reshaped = tf.image.resize(X_test, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
             test_probas = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1) # Concatenate the probas and the original image resized
             test_probas = test_probas.reshape(nb_test_samples, -1) # flatten for export
 
@@ -571,28 +268,28 @@ if __name__ == "__main__":
             # print(test_probas.shape)  #(nb_test_samples, 5324)
 
             # Save proba stats data with original image added
-            output_data(train_probas, train_stats_file_with_image)
-            output_data(test_probas, test_stats_file_with_image)
+            output_data(train_probas, cfg["train_stats_file_with_image"])
+            output_data(test_probas, cfg["test_stats_file_with_image"])
 
-            train_stats_file = train_stats_file_with_image
-            test_stats_file = test_stats_file_with_image
+            train_stats_file = cfg["train_stats_file_with_image"]
+            test_stats_file = cfg["test_stats_file_with_image"]
 
             print("original image added.")
 
-            if second_model == "cnn":
+            if cfg["second_model"] == "cnn":
                 # Pass on the DIMLP layer
-                train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_val, nbQuantLevels, hiknot, second_model_output_rules)
-                test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_val, nbQuantLevels, hiknot, mu=mu, sigma=sigma)
-                train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+output_size) #(100, 26, 26, 13)
+                train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_rules"])
+                test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_VAL, NB_QUANT_LEVELS, HIKNOT, mu=mu, sigma=sigma)
+                train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+cfg["output_size"]) #(100, 26, 26, 13)
                 print("train_probas_h1 reshaped : ", train_probas_h1.shape)
-                test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+output_size)
+                test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+cfg["output_size"])
                 #print(train_probas.shape)  # (nb_train_samples, 22, 22, 10)
                 #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
-                second_model_file = os.path.join(files_folder, "scanSecondModel.keras")
-                second_model_checkpoint_weights = os.path.join(files_folder, "weightsSecondModel.weights.h5")
+                second_model_file = os.path.join(cfg["files_folder"], "scanSecondModel.keras")
+                second_model_checkpoint_weights = os.path.join(cfg["files_folder"], "weightsSecondModel.weights.h5")
 
                 if args.statistic == "probability": # Train with a CNN now
-                    trainCNN(size_Height_proba_stat, size_Width_proba_stat, nb_classes+nb_channels, nb_classes, "small", 80, batch_size_second_model, second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, second_model_train_pred, second_model_test_pred, second_model_stats, False, True)
+                    trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "small", 80, cfg["batch_size_second_model"], second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], False, True)
 
                 else: # Create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
 
@@ -601,32 +298,32 @@ if __name__ == "__main__":
                     else:
                         nbIt_current = 80
 
-                    models_folder = os.path.join(files_folder, "Models")
+                    models_folder = os.path.join(cfg["files_folder"], "Models")
                     # Delete and recreate models folder
                     if os.path.exists(models_folder):
                         shutil.rmtree(models_folder)
                     os.makedirs(models_folder)
 
                     # Create each dataset
-                    for i in range(nb_classes):
+                    for i in range(cfg["nb_classes"]):
                         print("Creating dataset n°",i,"...")
 
                         original_img_transformed_reshaped_train = X_train_reshaped # (100, 26, 26, 3)
                         original_img_transformed_reshaped_test = X_test_reshaped
-                        if nb_channels == 3:
-                            if with_hsl: # Transform in HSL(hsv in fact)
+                        if cfg["nb_channels"] == 3:
+                            if cfg["with_hsl"]: # Transform in HSL(hsv in fact)
                                 original_img_transformed_reshaped_train = tf.image.rgb_to_hsv(original_img_transformed_reshaped_train)
                                 original_img_transformed_reshaped_test = tf.image.rgb_to_hsv(original_img_transformed_reshaped_test)
-                            elif not with_rg: # Transform in black and white
+                            elif not cfg["with_rg"]: # Transform in black and white
                                 original_img_transformed_reshaped_train = tf.image.rgb_to_grayscale(original_img_transformed_reshaped_train)
                                 original_img_transformed_reshaped_test = tf.image.rgb_to_grayscale(original_img_transformed_reshaped_test)
 
                         # Create train data for each model
-                        built_data_train = np.empty((nb_train_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
+                        built_data_train = np.empty((nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3))
                         # Add probas on first channel
                         built_data_train[:,:,:,0] = train_probas_h1[:,:,:,i]
                         # Add H and S on last 2 channels (or R and G)
-                        if (with_hsl or with_rg) and nb_channels == 3:
+                        if (cfg["with_hsl"] or cfg["with_rg"]) and cfg["nb_channels"] == 3:
                             built_data_train[:,:,:,1] = original_img_transformed_reshaped_train[..., 0]
                             built_data_train[:,:,:,2] = original_img_transformed_reshaped_train[..., 1]
 
@@ -642,18 +339,18 @@ if __name__ == "__main__":
                         current_model_train_pred = os.path.join(models_folder, f"second_model_train_pred_{i}.txt")
                         data_filename = f"train_probability_images_with_original_img_{i}.txt"
                         class_filename = f"Y_train_probability_images_with_original_img_{i}.txt"
-                        built_data_train_flatten = built_data_train.reshape(nb_train_samples, size_Height_proba_stat*size_Width_proba_stat*3)
+                        built_data_train_flatten = built_data_train.reshape(nb_train_samples, cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*3)
 
                         # output new train data
                         output_data(built_data_train_flatten, os.path.join(models_folder, data_filename))
                         output_data(built_Y_train, os.path.join(models_folder, class_filename))
 
                         # Create test data for each model
-                        built_data_test = np.empty((nb_test_samples, size_Height_proba_stat, size_Width_proba_stat, 3))
+                        built_data_test = np.empty((nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3))
                         # Add probas on first channel
                         built_data_test[:,:,:,0] = test_probas_h1[:,:,:,i]
                         # Add H and S on last 2 channels
-                        if (with_hsl or with_rg) and nb_channels == 3:
+                        if (cfg["with_hsl"] or cfg["with_rg"]) and cfg["nb_channels"] == 3:
                             built_data_test[:,:,:,1] = original_img_transformed_reshaped_test[..., 0]
                             built_data_test[:,:,:,2] = original_img_transformed_reshaped_test[..., 1]
                         else: # Add 1-probas and B&W on last 2 channels
@@ -667,7 +364,7 @@ if __name__ == "__main__":
                         current_model_test_pred = os.path.join(models_folder, f"second_model_test_pred_{i}.txt")
                         data_filename = f"test_probability_images_with_original_img_{i}.txt"
                         class_filename = f"Y_test_probability_images_with_original_img_{i}.txt"
-                        built_data_test_flatten = built_data_test.reshape(nb_test_samples, size_Height_proba_stat*size_Width_proba_stat*3)
+                        built_data_test_flatten = built_data_test.reshape(nb_test_samples, cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*3)
 
                         # output new test data
                         output_data(built_data_test_flatten, os.path.join(models_folder, data_filename))
@@ -679,26 +376,26 @@ if __name__ == "__main__":
 
                         print("Dataset n°",i," created.")
                         # Train new model
-                        trainCNN(size_Height_proba_stat, size_Width_proba_stat, 3, 2, "VGG", nbIt_current, batch_size_second_model, current_model_file, current_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats, False, True)
+                        trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3, 2, "VGG", nbIt_current, cfg["batch_size_second_model"], current_model_file, current_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats, False, True)
                         print("Dataset n°",i," trained.")
 
                     # Create test and train predictions
                     train_pred_files = [
-                        os.path.join(models_folder, f"second_model_train_pred_{i}.txt") for i in range(nb_classes)
+                        os.path.join(models_folder, f"second_model_train_pred_{i}.txt") for i in range(cfg["nb_classes"])
                     ]
                     test_pred_files = [
-                        os.path.join(models_folder, f"second_model_test_pred_{i}.txt") for i in range(nb_classes)
+                        os.path.join(models_folder, f"second_model_test_pred_{i}.txt") for i in range(cfg["nb_classes"])
                     ]
 
                     # Gathering predictions for train and test
                     print("Gathering train predictions...")
-                    gathering_predictions(train_pred_files, second_model_train_pred)
+                    gathering_predictions(train_pred_files, cfg["second_model_train_pred"])
                     print("Gathering test predictions...")
-                    gathering_predictions(test_pred_files, second_model_test_pred)
+                    gathering_predictions(test_pred_files, cfg["second_model_test_pred"])
 
                     # Compute and save predictions of the second (gathering of all models) model
-                    second_model_train_preds = np.argmax(np.loadtxt(second_model_train_pred), axis=1)
-                    second_model_test_preds = np.argmax(np.loadtxt(second_model_test_pred), axis=1)
+                    second_model_train_preds = np.argmax(np.loadtxt(cfg["second_model_train_pred"]), axis=1)
+                    second_model_test_preds = np.argmax(np.loadtxt(cfg["second_model_test_pred"]), axis=1)
 
                     # Compute and save train and test accuracies of the second model
                     train_accuracy = 0
@@ -713,7 +410,7 @@ if __name__ == "__main__":
                             test_accuracy += 1
                     test_accuracy /= nb_test_samples
 
-                    with open(second_model_stats, "w") as myFile:
+                    with open(cfg["second_model_stats"], "w") as myFile:
                         print("Train score : ", train_accuracy)
                         myFile.write(f"Train score : {train_accuracy}\n")
 
@@ -726,39 +423,39 @@ if __name__ == "__main__":
 
                 command = (
                     f'--train_data_file {train_stats_file} '
-                    f'--train_class_file {train_class_file} '
-                    f'--test_data_file {test_stats_file} '
-                    f'--test_class_file {test_class_file} '
-                    f'--stats_file {second_model_stats} '
-                    f'--train_pred_outfile {second_model_train_pred} '
-                    f'--test_pred_outfile {second_model_test_pred} '
-                    f'--nb_attributes {nb_stats_attributes} '
-                    f'--nb_classes {nb_classes} '
+                    f'--train_class_file {cfg["train_class_file"]} '
+                    f'--test_data_file {cfg["test_stats_file"]} '
+                    f'--test_class_file {cfg["test_class_file"]} '
+                    f'--stats_file {cfg["second_model_stats"]} '
+                    f'--train_pred_outfile {cfg["second_model_train_pred"]} '
+                    f'--test_pred_outfile {cfg["second_model_test_pred"]} '
+                    f'--nb_attributes {cfg["nb_stats_attributes"]} '
+                    f'--nb_classes {cfg["nb_classes"]} '
                     f'--root_folder . '
                     )
-                command += f'--rules_outfile {second_model_output_rules} '
+                command += f'--rules_outfile {cfg["second_model_output_rules"]} '
                 status = randForestsTrn(command)
 
         else: # (not with probabilities of areas)
 
             # Train model
             command = (
-                f'--train_data_file {train_stats_file} '
-                f'--train_class_file {train_class_file} '
-                f'--test_data_file {test_stats_file} '
-                f'--test_class_file {test_class_file} '
-                f'--stats_file {second_model_stats} '
-                f'--train_pred_outfile {second_model_train_pred} '
-                f'--test_pred_outfile {second_model_test_pred} '
-                f'--nb_attributes {nb_stats_attributes} '
-                f'--nb_classes {nb_classes} '
+                f'--train_data_file {cfg["train_stats_file"]} '
+                f'--train_class_file {cfg["train_class_file"]} '
+                f'--test_data_file {cfg["test_stats_file"]} '
+                f'--test_class_file {cfg["test_class_file"]} '
+                f'--stats_file {cfg["second_model_stats"]} '
+                f'--train_pred_outfile {cfg["second_model_train_pred"]} '
+                f'--test_pred_outfile {cfg["second_model_test_pred"]} '
+                f'--nb_attributes {cfg["nb_stats_attributes"]} '
+                f'--nb_classes {cfg["nb_classes"]} '
                 f'--root_folder . '
                 )
 
-            if using_decision_tree_model:
-                command += f'--rules_outfile {second_model_output_rules} '
+            if cfg["using_decision_tree_model"]:
+                command += f'--rules_outfile {cfg["second_model_output_rules"]} '
             else:
-                command += f'--weights_outfile {second_model_output_rules} '
+                command += f'--weights_outfile {cfg["second_model_output_rules"]} '
 
             print("\nTraining second model...\n")
 
@@ -776,13 +473,13 @@ if __name__ == "__main__":
             #             command += '--nb_epochs 10 '
             #         status = dimlp.dimlpBT(command)
 
-            if second_model == "randomForests":
+            if cfg["second_model"] == "randomForests":
                 status = randForestsTrn(command)
-            elif second_model == "gradientBoosting":
+            elif cfg["second_model"] == "gradientBoosting":
                 status = gradBoostTrn(command)
-            elif second_model == "dimlpTrn":
+            elif cfg["second_model"] == "dimlpTrn":
                 status = dimlp.dimlpTrn(command)
-            elif second_model == "dimlpBT":
+            elif cfg["second_model"] == "dimlpBT":
                 command += '--nb_dimlp_nets 15 '
                 command += '--hidden_layers [25] '
                 if args.test:
@@ -799,15 +496,15 @@ if __name__ == "__main__":
 
     if args.statistic == "histogram":
         # Define attributes file for histograms
-        with open(attributes_file, "w") as myFile:
-            for i in range(nb_classes):
-                for j in probability_thresholds:
+        with open(cfg["attributes_file"], "w") as myFile:
+            for i in range(cfg["nb_classes"]):
+                for j in PROBABILITY_THRESHOLDS:
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
 
     if args.statistic == "probability" or args.statistic == "probability_multi_nets":
-        train_stats_file = train_stats_file_with_image
-        test_stats_file = test_stats_file_with_image
+        train_stats_file = cfg["train_stats_file_with_image"]
+        test_stats_file = cfg["test_stats_file_with_image"]
 
     ##############################################################################
     # Compute global rules
@@ -815,25 +512,25 @@ if __name__ == "__main__":
     if args.rules:
         start_time_global_rules = time.time()
         command = (
-            f'--train_data_file {train_stats_file} '
-            f'--train_pred_file {second_model_train_pred} '
-            f'--train_class_file {train_class_file} '
-            f'--nb_classes {nb_classes} '
-            f'--global_rules_outfile {global_rules_file} '
-            f'--nb_attributes {nb_stats_attributes} '
+            f'--train_data_file {cfg["train_stats_file"]} '
+            f'--train_pred_file {cfg["second_model_train_pred"]} '
+            f'--train_class_file {cfg["train_class_file"]} '
+            f'--nb_classes {cfg["nb_classes"]} '
+            f'--global_rules_outfile {cfg["global_rules_file"]} '
+            f'--nb_attributes {cfg["nb_stats_attributes"]} '
             f'--heuristic 1 '
             f'--nb_threads 8 '
             f'--max_iterations 25 '
-            f'--nb_quant_levels {nbQuantLevels} '
-            f'--dropout_dim {dropout_dim} '
-            f'--dropout_hyp {dropout_hyp} '
+            f'--nb_quant_levels {NB_QUANT_LEVELS} '
+            f'--dropout_dim {DROPOUT_DIM} '
+            f'--dropout_hyp {DROPOUT_HYP} '
         )
         if args.statistic == "histogram":
-            command += f'--attributes_file {attributes_file} '
-        if using_decision_tree_model:
-            command += f'--rules_file {second_model_output_rules} '
+            command += f'--attributes_file {cfg["attributes_file"]} '
+        if cfg["using_decision_tree_model"]:
+            command += f'--rules_file {cfg["second_model_output_rules"]} '
         else:
-            command += f'--weights_file {second_model_output_rules} '
+            command += f'--weights_file {cfg["second_model_output_rules"]} '
 
         print("\nComputing global rules...\n")
         status = fidex.fidexGloRules(command)
@@ -841,14 +538,14 @@ if __name__ == "__main__":
             print("\nGlobal rules computed.")
 
         command = (
-            f'--test_data_file {test_stats_file} '
-            f'--test_pred_file {second_model_test_pred} '
-            f'--test_class_file {test_class_file} '
-            f'--nb_classes {nb_classes} '
-            f'--global_rules_file {global_rules_file} '
-            f'--nb_attributes {nb_stats_attributes} '
-            f'--global_rules_outfile {global_rules_with_test_stats} '
-            f'--stats_file {global_rules_stats}'
+            f'--test_data_file {cfg["test_stats_file"]} '
+            f'--test_pred_file {cfg["second_model_test_pred"]} '
+            f'--test_class_file {cfg["test_class_file"]} '
+            f'--nb_classes {cfg["nb_classes"]} '
+            f'--global_rules_file {cfg["global_rules_file"]} '
+            f'--nb_attributes {cfg["nb_stats_attributes"]} '
+            f'--global_rules_outfile {cfg["global_rules_with_test_stats"]} '
+            f'--stats_file {cfg["global_rules_stats"]}'
         )
 
         print("\nComputing statistics on global rules...\n")
@@ -867,14 +564,14 @@ if __name__ == "__main__":
     if args.images:
         print("Generation of images...")
         # Get rules and attributes
-        global_rules = getRules(global_rules_file)
+        global_rules = getRules(cfg["global_rules_file"])
         if args.statistic == "histogram":
-            attributes = get_attribute_file(attributes_file, nb_stats_attributes)[0]
+            attributes = get_attribute_file(cfg["attributes_file"], cfg["nb_stats_attributes"])[0]
 
         # Create folder for all rules
-        if os.path.exists(rules_folder):
-            shutil.rmtree(rules_folder)
-        os.makedirs(rules_folder)
+        if os.path.exists(cfg["rules_folder"]):
+            shutil.rmtree(cfg["rules_folder"])
+        os.makedirs(cfg["rules_folder"])
 
         # For each rule we get filter images for train samples covering the rule
         good_classes = [2,3,5]
@@ -896,7 +593,7 @@ if __name__ == "__main__":
                 rule.include_X = False
 
             # Create folder for this rule
-            rule_folder = os.path.join(rules_folder, f"rule_{id}_class_{classes[rule.target_class]}")
+            rule_folder = os.path.join(cfg["rules_folder"], f"rule_{id}_class_{cfg['classes'][rule.target_class]}")
             if os.path.exists(rule_folder):
                 shutil.rmtree(rule_folder)
             os.makedirs(rule_folder)
@@ -912,7 +609,7 @@ if __name__ == "__main__":
                     if match:
                         class_id = int(match.group(1))
                         pred_threshold = match.group(2)
-                        class_name = classes[class_id]  # Get the class name
+                        class_name = cfg["classes"][class_id]  # Get the class name
                         antecedent.attribute = f"P_{class_name}>={pred_threshold}"
                     else:
                         raise ValueError("Wrong antecedent...")
@@ -922,25 +619,25 @@ if __name__ == "__main__":
                 # Change antecedent with area and class involved
 
                 # Scales of changes of original image to reshaped image
-                scale_h = size1D / size_Height_proba_stat
-                scale_w = size1D / size_Width_proba_stat
+                scale_h = cfg["size1D"] / cfg["size_Height_proba_stat"]
+                scale_w = cfg["size1D"] / cfg["size_Width_proba_stat"]
                 for antecedent in rule_to_print.antecedents: # TODO : handle stride, different filter sizes, etc
                     # area_index (size_Height_proba_stat, size_Width_proba_stat) : 0 : (1,1), 1: (1,2), ...
-                    channel_id = antecedent.attribute % (nb_classes + nb_channels) # (probas of each class + image rgb concatenated)
-                    area_number = antecedent.attribute // (nb_classes + nb_channels)
-                    # channel_id = attribut_de_test % (nb_classes + nb_channels)
-                    # area_number = attribut_de_test // (nb_classes + nb_channels)
-                    area_Height = area_number // size_Width_proba_stat
-                    area_Width = area_number % size_Width_proba_stat
+                    channel_id = antecedent.attribute % (cfg["nb_classes"] + cfg["nb_channels"]) # (probas of each class + image rgb concatenated)
+                    area_number = antecedent.attribute // (cfg["nb_classes"] + cfg["nb_channels"])
+                    # channel_id = attribut_de_test % (cfg["nb_classes"] + cfg["nb_channels"])
+                    # area_number = attribut_de_test // (cfg["nb_classes"] + cfg["nb_channels"])
+                    area_Height = area_number // cfg["size_Width_proba_stat"]
+                    area_Width = area_number % cfg["size_Width_proba_stat"]
                     # print("classe : ", channel_id)
                     # print("Height : ", area_Height)
                     # print("Width : ", area_Width)
                     # exit()
-                    if channel_id < nb_classes: #Proba of area
-                        class_name = classes[channel_id]
-                        antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+filter_size[0][0]-1}]x[{area_Width}-{area_Width+filter_size[0][1]-1}]"
+                    if channel_id < cfg["nb_classes"]: #Proba of area
+                        class_name = cfg["classes"][channel_id]
+                        antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+FILTER_SIZE[0][0]-1}]x[{area_Width}-{area_Width+FILTER_SIZE[0][1]-1}]"
                     else:
-                        channel = channel_id - nb_classes #Pixel in concatenated original rgb image
+                        channel = channel_id - cfg["nb_classes"] #Pixel in concatenated original rgb image
                         # Conversion of resized coordinates into originals
                         height_original = round(area_Height * scale_h)
                         width_original = round(area_Width * scale_w)
@@ -955,11 +652,11 @@ if __name__ == "__main__":
             for img_id in rule.covered_samples[0:10]:
                 img = X_train[img_id]
                 if args.statistic == "histogram":
-                    highlighted_image = highlight_area_histograms(CNNModel, img, filter_size, stride, rule, classes)
+                    highlighted_image = highlight_area_histograms(CNNModel, img, FILTER_SIZE, STRIDE, rule, cfg["classes"])
                 elif args.statistic == "activation_layer":
-                    highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, filter_size, stride, classes)
+                    highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, FILTER_SIZE, STRIDE, cfg["classes"])
                 elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
-                    highlighted_image = highlight_area_probability_image(img, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels)
+                    highlighted_image = highlight_area_probability_image(img, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
                 highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png") # Save image
 
 
@@ -969,13 +666,13 @@ if __name__ == "__main__":
     if args.heatmap: # Only for one filter !
 
         # Create heat map folder
-        if os.path.exists(heat_maps_folder):
-            shutil.rmtree(heat_maps_folder)
-        os.makedirs(heat_maps_folder)
+        if os.path.exists(cfg["heat_maps_folder"]):
+            shutil.rmtree(cfg["heat_maps_folder"])
+        os.makedirs(cfg["heat_maps_folder"])
 
         for id,img in enumerate(X_test[0:100]):
-            heat_maps_img = get_heat_maps(CNNModel, img, filter_size, stride, probability_thresholds, classes)
-            heat_maps_img.savefig(f"{heat_maps_folder}/sample_{id}.png")
+            heat_maps_img = get_heat_maps(CNNModel, img, FILTER_SIZE, STRIDE, PROBABILITY_THRESHOLDS, cfg["classes"])
+            heat_maps_img.savefig(f"{cfg['heat_maps_folder']}/sample_{id}.png")
 
 
     end_time = time.time()
