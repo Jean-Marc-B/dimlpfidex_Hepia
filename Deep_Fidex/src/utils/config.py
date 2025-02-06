@@ -160,10 +160,10 @@ def load_config(args, script_dir):
 
     # 📊 Parameters specific to probabilities
     if args.statistic in ["probability", "probability_multi_nets"]:
-        size_Height_proba_stat = config["size1D"] - FILTER_SIZE[0][0] + 1
-        size_Width_proba_stat = config["size1D"] - FILTER_SIZE[0][1] + 1
-        config["output_size"] = (size_Height_proba_stat, size_Width_proba_stat, config["nb_classes"] + config["nb_channels"])
-        config["nb_stats_attributes"] = size_Height_proba_stat * size_Width_proba_stat * (config["nb_classes"] + config["nb_channels"])
+        config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
+        config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
+        config["output_size"] = (config["size_Height_proba_stat"], config["size_Width_proba_stat"], config["nb_classes"] + config["nb_channels"])
+        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
 
     # Display parameters
     print("\n--------------------------------------------------------------------------")
