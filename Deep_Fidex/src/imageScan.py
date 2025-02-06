@@ -212,7 +212,7 @@ if __name__ == "__main__":
         elif args.statistic == "probability" or args.statistic == "probability_multi_nets": # We create an image out of the probabilities (for each class) of cropped areas of the original image
             print("\nComputing train probability images of patches...\n")
             # Get sums for each train sample
-
+            print(nb_train_samples, cfg["size1D"], cfg["nb_channels"], cfg["nb_classes"], FILTER_SIZE, STRIDE)
             train_probas = compute_proba_images(nb_train_samples, X_train, cfg["size1D"], cfg["nb_channels"], cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
             print(train_probas.shape)
             print("\nComputed train probability images of patches.")
@@ -271,8 +271,8 @@ if __name__ == "__main__":
             output_data(train_probas, cfg["train_stats_file_with_image"])
             output_data(test_probas, cfg["test_stats_file_with_image"])
 
-            train_stats_file = cfg["train_stats_file_with_image"]
-            test_stats_file = cfg["test_stats_file_with_image"]
+            cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
+            cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 
             print("original image added.")
 
@@ -422,7 +422,7 @@ if __name__ == "__main__":
             else: # Using a Ranfom Forests to train the probas with images
 
                 command = (
-                    f'--train_data_file {train_stats_file} '
+                    f'--train_data_file {cfg["train_stats_file"]} '
                     f'--train_class_file {cfg["train_class_file"]} '
                     f'--test_data_file {cfg["test_stats_file"]} '
                     f'--test_class_file {cfg["test_class_file"]} '
@@ -503,8 +503,8 @@ if __name__ == "__main__":
 
 
     if args.statistic == "probability" or args.statistic == "probability_multi_nets":
-        train_stats_file = cfg["train_stats_file_with_image"]
-        test_stats_file = cfg["test_stats_file_with_image"]
+        cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
+        cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 
     ##############################################################################
     # Compute global rules

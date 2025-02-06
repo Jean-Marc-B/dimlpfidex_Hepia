@@ -40,14 +40,14 @@ def load_config(args, script_dir):
     if args.dataset == "Mnist":
         config["size1D"] = 28
         config["nb_channels"] = 1
-        config["base_folder"] = os.path.join(os.path.dirname(script_dir), "data", "Mnist")
+        config["base_folder"] = os.path.join(os.path.dirname(script_dir), "../../data", "Mnist")
         config["data_type"] = "integer"
         config["classes"] = {i: str(i) for i in range(10)}
 
     elif args.dataset == "Cifar":
         config["size1D"] = 32
         config["nb_channels"] = 3
-        config["base_folder"] = os.path.join(os.path.dirname(script_dir), "data", "Cifar")
+        config["base_folder"] = os.path.join(os.path.dirname(script_dir), "../../data", "Cifar")
         config["data_type"] = "integer"
         config["classes"] = {
             0: "airplane", 1: "automobile", 2: "bird", 3: "cat", 4: "deer",
@@ -163,6 +163,7 @@ def load_config(args, script_dir):
         config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
         config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
         config["output_size"] = (config["size_Height_proba_stat"], config["size_Width_proba_stat"], config["nb_classes"] + config["nb_channels"])
+        print(config["size_Height_proba_stat"], config["size_Width_proba_stat"], (config["nb_classes"] + config["nb_channels"]))
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
 
     # Display parameters
