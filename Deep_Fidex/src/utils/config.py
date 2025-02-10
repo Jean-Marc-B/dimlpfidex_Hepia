@@ -192,7 +192,7 @@ def load_config(args, script_dir):
     print(f"Rules folder : {config['rules_folder']}")
     print(f"Heat maps folder : {config['heat_maps_folder']}")
 
-    if args.train_cnn:
+    if args.train:
         print("\n-------------")
         print("Training :")
         print("-------------")
@@ -224,7 +224,7 @@ def load_config(args, script_dir):
     if args.heatmap and not (args.stats and args.statistic == "histogram"):
         print(f"Probability thresholds : {PROBABILITY_THRESHOLDS}")
 
-    if args.train_second_model:
+    if args.second_train:
         print("\n-------------")
         print("Second training :")
         print("-------------")
