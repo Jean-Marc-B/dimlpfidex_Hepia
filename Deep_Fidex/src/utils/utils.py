@@ -675,8 +675,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     gc.collect()
     tf.keras.backend.clear_session()
 
-    if model not in ["resnet", "VGG", "small"]:
-        raise ValueError("The model needs to be one of resnet, VGG or small")
+    if model not in ["resnet", "VGG", "small", "MLP"]:
+        raise ValueError("The model needs to be one of resnet, VGG, small or MLP")
 
     split_index = int(0.8 * len(X_train))
     x_train = X_train[0:split_index]
@@ -823,8 +823,19 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
+    elif model == "MLP":
+        model = Sequential()
+        model.add(Input(shape=(height, width, nbChannels)))
+        model.add(Flatten())
+        model.add(Dense(128, activation='relu'))
+        model.add(Dense(64, activation='relu'))
+        model.add(Dense(nb_classes, activation='softmax'))
+
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model.summary()
+
     checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True, save_weights_only=True)
-    model.fit(x_train, y_train, batch_size=batch_size, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], verbose=2)
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], shuffle=True, verbose=2)
 
     print("\nCNN trained\n")
 
@@ -965,7 +976,6 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     - stride: The stride value for moving the filter across the image (verticaly, horizontaly).
 
     Returns:
-    - filtered_images: An array of filtered images created by applying the filter at different positions.
     - predictions: Predictions from the CNN model for each filtered image.
     - positions: A list of (row, column) tuples indicating the top-left position of each filter applied.
     """
@@ -1013,6 +1023,60 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
         #     prediction_at_target = predictions[index]
         #     print(f"La prédiction pour le sample_id {sample_id} à la position Height=8 et Width=8 et Classe=0 est : {prediction_at_target[0]}")
         return predictions, positions, nb_areas_per_filter
+
+###############################################################
+# Generate patches for the dataset
+def create_patches(X_train, Y_train, X_test, Y_test, filter_size, stride):
+    """
+    Generates patches for the dataset by applying a sliding window approach.
+
+    Parameters:
+    - X_train, Y_train: Training images and their labels.
+    - X_test, Y_test: Testing images and their labels.
+    - filter_size: Tuple (height, width) defining the size of the patches.
+    - stride: Tuple (vertical_step, horizontal_step) defining the step size.
+
+    Returns:
+    - X_train_patches: List of training image patches.
+    - Y_train_patches: List of corresponding training labels.
+    - X_test_patches: List of testing image patches.
+    - Y_test_patches: List of corresponding testing labels.
+    - nb_areas: Number of patches per original image.
+    """
+    def extract_patches(X, Y, filter_size, stride):
+        start_time = time.time()
+        patches = []
+        labels = []
+        img_height, img_width = X.shape[1:3]  # For shape (num_samples, height, width, channels)
+
+        # Compute number of patches per image
+        nb_areas = ((img_height - filter_size[0]) // stride[0] + 1) * ((img_width - filter_size[1]) // stride[1] + 1)
+
+        for img, label in zip(X, Y):
+            current_pixel = [0, 0]
+            while current_pixel[0] + filter_size[0] <= img_height:
+                while current_pixel[1] + filter_size[1] <= img_width:
+                    # Extract patch
+                    patch = img[current_pixel[0]:current_pixel[0] + filter_size[0],
+                                current_pixel[1]:current_pixel[1] + filter_size[1]]
+                    patches.append(patch)
+                    labels.append(label)  # Assign the same label as the original image
+
+                    current_pixel[1] += stride[1]  # Move horizontally
+
+                current_pixel[1] = 0  # Reset column position
+                current_pixel[0] += stride[0]  # Move vertically
+
+        end_time = time.time()
+        print(f"Extracting executed in {end_time - start_time:.2f} seconds")
+        return np.array(patches), np.array(labels), nb_areas
+
+    print("Extracting train patches...")
+    X_train_patches, Y_train_patches, nb_areas = extract_patches(X_train, Y_train, filter_size, stride)
+    print("Extracting test patches...")
+    X_test_patches, Y_test_patches, _ = extract_patches(X_test, Y_test, filter_size, stride)  # nb_areas is the same for all images
+
+    return X_train_patches, Y_train_patches, X_test_patches, Y_test_patches, nb_areas
 
 ###############################################################
 # get probability thresholds

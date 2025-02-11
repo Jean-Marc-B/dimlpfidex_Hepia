@@ -15,12 +15,14 @@ from utils.utils import (
 )
 from utils.config import *
 
-def train_second_model(cfg, X_train, Y_train, X_test, Y_test, nb_train_samples, nb_test_samples, CNNModel, intermediate_model, args):
+def train_second_model(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args):
     """
     Train a second model (For ex. RandomForest, dimlpTrn, or a second CNN)
     with respect to cfg["second_model"].
     """
     start_time_train_second_model = time.time()
+    nb_train_samples = len(X_train)
+    nb_test_samples = len(X_test)
 
     if args.statistic in ["probability", "probability_multi_nets"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
         # Load probas of areas from file

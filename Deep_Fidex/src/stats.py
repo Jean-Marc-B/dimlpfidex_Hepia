@@ -13,7 +13,7 @@ from utils.utils import (
 from tensorflow.keras import Model
 from utils.config import *
 
-def compute_stats(cfg, X_train, Y_train, X_test, Y_test, nb_train_samples, nb_test_samples, CNNModel, intermediate_model, args):
+def compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args):
     """
     Compute statistics :
       - histograms
@@ -22,6 +22,9 @@ def compute_stats(cfg, X_train, Y_train, X_test, Y_test, nb_train_samples, nb_te
     with respect to the value of args.statistic.
     """
     start_time_stats_computation = time.time()
+    nb_train_samples = len(X_train)
+    nb_test_samples = len(X_test)
+
 
     if args.statistic == "histogram":
         print("\nComputing train histograms...")

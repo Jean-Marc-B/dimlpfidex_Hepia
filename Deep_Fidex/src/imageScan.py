@@ -131,9 +131,18 @@ if __name__ == "__main__":
 
     ##############################################################################
 
+    # Create patch dataset if training with patches or computing stats after training with patches
+    if TRAIN_WITH_PATCHES and (args.train or args.stats):
+        print("Creating patches...")
+        X_train_patches, Y_train_patches, X_test_patches, Y_test_patches, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
+
+
     # TRAINING
     if args.train:
-        train_cnn(cfg, X_train, Y_train, X_test, Y_test)
+        if TRAIN_WITH_PATCHES:
+            train_cnn(cfg, X_train_patches, Y_train_patches, X_test_patches, Y_test_patches)
+        else:
+            train_cnn(cfg, X_train, Y_train, X_test, Y_test)
 
     print("Loading model...")
     CNNModel = keras.saving.load_model(cfg["model_file"])
@@ -149,21 +158,13 @@ if __name__ == "__main__":
         intermediate_model = Model(inputs=CNNModel.inputs, outputs=flatten_layer_output)
         cfg["nb_stats_attributes"] = intermediate_model.output_shape[1]
 
-    # Define the number of train and test samples
-    if args.test:
-        nb_train_samples = 100
-        nb_test_samples = 100
-    else:
-        nb_train_samples = Y_train.shape[0]
-        nb_test_samples = Y_test.shape[0]
-
     # STATISTICS
     if args.stats:
-        compute_stats(cfg, X_train, Y_train, X_test, Y_test, nb_train_samples, nb_test_samples, CNNModel, intermediate_model, args)
+        compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args)
 
     # TRAIN SECOND MODEL
     if args.second_train:
-        train_second_model(cfg, X_train, Y_train, X_test, Y_test, nb_train_samples, nb_test_samples, CNNModel, intermediate_model, args)
+        train_second_model(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args)
 
     # Define attributes file for histograms
     if args.statistic == "histogram":
