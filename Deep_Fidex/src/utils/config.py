@@ -11,11 +11,16 @@ AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset"]
 # List of statistics allowed
 AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_multi_nets"]
 
+# Training with images or with patches, useful for train and stats parts
+TRAIN_WITH_PATCHES = True
+
 # Filters
 FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
 STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
+if TRAIN_WITH_PATCHES and len(FILTER_SIZE) != 1:
+    raise ValueError("Error : When training with patches, only one stride and one filter size can be chosen.")
 NB_BINS = 9  # Number of bins wanted for probabilities (ex: NProb>=0.1, NProb>=0.2, etc.)
 PROBABILITY_THRESHOLDS = getProbabilityThresholds(NB_BINS)
 
@@ -118,6 +123,9 @@ def load_config(args, script_dir):
         config["batch_size"] = 64
         config["batch_size_second_model"] = 64
 
+    if TRAIN_WITH_PATCHES:
+        config["model"] = "MLP"
+
     # 📊 Managment of statistics
     config["with_leaky_relu"] = args.statistic == "activation_layer"
 
@@ -126,6 +134,8 @@ def load_config(args, script_dir):
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_hist.txt")
         config["nb_stats_attributes"] = config["nb_classes"]*NB_BINS
     elif args.statistic == "activation_layer":
+        if TRAIN_WITH_PATCHES:
+            raise ValueError("Not possible to use sum of activation layers stats when training with patches.")
         config["train_stats_file"] = os.path.join(config["files_folder"], "train_activation_sum.txt")
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_activation_sum.txt")
     elif args.statistic in ["probability", "probability_multi_nets"]:
@@ -177,6 +187,8 @@ def load_config(args, script_dir):
 
     print("Statistic :")
     print(STATISTIC_FOLDERS.get(args.statistic, "UNKNOWN"))
+    if TRAIN_WITH_PATCHES:
+        print("Training with patches")
 
     print("\n-------------")
     print("Files :")
