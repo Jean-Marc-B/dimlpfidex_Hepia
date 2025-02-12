@@ -11,16 +11,11 @@ AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset"]
 # List of statistics allowed
 AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_multi_nets"]
 
-# Training with images or with patches, useful for train and stats parts
-TRAIN_WITH_PATCHES = True
-
 # Filters
 FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
 STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
-if TRAIN_WITH_PATCHES and len(FILTER_SIZE) != 1:
-    raise ValueError("Error : When training with patches, only one stride and one filter size can be chosen.")
 NB_BINS = 9  # Number of bins wanted for probabilities (ex: NProb>=0.1, NProb>=0.2, etc.)
 PROBABILITY_THRESHOLDS = getProbabilityThresholds(NB_BINS)
 
@@ -77,13 +72,19 @@ def load_config(args, script_dir):
 
     config["nb_classes"] = len(config["classes"])
 
+    if args.train_with_patches and len(FILTER_SIZE) != 1:
+        raise ValueError("Error : When training with patches, only one stride and one filter size can be chosen.")
+
     # 📊 Definition of the scan folder
     scan_folder = "evaluation/Scan" if args.test else "evaluation/ScanFull"
+    patches_sufix = ""
+    if args.train_with_patches:
+        patches_sufix = "_train_patches"
     STATISTIC_FOLDERS = {
-        "histogram": "Histograms",
-        "activation_layer": "Activations_Sum",
-        "probability_multi_nets": "Probability_Multi_Nets_Images",
-        "probability": "Probability_Images",
+        "histogram": "Histograms" + patches_sufix,
+        "activation_layer": "Activations_Sum" + patches_sufix,
+        "probability_multi_nets": "Probability_Multi_Nets_Images" + patches_sufix,
+        "probability": "Probability_Images" + patches_sufix,
     }
     scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
 
@@ -123,7 +124,7 @@ def load_config(args, script_dir):
         config["batch_size"] = 64
         config["batch_size_second_model"] = 64
 
-    if TRAIN_WITH_PATCHES:
+    if args.train_with_patches:
         config["model"] = "MLP"
 
     # 📊 Managment of statistics
@@ -134,7 +135,7 @@ def load_config(args, script_dir):
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_hist.txt")
         config["nb_stats_attributes"] = config["nb_classes"]*NB_BINS
     elif args.statistic == "activation_layer":
-        if TRAIN_WITH_PATCHES:
+        if args.train_with_patches:
             raise ValueError("Not possible to use sum of activation layers stats when training with patches.")
         config["train_stats_file"] = os.path.join(config["files_folder"], "train_activation_sum.txt")
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_activation_sum.txt")
@@ -168,10 +169,10 @@ def load_config(args, script_dir):
     else:
         config["second_model_output_rules"] = os.path.join(config["files_folder"], "second_model_weights.wts")
 
+    config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
+    config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
     # 📊 Parameters specific to probabilities
     if args.statistic in ["probability", "probability_multi_nets"]:
-        config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
-        config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
         config["output_size"] = (config["size_Height_proba_stat"], config["size_Width_proba_stat"], config["nb_classes"] + config["nb_channels"])
         print(config["size_Height_proba_stat"], config["size_Width_proba_stat"], (config["nb_classes"] + config["nb_channels"]))
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
@@ -187,7 +188,7 @@ def load_config(args, script_dir):
 
     print("Statistic :")
     print(STATISTIC_FOLDERS.get(args.statistic, "UNKNOWN"))
-    if TRAIN_WITH_PATCHES:
+    if args.train_with_patches:
         print("Training with patches")
 
     print("\n-------------")

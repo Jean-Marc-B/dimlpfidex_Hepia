@@ -13,7 +13,7 @@ from utils.utils import (
 from tensorflow.keras import Model
 from utils.config import *
 
-def compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args):
+def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
     """
     Compute statistics :
       - histograms
@@ -22,25 +22,35 @@ def compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_
     with respect to the value of args.statistic.
     """
     start_time_stats_computation = time.time()
-    nb_train_samples = len(X_train)
-    nb_test_samples = len(X_test)
-
+    nb_train_images = len(X_train)
+    nb_test_images = len(X_test)
+    train_data = X_train
+    test_data = X_test
+    if args.train_with_patches:
+        train_pred = np.loadtxt(cfg["train_pred_file"])
+        test_pred = np.loadtxt(cfg["test_pred_file"])
+        nb_train_images = train_pred.shape[0] // (cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"])
+        nb_test_images = test_pred.shape[0] // (cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"])
+        train_data = train_pred
+        test_data = test_pred
 
     if args.statistic == "histogram":
         print("\nComputing train histograms...")
-        train_histograms = compute_histograms(nb_train_samples, X_train, cfg["size1D"], cfg["nb_channels"],
-                                              CNNModel, cfg["nb_classes"], FILTER_SIZE, STRIDE, NB_BINS)
+
+        train_histograms = compute_histograms(nb_train_images, train_data, cfg["size1D"], cfg["nb_channels"], # Shape (nb_train_images(nb_images), nb_classes, nb_bins)
+                                            CNNModel, cfg["nb_classes"], FILTER_SIZE, STRIDE, NB_BINS, cfg, args.train_with_patches)
         print("\nTrain histograms computed.\n")
 
         print("Computing test histograms...")
-        test_histograms = compute_histograms(nb_test_samples, X_test, cfg["size1D"], cfg["nb_channels"],
-                                             CNNModel, cfg["nb_classes"], FILTER_SIZE, STRIDE, NB_BINS)
+
+        test_histograms = compute_histograms(nb_test_images, test_data, cfg["size1D"], cfg["nb_channels"], # Shape (nb_test_images(nb_images), nb_classes, nb_bins)
+                                            CNNModel, cfg["nb_classes"], FILTER_SIZE, STRIDE, NB_BINS, cfg, args.train_with_patches)
         print("\nTest histograms computed.")
 
         # Save in histograms in .npy file
         print("\nSaving histograms...")
-        train_histograms = train_histograms.reshape(nb_train_samples, cfg["nb_stats_attributes"])
-        test_histograms = test_histograms.reshape(nb_test_samples, cfg["nb_stats_attributes"])
+        train_histograms = train_histograms.reshape(nb_train_images, cfg["nb_stats_attributes"])
+        test_histograms = test_histograms.reshape(nb_test_images, cfg["nb_stats_attributes"])
         output_data(train_histograms, cfg["train_stats_file"])
         output_data(test_histograms, cfg["test_stats_file"])
         print("Histograms saved.")
@@ -49,7 +59,7 @@ def compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_
         print("\nComputing train sums of activation layer patches...")
 
         # Get sums for each train sample
-        train_sums = compute_activation_sums(nb_train_samples, X_train, cfg["size1D"], cfg["nb_channels"],
+        train_sums = compute_activation_sums(nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
                                              CNNModel, intermediate_model, cfg["nb_stats_attributes"],
                                              FILTER_SIZE, STRIDE)
         # Normalization
@@ -61,7 +71,7 @@ def compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_
 
         print("\nComputing test sums of activation layer patches...")
         # Get sums for each test sample
-        test_sums = compute_activation_sums(nb_test_samples, X_test, cfg["size1D"], cfg["nb_channels"],
+        test_sums = compute_activation_sums(nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
                                             CNNModel, intermediate_model, cfg["nb_stats_attributes"],
                                             FILTER_SIZE, STRIDE)
         # Normalization
@@ -73,17 +83,29 @@ def compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_
         print("Sums saved.")
 
     elif args.statistic in ["probability", "probability_multi_nets"]: # We create an image out of the probabilities (for each class) of cropped areas of the original image
-        print("\nComputing train probability images of patches...\n")
-        # Get sums for each train sample
-        train_probas = compute_proba_images(nb_train_samples, X_train, cfg["size1D"], cfg["nb_channels"],
-                                            cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
-        print("\nComputed train probability images of patches.")
+        if args.train_with_patches:
+            print("\nGathering train probability of patches...")
+            train_pred_data = train_pred # shape (nb_images_train*cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"], nb_classes)
+            nb_images_train = train_pred_data.shape[0] // (cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"])
+            train_probas = train_pred_data.reshape(nb_images_train, -1) # shape (nb_images_train, cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*nb_classes)
 
-        print("\nComputing test probability images of patches...\n")
-        # Get sums for each train sample
-        test_probas = compute_proba_images(nb_test_samples, X_test, cfg["size1D"], cfg["nb_channels"],
-                                           cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
-        print("\nComputed test probability images of patches.")
+            print("\nGathering test probability of patches...")
+            test_pred_data = test_pred # shape (nb_images_test*cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"], nb_classes)
+            nb_images_test = test_pred_data.shape[0] // (cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"])
+            test_probas = test_pred_data.reshape(nb_images_test, -1) # shape (nb_images_test, cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*nb_classes)
+        else:
+            print("\nComputing train probability images of patches...\n")
+            # Get sums for each train sample
+            train_probas = compute_proba_images(nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
+                                                cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
+            # shape (nb_train_images(images), cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*nb_classes)
+            print("\nComputed train probability images of patches.")
+
+            print("\nComputing test probability images of patches...\n")
+            # Get sums for each train sample
+            test_probas = compute_proba_images(nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
+                                            cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
+            print("\nComputed test probability images of patches.")
 
         output_data(train_probas, cfg["train_stats_file"])
         output_data(test_probas, cfg["test_stats_file"])

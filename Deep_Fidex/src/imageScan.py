@@ -62,6 +62,10 @@ def parse_arguments():
         "--statistic", type=str, required=True, choices=config.AVAILABLE_STATISTICS,
         help=f"Choose a statistic in : {', '.join(config.AVAILABLE_STATISTICS)}"
     )
+    parser.add_argument(
+        "--train_with_patches", type=lambda x: (str(x).lower() in ['true', '1', 'yes']), required=True,
+        help="Set to True if training with patches, False otherwise (Accepted values: True, False, 1, 0, Yes, No)"
+    )
 
     # Optionals arguments
     parser.add_argument("--test", action="store_true", help="Test mode") # Launch with minimal version
@@ -132,17 +136,17 @@ if __name__ == "__main__":
     ##############################################################################
 
     # Create patch dataset if training with patches or computing stats after training with patches
-    if TRAIN_WITH_PATCHES and (args.train or args.stats):
+    if args.train_with_patches and (args.train or args.stats):
         print("Creating patches...")
         X_train_patches, Y_train_patches, X_test_patches, Y_test_patches, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
 
 
     # TRAINING
     if args.train:
-        if TRAIN_WITH_PATCHES:
-            train_cnn(cfg, X_train_patches, Y_train_patches, X_test_patches, Y_test_patches)
+        if args.train_with_patches:
+            train_cnn(cfg, X_train_patches, Y_train_patches, X_test_patches, Y_test_patches, args)
         else:
-            train_cnn(cfg, X_train, Y_train, X_test, Y_test)
+            train_cnn(cfg, X_train, Y_train, X_test, Y_test, args)
 
     print("Loading model...")
     CNNModel = keras.saving.load_model(cfg["model_file"])
@@ -160,7 +164,10 @@ if __name__ == "__main__":
 
     # STATISTICS
     if args.stats:
-        compute_stats(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args)
+        if args.train_with_patches:
+            compute_stats(cfg, X_train_patches, X_test_patches, CNNModel, intermediate_model, args)
+        else:
+            compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args)
 
     # TRAIN SECOND MODEL
     if args.second_train:

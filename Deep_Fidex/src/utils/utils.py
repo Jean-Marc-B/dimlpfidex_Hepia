@@ -874,14 +874,14 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
 ###############################################################
 
-def compute_histograms(nb_samples, data, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins):
+def compute_histograms(nb_samples, data_or_predictions, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins, cfg, train_with_patches=False):
     """
     Computes histograms for each sample in the dataset using the CNN model. It's the histogram of the probabilities of each class on the CNN
     evaluated on each area (or patches) added on the image (by a sliding filter). A patch is applied and outside of this area everything is 0.
 
     Parameters:
     - nb_samples: The number of samples in the dataset.
-    - data: The dataset containing images to be processed.
+    - data_or_predictions: The dataset containing images to be processed or the predictions of each patch (if train_with_patches == True).
     - size1D: The size of one dimension of the input image (image is size1D x size1D).
     - nb_channels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - CNNModel: The CNN model used for making predictions.
@@ -895,10 +895,19 @@ def compute_histograms(nb_samples, data, size1D, nb_channels, CNNModel, nb_class
     """
 
     histograms = []
+    nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
     for sample_id in range(nb_samples):
-        image = data[sample_id]
-        image = image.reshape(size1D, size1D, nb_channels)
-        histogram = getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins)
+        if train_with_patches:
+            start_idx = sample_id * nb_patches_per_image
+            end_idx = start_idx + nb_patches_per_image
+            predictions = data_or_predictions[start_idx:end_idx, :]
+        else:
+            image = data_or_predictions[sample_id]
+            image = image.reshape(size1D, size1D, nb_channels)
+            predictions, _, _ = generate_filtered_images_and_predictions( # shape cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"], nb_classes
+                CNNModel, image, filter_size, stride)
+
+        histogram = getHistogram(CNNModel, predictions, nb_classes, filter_size, stride, nb_bins)
         histograms.append(histogram)
         if (sample_id+1) % 100 == 0 or sample_id+1 == nb_samples:
             progress = ((sample_id+1) / nb_samples) * 100
@@ -1097,7 +1106,7 @@ def getProbabilityThresholds(nb_bins):
 ###############################################################
 
 # get histogram for an image on a CNN
-def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
+def getHistogram(CNNModel, predictions, nb_classes, filter_size, stride, nb_bins):
     """
     Computes a histogram for a given image based on CNN model predictions for different areas of the image.
 
@@ -1113,9 +1122,6 @@ def getHistogram(CNNModel, image, nb_classes, filter_size, stride, nb_bins):
     - histogram_scores: A list of numpy arrays where each array corresponds to a class, containing counts of probabilities
       falling into each bin.
     """
-
-    predictions, _, _ = generate_filtered_images_and_predictions(
-        CNNModel, image, filter_size, stride)
 
     probability_thresholds = getProbabilityThresholds(nb_bins)
     histogram_scores = [np.zeros(nb_bins, dtype=int) for _ in range(nb_classes)]
