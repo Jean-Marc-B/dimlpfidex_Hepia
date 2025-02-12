@@ -3,13 +3,13 @@ import time
 from utils.utils import trainCNN
 from utils.config import *
 
-def train_cnn(cfg, X_train, Y_train, X_test, Y_test):
+def train_cnn(cfg, X_train, Y_train, X_test, Y_test, args):
     """
     Effectue l'entraînement du premier CNN.
     """
     start_time_train_cnn = time.time()
 
-    if TRAIN_WITH_PATCHES:
+    if args.train_with_patches:
         height = FILTER_SIZE[0][0]
         width = FILTER_SIZE[0][1]
     else:
