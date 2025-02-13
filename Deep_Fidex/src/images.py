@@ -8,19 +8,476 @@ import matplotlib.pyplot as plt
 
 from utils.utils import (
     getRules,
-    highlight_area_histograms,
-    highlight_area_activations_sum,
-    highlight_area_probability_image
+    image_to_rgb,
+    get_top_ids,
+    generate_filtered_images_and_predictions
 )
 from trainings.trnFun import get_attribute_file
 from utils.constants import HISTOGRAM_ANTECEDENT_PATTERN
 from utils.config import *
 
-def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args):
+
+def highlight_area_histograms(CNNModel, image, filter_size, rule, classes, predictions, positions, nb_areas_per_filter):
+    """
+    Highlights important areas in an image based on the rule's antecedents using the CNN model.
+
+    Parameters:
+    - CNNModel: The trained CNN model used to make predictions on filtered areas of the image.
+    - image: The input image (2D grayscale or 3D RGB) to be processed and highlighted.
+    - filter_size: A tuple or a list of tuples representing the size (height, width) of the filter applied on the image.
+    - rule: An object containing antecedents which specify conditions (class ID and prediction threshold)
+            for highlighting areas based on CNN predictions.
+    - classes: A list or dictionary that maps class IDs to class names for better interpretability.
+    - predictions : The predictions of each area in the image
+    - positions : The positions of each area in the image
+    - nb_areas_per_filter : The number of areas in the image for each filter size.
+
+    Returns:
+    - fig: The matplotlib figure containing subplots with:
+        1. The original image.
+        2. The image with all filters applied based on the rule's antecedents.
+        3. Individual images showing the highlighted areas for each antecedent separately.
+    """
+
+    # Convert to RGB if necessary
+    original_image_rgb = image_to_rgb(image)
+
+    # Initialize the combined intensity maps for green and red
+    combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
+    combined_red_intensity = np.zeros((image.shape[0], image.shape[1]))
+
+    individual_maps = []
+
+    # Identify current filter size
+    filter_index = 0
+    filter_start_idx = 0
+    current_filter_size = filter_size[filter_index]
+
+    for antecedent in rule.antecedents: # For each antecedent
+        # Get the class id and prediction threshold of this antecedent
+        match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
+        if match:
+            pred_threshold = float(match.group(2))
+            class_id = int(match.group(1))
+        else:
+            raise ValueError(f"Wrong antecedant format : {antecedent.attribute}")
+
+        individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
+
+        # For each area (it's prediction, position and filter size)
+        for i, (prediction, position) in enumerate(zip(predictions, positions)):
+            # Update filter size if we exceed current limit
+            if i >= filter_start_idx + nb_areas_per_filter[filter_index]:
+                filter_start_idx += nb_areas_per_filter[filter_index]
+                filter_index += 1
+                current_filter_size = filter_size[filter_index]
+
+            class_prob = prediction[class_id] # Prediction of the area
+
+            # Check if the prediction with this area satisfies the antecedent
+            if (class_prob >= pred_threshold):
+                top_left = position
+                bottom_right = (position[0] + current_filter_size[0], position[1] + current_filter_size[1]) # Goes one pixel too long but handled correctly then
+
+                # Accumulate the intensity of the activation in the individual color map
+                individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+
+                # Accumulate the intensity in the combined map for each activations
+                if antecedent.inequality:
+                    combined_green_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+                else:
+                    combined_red_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
+
+        individual_maps.append((individual_intensity_map, antecedent))
+
+
+
+    # Create the image combined with all filter of all antecedents
+
+    max_green = np.max(combined_green_intensity) if np.max(combined_green_intensity) > 0 else 1
+    max_red = np.max(combined_red_intensity) if np.max(combined_red_intensity) > 0 else 1
+
+    # Normalise the intensity maps combined between 0 and 255
+    green_overlay = (combined_green_intensity / max_green) * 255
+    red_overlay = (combined_red_intensity / max_red) * 255
+
+    combined_image = original_image_rgb.copy().astype(np.float32)
+
+    # Apply the combined filters
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0].astype(float) + red_overlay.astype(float), 0, 255)  # Ajout du rouge
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1].astype(float) + green_overlay.astype(float), 0, 255)  # Ajout du vert
+
+    combined_image = combined_image.astype(np.uint8)
+
+    # Determine the number of rows and columns for the subplots
+    num_antecedents = len(rule.antecedents)
+    total_images = num_antecedents + 2  # Original, combined, and individual filters
+
+    # We set a maximum number of columns per row for better visualization
+    max_columns = 4
+    num_columns = min(max_columns, total_images)
+    num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
+
+    # Create the matplotlib figure with dynamic rows and columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+
+    # If axes is a single AxesSubplot, convert it to a list for consistent indexing
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+
+    # Show the original image on top left
+    axes[0].imshow(original_image_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # Show combined image
+    axes[1].imshow(combined_image)
+    axes[1].set_title("Combined Filters")
+    axes[1].axis('off')
+
+    # Show each image with an individual filter (for each antecedent)
+    for i, (intensity_map, antecedent) in enumerate(individual_maps, start=2):
+        # Normlaise the intensity of the filter for the antecedent
+        max_intensity = np.max(intensity_map) if np.max(intensity_map) > 0 else 1
+        normalized_intensity = (intensity_map / max_intensity) * 255
+
+        individual_image = original_image_rgb.copy().astype(np.float32)
+
+        # Apply filter green for >= or red for <
+        if antecedent.inequality:
+            # Apply green filter
+            individual_image[:, :, 1] = np.clip(individual_image[:, :, 1].astype(float) + normalized_intensity.astype(float), 0, 255)
+        else:
+            # Apply red filter
+            individual_image[:, :, 0] = np.clip(individual_image[:, :, 0].astype(float) + normalized_intensity.astype(float), 0, 255)
+
+        individual_image = individual_image.astype(np.uint8)
+
+        # Show an image for each individual antecedant
+        match = re.match(HISTOGRAM_ANTECEDENT_PATTERN, antecedent.attribute)
+        if match:
+            class_id = int(match.group(1))
+            pred_threshold = match.group(2)
+            class_name = classes[class_id]  # Get the class name
+        ineq = ">=" if antecedent.inequality else "<"
+
+        axes[i].imshow(individual_image)
+        axes[i].set_title(f"Filter for P_{class_name}>={pred_threshold}{ineq}{antecedent.value}")
+        axes[i].axis('off')
+
+    # Hide any remaining empty subplots if total_images < num_rows * num_columns
+    for j in range(total_images, len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout() # Adjust spacing
+    plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    plt.close(fig)
+
+    return fig
+
+###############################################################
+
+def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
+
+    nb_top_filters = 20 # Number of filters to show in an image
+
+    activations, positions = generate_filtered_images_and_predictions( #nb_filters x nb_activations
+            CNNModel, image, filter_size, stride, intermediate_model)
+
+    filter_size = filter_size[0]
+
+    # Convert to RGB if necessary
+    original_image_rgb = image_to_rgb(image)
+
+    # Initialize the combined intensity maps for green and red
+    combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
+    combined_red_intensity = np.zeros((image.shape[0], image.shape[1]))
+
+    individual_maps = []
+
+    for antecedent in rule.antecedents:
+        # WARNING : Depending on the activation before the flatten layer, all smaller values are 0 which cannot be well interpreted
+        # Get top X ids of patches on this activation
+        if antecedent.inequality: #>=
+            patches_idx = get_top_ids(activations[:,antecedent.attribute], nb_top_filters) # The attribute is the id of the activation
+            #print("big", activations[patches_idx,antecedent.attribute])
+        else: #<
+            patches_idx = get_top_ids(activations[:,antecedent.attribute], nb_top_filters, False)
+            #print("small", activations[patches_idx,antecedent.attribute])
+
+        for i in patches_idx:
+            position = positions[i]
+            top_left = position
+            bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1]) # Goes one pixel too long but handled correctly then
+
+            individual_intensity_map = np.zeros((image.shape[0], image.shape[1]))
+
+            #Calculate intensity based on activation values
+            activation_values = activations[patches_idx, antecedent.attribute]
+            min_val, max_val = activation_values.min(), activation_values.max()
+            normalized_intensities = (activation_values - min_val) / (max_val - min_val + 1e-5)
+
+            # Apply intensity to patches
+            for i, idx in enumerate(patches_idx):  # Utilisation directe de l'index dans patches_idx
+                position = positions[idx]
+                intensity = normalized_intensities[i]
+                top_left = position
+                bottom_right = (position[0] + filter_size[0], position[1] + filter_size[1]) # Goes one pixel too long but handled correctly then
+
+                if antecedent.inequality:  # Apply green filter
+                    combined_green_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
+                    individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
+                else:  # Apply red filter
+                    combined_red_intensity[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
+                    individual_intensity_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += intensity
+
+        individual_maps.append(individual_intensity_map)
+
+    # Renormalization of intensities for each channel
+    if np.max(combined_green_intensity) > 0:
+        combined_green_intensity = np.clip(combined_green_intensity / np.max(combined_green_intensity), 0, 1)
+    else:
+        combined_green_intensity = np.zeros_like(combined_green_intensity)  # Laisser l'intensité à zéro si aucune valeur
+
+    if np.max(combined_red_intensity) > 0:
+        combined_red_intensity = np.clip(combined_red_intensity / np.max(combined_red_intensity), 0, 1)
+    else:
+        combined_red_intensity = np.zeros_like(combined_red_intensity)  # Laisser l'intensité à zéro si aucune valeur
+
+    # Combine green and red intensities into a single image
+    combined_image = original_image_rgb.copy()
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1].astype(float) + combined_green_intensity.astype(float) * 255, 0, 255)  # Green channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0].astype(float) + combined_red_intensity.astype(float) * 255, 0, 255)    # Red channel
+
+    # Plotting
+
+    # Determine the number of rows and columns for the subplots
+    num_antecedents = len(rule.antecedents)
+    total_images = num_antecedents + 2  # Original, combined, and individual filters
+
+    # We set a maximum number of columns per row for better visualization
+    max_columns = 4
+    num_columns = min(max_columns, total_images)
+    num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
+
+    # Create the matplotlib figure with dynamic rows and columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+
+    # If axes is a single AxesSubplot, convert it to a list for consistent indexing
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+
+    # Show the original image on top left
+    axes[0].imshow(original_image_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # Show combined image
+    axes[1].imshow(combined_image.astype(np.uint8))
+    axes[1].set_title("Combined Filters")
+    axes[1].axis('off')
+
+    # Show each antecedent image
+    for i, intensity_map in enumerate(individual_maps):
+        antecedent = rule.antecedents[i]
+        # Renormalize each intensity map
+        max_intensity = np.max(intensity_map)
+        if max_intensity > 0:  # Eviter la division par zéro
+            intensity_map = intensity_map / max_intensity
+
+        # Create filter image
+        filtered_image = original_image_rgb.copy()
+        if antecedent.inequality:
+            filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1].astype(float) + intensity_map.astype(float) * 255, 0, 255)
+        else:
+            filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0].astype(float) + intensity_map.astype(float) * 255, 0, 255)
+
+        filtered_image = filtered_image.astype(np.uint8)
+        ineq = ">=" if antecedent.inequality else "<"
+        axes[i+2].imshow(filtered_image)
+        axes[i+2].set_title(f"Top {nb_top_filters} Filter for Sum(A{antecedent.attribute}){ineq}{antecedent.value}")
+        axes[i+2].axis('off')
+
+    # Hide any remaining empty subplots if total_images < num_rows * num_columns
+    for j in range(total_images, len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout() # Adjust spacing
+    plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    plt.close(fig)
+
+    return fig
+
+###############################################################
+
+def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
+
+    nb_classes = len(classes)
+
+    # Convert to RGB if necessary
+    original_image_rgb = image_to_rgb(image)
+
+    filtered_images = []
+    combined_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+    mask_green_combined = np.zeros((size1D, size1D), dtype=bool)
+    mask_red_combined = np.zeros((size1D, size1D), dtype=bool)
+
+    # Scales of changes of original image to reshaped image
+    scale_h = size1D / size_Height_proba_stat
+    scale_w = size1D / size_Width_proba_stat
+
+
+    for antecedent in rule.antecedents:
+        channel_id = antecedent.attribute % (nb_classes + nb_channels)
+        area_number = antecedent.attribute // (nb_classes + nb_channels)
+        area_Height = area_number // size_Width_proba_stat
+        area_Width = area_number % size_Width_proba_stat
+        filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+
+        if channel_id < nb_classes: # Attrubute corresponds to an area
+            # Get attribute information
+            area_Height_end = area_Height+filter_size[0][0]-1
+            area_Width_end = area_Width+filter_size[0][1]-1
+
+            if antecedent.inequality:  # >=
+                filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
+                combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
+            else:  # <
+                filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
+                combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
+        else: # Antecedant corresponds to a pixel
+            height_original = round(area_Height * scale_h)
+            width_original = round(area_Width * scale_w)
+            if antecedent.inequality:  # >=
+                filtered_image_intensity[height_original, width_original, :] = [0, 255, 0]  # Green
+                combined_image_intensity[height_original, width_original, :] = [0, 255, 0]
+            else:  # <
+                filtered_image_intensity[height_original, width_original, :] = [255, 0, 0]  # Red
+                combined_image_intensity[height_original, width_original, :] = [255, 0, 0]
+
+
+        # We force pixel specifics to be green or red
+        mask_green = (filtered_image_intensity[:, :, 1] >= 255).astype(bool)   # Pixels marked for green
+        mask_red = (filtered_image_intensity[:, :, 0] >= 255).astype(bool)     # Pixels marked for red
+
+        mask_green_combined |= mask_green
+        mask_red_combined |= mask_red
+
+        filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8) # Normalize to be between 0 and 255.
+        filtered_image = original_image_rgb.copy()
+        filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1].astype(float) + filtered_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel type unint16 is mandatory otherwise addition will be cyclic (255+1=0)
+        filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0].astype(float) + filtered_image_intensity[:, :, 0].astype(float), 0, 255)  # Red channel
+
+        # Green Pixels
+        filtered_image[mask_green] = [0, 255, 0]
+        # Red Pixels
+        filtered_image[mask_red] = [255, 0, 0]
+
+        filtered_images.append(filtered_image)
+
+    # Normalise combined image between 0 and 255
+
+    combined_masked_intensity = combined_image_intensity.copy()
+    combined_masked_intensity[mask_green_combined | mask_red_combined] = 0  # Ignore marked pixels for max calculation
+
+    # Normalizazion without marked pixels
+    combined_max_value = np.max(combined_masked_intensity)
+
+    if combined_max_value > 0:
+        combined_image_intensity = np.clip(combined_image_intensity / combined_max_value * 255, 0, 255) # Normalize to be between 0 and 255
+    else:
+        combined_image_intensity = np.zeros_like(combined_image_intensity)
+
+    combined_image = original_image_rgb.copy()
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1].astype(float) + combined_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0].astype(float) + combined_image_intensity[:, :, 0].astype(float), 0, 255)  # Red channel
+
+    # Green Pixels
+    combined_image[mask_green_combined] = [0, 255, 0]
+    # Red Pixels
+    combined_image[mask_red_combined] = [255, 0, 0]
+    # Plotting
+
+    # Determine the number of rows and columns for the subplots
+    num_antecedents = len(rule.antecedents)
+    total_images = num_antecedents + 2  # Original, combined, and individual filters
+
+    # We set a maximum number of columns per row for better visualization
+    max_columns = 4
+    num_columns = min(max_columns, total_images)
+    num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
+
+    # Create the matplotlib figure with dynamic rows and columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+
+    # If axes is a single AxesSubplot, convert it to a list for consistent indexing
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+
+    # Show the original image on top left
+    axes[0].imshow(original_image_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # Show combined image
+    axes[1].imshow(combined_image.astype(np.uint8))
+    axes[1].set_title("Combined Filters")
+    axes[1].axis('off')
+
+    # Show each antecedent image
+    for i,img in enumerate(filtered_images):
+        antecedent = rule.antecedents[i]
+        channel_id = antecedent.attribute % (nb_classes + nb_channels)
+        area_number = antecedent.attribute // (nb_classes + nb_channels)
+        area_Height = area_number // size_Width_proba_stat
+        area_Width = area_number % size_Width_proba_stat
+        img = img.astype(np.uint8)
+        ineq = ">=" if antecedent.inequality else "<"
+        axes[i+2].imshow(img)
+        if channel_id < nb_classes:
+            area_Height_end = area_Height+filter_size[0][0]-1
+            area_Width_end = area_Width+filter_size[0][1]-1
+            class_name = classes[antecedent.attribute % nb_classes]
+            axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
+        else:
+            channel = channel_id - nb_classes
+            # Conversion of resized coordinates into originales
+            height_original = round(area_Height * scale_h)
+            width_original = round(area_Width * scale_w)
+            axes[i+2].set_title(f"Pixel_{height_original}x{width_original}x{channel}{ineq}{antecedent.value:.6f}")
+        axes[i+2].axis('off')
+    # Hide any remaining empty subplots if total_images < num_rows * num_columns
+    for j in range(total_images, len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout() # Adjust spacing
+    plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    plt.close(fig)
+
+    return fig
+
+###############################################################
+
+def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions=None):
     """
     Generate explaining images.
     """
     print("Generation of images...")
+
+    if args.train_with_patches:
+        train_positions = np.array(train_positions)
 
     # 1) Load rules
     global_rules = getRules(cfg["global_rules_file"])
@@ -103,10 +560,22 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             file.write(str(rule_to_print))
 
         # We create and save an image for each covered sample
+        if args.train_with_patches:
+            train_pred = np.loadtxt(cfg["train_pred_file"])
+            nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             if args.statistic == "histogram":
-                highlighted_image = highlight_area_histograms(CNNModel, img, FILTER_SIZE, STRIDE, rule, cfg["classes"])
+                if args.train_with_patches:
+                    nb_areas_per_filter = [nb_patches_per_image]
+                    start_idx = img_id * nb_patches_per_image
+                    end_idx = start_idx + nb_patches_per_image
+                    predictions = train_pred[start_idx:end_idx, :]
+                    positions = train_positions[start_idx:end_idx, :]
+                else:
+                    predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
+                    CNNModel, img, FILTER_SIZE, STRIDE)
+                highlighted_image = highlight_area_histograms(CNNModel, img, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, FILTER_SIZE, STRIDE, cfg["classes"])
             elif args.statistic == "probability" or args.statistic == "probability_multi_nets":

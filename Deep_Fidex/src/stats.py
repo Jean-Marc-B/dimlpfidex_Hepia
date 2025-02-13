@@ -4,14 +4,117 @@ import numpy as np
 import tensorflow as tf
 
 from utils.utils import (
-    compute_histograms,
-    compute_activation_sums,
-    compute_proba_images,
+    getHistogram,
+    generate_filtered_images_and_predictions,
     output_data,
     normalize_data
 )
 from tensorflow.keras import Model
 from utils.config import *
+
+
+def compute_histograms(nb_samples, data_or_predictions, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins, cfg, train_with_patches=False):
+    """
+    Computes histograms for each sample in the dataset using the CNN model. It's the histogram of the probabilities of each class on the CNN
+    evaluated on each area (or patches) added on the image (by a sliding filter). A patch is applied and outside of this area everything is 0.
+
+    Parameters:
+    - nb_samples: The number of samples in the dataset.
+    - data_or_predictions: The dataset containing images to be processed or the predictions of each patch (if train_with_patches == True).
+    - size1D: The size of one dimension of the input image (image is size1D x size1D).
+    - nb_channels: The number of channels in the input images (1 for grayscale, 3 for RGB).
+    - CNNModel: The CNN model used for making predictions.
+    - nb_classes: The number of classes for classification.
+    - filter_size: The size of the filter applied to the image (height, width), can be an array of tuples if we apply several filters.
+    - stride: The stride value for moving the filter across the image (verticaly, horizontaly).
+    - nb_bins: The number of bins used for computing the histogram.
+
+    Returns:
+    - histograms: A numpy array containing the computed histograms for each sample.
+    """
+
+    histograms = []
+    nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
+    for sample_id in range(nb_samples):
+        if train_with_patches:
+            start_idx = sample_id * nb_patches_per_image
+            end_idx = start_idx + nb_patches_per_image
+            predictions = data_or_predictions[start_idx:end_idx, :]
+        else:
+            image = data_or_predictions[sample_id]
+            image = image.reshape(size1D, size1D, nb_channels)
+            predictions, _, _ = generate_filtered_images_and_predictions( # shape cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"], nb_classes
+                CNNModel, image, filter_size, stride)
+
+        histogram = getHistogram(CNNModel, predictions, nb_classes, filter_size, stride, nb_bins)
+        histograms.append(histogram)
+        if (sample_id+1) % 100 == 0 or sample_id+1 == nb_samples:
+            progress = ((sample_id+1) / nb_samples) * 100
+            progress_message = f"Progress : {progress:.2f}% ({sample_id+1}/{nb_samples})"
+            print(f"\r{progress_message}", end='', flush=True)
+    histograms = np.array(histograms)
+
+    return histograms
+
+###############################################################
+
+def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride):
+    """
+    Computes the sum of activations from an intermediate layer for each sample in the dataset using a sliding filter.
+
+    This function applies a sliding filter across each image in the dataset and uses a CNN model to extract feature activations
+    from an intermediate layer. The activations for each patch are then summed to produce a global activation sum for each sample.
+    This method helps analyze the CNN model’s response over different areas of the image.
+
+    Parameters:
+    - nb_samples: The number of samples in the dataset.
+    - data: The dataset containing images to be processed.
+    - size1D: The size of one dimension of the input image (image is size1D x size1D).
+    - nb_channels: The number of channels in the input images (1 for grayscale, 3 for RGB).
+    - CNNModel: The full CNN model used for making predictions.
+    - intermediate_model: A model stopping at the specific intermediate layer (e.g., Flatten layer) to capture activations.
+    - nb_stats_attributes: The number of statistical attributes to store for each sample (dimensionality of the intermediate layer).
+    - filter_size: The size of the filter applied to the image (height, width), can be an array of tuples if applying multiple filters.
+    - stride: The stride value for moving the filter across the image (vertically, horizontally).
+
+    Returns:
+    - sums: A numpy array containing the activation sums for each sample, with shape (nb_samples, nb_stats_attributes).
+    """
+    sums = np.zeros((nb_samples, nb_stats_attributes))
+    for sample_id in range(nb_samples):
+        image = data[sample_id]
+        image = image.reshape(size1D, size1D, nb_channels)
+        activations, _ = generate_filtered_images_and_predictions(
+        CNNModel, image, filter_size, stride, intermediate_model)
+        sums[sample_id] = np.sum(activations, axis=0)
+        if (sample_id+1) % 100 == 0 or sample_id+1 == nb_samples:
+            progress = ((sample_id+1) / nb_samples) * 100
+            progress_message = f"Progress : {progress:.2f}% ({sample_id+1}/{nb_samples})"
+            print(f"\r{progress_message}", end='', flush=True)
+
+    return sums
+
+###############################################################
+
+def compute_proba_images(nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride):
+    my_filter_size = filter_size[0]
+    output_size = ((size1D - my_filter_size[0] + 1)*(size1D - my_filter_size[1] + 1)*nb_classes)
+    #print(output_size) # (4840)
+    proba_images = np.zeros((nb_samples,output_size))
+
+    for sample_id in range(nb_samples):
+        image = data[sample_id]
+        image = image.reshape(size1D, size1D, nb_channels)
+        predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
+            CNNModel, image, filter_size, stride)
+        #print(predictions.shape)  # (484, 10)
+        predictions = predictions.reshape(output_size)
+        # print(predictions.shape) # (4840,)
+        proba_images[sample_id] = predictions
+    #print(proba_images.shape)  # (nb_samples, 4840)
+    return proba_images
+
+###############################################################
 
 def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
     """

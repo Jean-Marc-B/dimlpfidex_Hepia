@@ -136,10 +136,9 @@ if __name__ == "__main__":
     ##############################################################################
 
     # Create patch dataset if training with patches or computing stats after training with patches
-    if args.train_with_patches and (args.train or args.stats):
+    if args.train_with_patches and (args.train or args.stats or (args.images and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
-        X_train_patches, Y_train_patches, X_test_patches, Y_test_patches, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
-
+        X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
 
     # TRAINING
     if args.train:
@@ -192,11 +191,17 @@ if __name__ == "__main__":
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images:
-        generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args)
+        if args.train_with_patches:
+            generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions)
+        else:
+            generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args)
 
     # HEATMAP
     if args.heatmap:
-        generate_heatmaps(cfg, X_test, CNNModel)
+        if args.train_with_patches:
+            generate_heatmaps(cfg, X_test, CNNModel, args, test_positions)
+        else:
+            generate_heatmaps(cfg, X_test, CNNModel, args)
 
     end_time = time.time()
     full_time = end_time - start_time
