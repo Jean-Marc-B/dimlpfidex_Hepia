@@ -40,7 +40,7 @@ from heatmap import generate_heatmaps
 
 # GPU arguments
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 np.random.seed(seed=None)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     # TRAINING
     if args.train:
         if args.train_with_patches:
-            train_cnn(cfg, X_train_patches, Y_train_patches, X_test_patches, Y_test_patches, args)
+            train_cnn(cfg, (X_train_patches, train_positions), Y_train_patches, (X_test_patches, test_positions), Y_test_patches, args)
         else:
             train_cnn(cfg, X_train, Y_train, X_test, Y_test, args)
 

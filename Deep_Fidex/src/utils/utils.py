@@ -5,7 +5,7 @@ from .stairObj import StairObj
 from keras import backend as K
 from keras.models     import Sequential
 from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU, Resizing
-from keras.layers     import BatchNormalization, GlobalAveragePooling2D
+from keras.layers     import BatchNormalization, GlobalAveragePooling2D, Concatenate
 from keras.applications     import ResNet50, VGG16
 from keras.optimizers import Adam
 from tensorflow.keras.models import Model
@@ -675,14 +675,29 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     gc.collect()
     tf.keras.backend.clear_session()
 
-    if model not in ["resnet", "VGG", "small", "MLP"]:
-        raise ValueError("The model needs to be one of resnet, VGG, small or MLP")
+    if model not in ["resnet", "VGG", "small", "MLP", "MLP_Patch"]:
+        raise ValueError("The model needs to be one of resnet, VGG, small, MLP or MLP_Patch")
+
+    if model == "MLP_Patch":
+        if len(X_train) != 2 or len(X_test) != 2 or len(X_train[1][0]) != 2 or len(X_test[1][0]) != 2:
+            raise ValueError("Wrong shape of data when training with patches.")
+        if not isinstance(X_train, tuple) or not isinstance(X_test, tuple):
+            raise ValueError("X_train and X_test must be tuples (image patches, positions).")
+
+        X_train, coord_train = X_train
+        X_test, coord_test = X_test
+        coord_train = np.array(coord_train)
+        coord_test = np.array(coord_test)
+        X_test = np.array(X_test)
 
     split_index = int(0.8 * len(X_train))
     x_train = X_train[0:split_index]
     x_val   = X_train[split_index:]
     y_train = Y_train[0:split_index]
     y_val   = Y_train[split_index:]
+
+    if model == "MLP_Patch":
+        coord_train, coord_val = coord_train[:split_index], coord_train[split_index:]
 
     print(f"Training set: {x_train.shape}, {y_train.shape}")
     print(f"Validation set: {x_val.shape}, {y_val.shape}")
@@ -694,6 +709,11 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         X_test = np.repeat(X_test, 3, axis=-1)
         x_val = np.repeat(x_val, 3, axis=-1)
         nbChannels = 3
+
+    if model == "MLP_Patch":
+        x_train = [x_train, coord_train]
+        x_val = [x_val,coord_val]
+        X_test = [X_test,coord_test]
 
     ##############################################################################
     if model == "resnet":
@@ -830,6 +850,25 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.add(Dense(128, activation='relu'))
         model.add(Dense(64, activation='relu'))
         model.add(Dense(nb_classes, activation='softmax'))
+
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model.summary()
+
+    elif model == "MLP_Patch":
+        patch_input = Input(shape=(height, width, nbChannels))
+
+        x = Flatten()(patch_input)
+        x = Dense(128, activation='relu')(x)
+        x = Dense(64, activation='relu')(x)
+
+        coord_input = Input(shape=(2,))
+        y = Dense(8, activation='relu')(coord_input)
+
+        merged = Concatenate()([x, y])
+        merged = Dense(64, activation='relu')(merged)
+        output = Dense(nb_classes, activation='softmax')(merged)
+
+        model = Model(inputs=[patch_input, coord_input], outputs=output)
 
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         model.summary()
