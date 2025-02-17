@@ -57,7 +57,7 @@ def load_config(args, script_dir):
     elif args.dataset == "Happy":
         config["size1D"] = 48
         config["nb_channels"] = 1
-        config["base_folder"] = os.path.join(os.path.dirname(script_dir), "data", "Happy")
+        config["base_folder"] = os.path.join(os.path.dirname(script_dir), "../../data", "Happy")
         config["data_type"] = "float"
         config["classes"] = {0: "happy", 1: "not happy"}
 
@@ -116,16 +116,16 @@ def load_config(args, script_dir):
     if args.test:
         config["model"] = "small"
         config["nbIt"] = 4
-        config["batch_size"] = 32
+        config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
         config["model"] = "VGG"
-        config["nbIt"] = 80
-        config["batch_size"] = 64
-        config["batch_size_second_model"] = 64
+        config["nbIt"] = 50
+        config["batch_size"] = 16
+        config["batch_size_second_model"] = 16
 
     if args.train_with_patches:
-        config["model"] = "MLP"
+        config["model"] = "MLP_Patch"
 
     # 📊 Managment of statistics
     config["with_leaky_relu"] = args.statistic == "activation_layer"
