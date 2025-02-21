@@ -5,6 +5,7 @@ import copy
 import re
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 from utils.utils import (
     getRules,
@@ -181,12 +182,12 @@ def highlight_area_histograms(CNNModel, image, filter_size, rule, classes, predi
 
 ###############################################################
 
-def highlight_area_activations_sum(CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
+def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
 
     nb_top_filters = 20 # Number of filters to show in an image
 
     activations, positions = generate_filtered_images_and_predictions( #nb_filters x nb_activations
-            CNNModel, image, filter_size, stride, intermediate_model)
+            cfg, CNNModel, image, filter_size, stride, intermediate_model)
 
     filter_size = filter_size[0]
 
@@ -476,8 +477,13 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
     """
     print("Generation of images...")
 
+    # Get train predictions
     if args.train_with_patches:
+        print("Loading train predictions...")
         train_positions = np.array(train_positions)
+        train_pred = np.loadtxt(cfg["train_pred_file"])
+        nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
+        print("Train predictions loaded.")
 
     # 1) Load rules
     global_rules = getRules(cfg["global_rules_file"])
@@ -491,17 +497,17 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
         shutil.rmtree(cfg["rules_folder"])
     os.makedirs(cfg["rules_folder"])
 
-    # 4) For each rule we get filter images for train samples covering the rule
-    # good_classes = [2,3,5]
-    # counter = 0
-    for rule_id, rule in enumerate(global_rules[0:50]):
 
-        # if counter == 50:
-        #     exit()
-        # if rule.target_class not in good_classes:
-        #     continue
-        # else:
-        #     counter += 1
+    # 4) For each rule we get filter images for train samples covering the rule
+    good_classes = [9]
+    counter = 0
+    for rule_id, rule in enumerate(global_rules):
+        if counter == 10:
+            exit()
+        if rule.target_class not in good_classes:
+            continue
+        else:
+            counter += 1
 
         if args.statistic == "histogram":
             rule.include_X = False
@@ -560,9 +566,6 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             file.write(str(rule_to_print))
 
         # We create and save an image for each covered sample
-        if args.train_with_patches:
-            train_pred = np.loadtxt(cfg["train_pred_file"])
-            nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             if args.statistic == "histogram":
@@ -574,10 +577,10 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     positions = train_positions[start_idx:end_idx, :]
                 else:
                     predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
-                    CNNModel, img, FILTER_SIZE, STRIDE)
+                    cfg, CNNModel, img, FILTER_SIZE, STRIDE)
                 highlighted_image = highlight_area_histograms(CNNModel, img, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
-                highlighted_image = highlight_area_activations_sum(CNNModel, intermediate_model, img, rule, FILTER_SIZE, STRIDE, cfg["classes"])
+                highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, rule, FILTER_SIZE, STRIDE, cfg["classes"])
             elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
                 highlighted_image = highlight_area_probability_image(img, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png")

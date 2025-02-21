@@ -913,7 +913,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
 ###############################################################
 
-def generate_filtered_images_and_predictions(CNNModel, image, filter_size, stride, intermediate_model=None):
+def generate_filtered_images_and_predictions(cfg, CNNModel, image, filter_size, stride, intermediate_model=None):
 
     """
     Generates filtered versions of an image by applying a sliding filter and predicts each filtered image using the CNN model.
@@ -928,7 +928,8 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
     - predictions: Predictions from the CNN model for each filtered image.
     - positions: A list of (row, column) tuples indicating the top-left position of each filter applied.
     """
-    if (image.shape[2] == 1 and CNNModel.input_shape[-1] == 3):
+
+    if (cfg["model"] != "RF" and image.shape[2] == 1 and CNNModel.input_shape[-1] == 3):
         # B&W to RGB
         image = np.repeat(image, 3, axis=-1)
 
@@ -966,7 +967,11 @@ def generate_filtered_images_and_predictions(CNNModel, image, filter_size, strid
         return predictions, positions
 
     else:
-        predictions = CNNModel.predict(filtered_images, verbose=0)
+        if cfg["model"] == "RF":
+            filtered_images_flattened = filtered_images.reshape(filtered_images.shape[0], -1)
+            predictions = CNNModel.predict_proba(filtered_images_flattened)
+        else:
+            predictions = CNNModel.predict(filtered_images, verbose=0)
         # if sample_id == 56:
         #     index = positions.index((8,8))
         #     prediction_at_target = predictions[index]

@@ -44,7 +44,7 @@ def compute_histograms(nb_samples, data_or_predictions, size1D, nb_channels, CNN
             image = data_or_predictions[sample_id]
             image = image.reshape(size1D, size1D, nb_channels)
             predictions, _, _ = generate_filtered_images_and_predictions( # shape cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"], nb_classes
-                CNNModel, image, filter_size, stride)
+                cfg, CNNModel, image, filter_size, stride)
 
         histogram = getHistogram(CNNModel, predictions, nb_classes, filter_size, stride, nb_bins)
         histograms.append(histogram)
@@ -58,7 +58,7 @@ def compute_histograms(nb_samples, data_or_predictions, size1D, nb_channels, CNN
 
 ###############################################################
 
-def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride):
+def compute_activation_sums(cfg, nb_samples, data, size1D, nb_channels, CNNModel, intermediate_model, nb_stats_attributes, filter_size, stride):
     """
     Computes the sum of activations from an intermediate layer for each sample in the dataset using a sliding filter.
 
@@ -85,7 +85,7 @@ def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, int
         image = data[sample_id]
         image = image.reshape(size1D, size1D, nb_channels)
         activations, _ = generate_filtered_images_and_predictions(
-        CNNModel, image, filter_size, stride, intermediate_model)
+        cfg, CNNModel, image, filter_size, stride, intermediate_model)
         sums[sample_id] = np.sum(activations, axis=0)
         if (sample_id+1) % 100 == 0 or sample_id+1 == nb_samples:
             progress = ((sample_id+1) / nb_samples) * 100
@@ -96,7 +96,7 @@ def compute_activation_sums(nb_samples, data, size1D, nb_channels, CNNModel, int
 
 ###############################################################
 
-def compute_proba_images(nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride):
+def compute_proba_images(cfg, nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride):
     my_filter_size = filter_size[0]
     output_size = ((size1D - my_filter_size[0] + 1)*(size1D - my_filter_size[1] + 1)*nb_classes)
     #print(output_size) # (4840)
@@ -106,8 +106,8 @@ def compute_proba_images(nb_samples, data, size1D, nb_channels, nb_classes, CNNM
         image = data[sample_id]
         image = image.reshape(size1D, size1D, nb_channels)
         predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
-            CNNModel, image, filter_size, stride)
-        #print(predictions.shape)  # (484, 10)
+            cfg, CNNModel, image, filter_size, stride)
+        # print(predictions.shape)  # (484, 10)
         predictions = predictions.reshape(output_size)
         # print(predictions.shape) # (4840,)
         proba_images[sample_id] = predictions
@@ -162,7 +162,7 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
         print("\nComputing train sums of activation layer patches...")
 
         # Get sums for each train sample
-        train_sums = compute_activation_sums(nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
+        train_sums = compute_activation_sums(cfg, nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
                                              CNNModel, intermediate_model, cfg["nb_stats_attributes"],
                                              FILTER_SIZE, STRIDE)
         # Normalization
@@ -174,7 +174,7 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
 
         print("\nComputing test sums of activation layer patches...")
         # Get sums for each test sample
-        test_sums = compute_activation_sums(nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
+        test_sums = compute_activation_sums(cfg, nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
                                             CNNModel, intermediate_model, cfg["nb_stats_attributes"],
                                             FILTER_SIZE, STRIDE)
         # Normalization
@@ -199,14 +199,14 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
         else:
             print("\nComputing train probability images of patches...\n")
             # Get sums for each train sample
-            train_probas = compute_proba_images(nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
+            train_probas = compute_proba_images(cfg, nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
                                                 cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
             # shape (nb_train_images(images), cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*nb_classes)
             print("\nComputed train probability images of patches.")
 
             print("\nComputing test probability images of patches...\n")
             # Get sums for each train sample
-            test_probas = compute_proba_images(nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
+            test_probas = compute_proba_images(cfg, nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
                                             cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
             print("\nComputed test probability images of patches.")
 

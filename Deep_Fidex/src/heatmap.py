@@ -125,7 +125,7 @@ def generate_heatmaps(cfg, X_test, CNNModel, args, test_positions=None):
             positions = test_positions[start_idx:end_idx, :]
         else:
             predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
-            CNNModel, img, FILTER_SIZE, STRIDE)
+            cfg, CNNModel, img, FILTER_SIZE, STRIDE)
 
 
         heat_maps_img = get_heat_maps(CNNModel, img, FILTER_SIZE, cfg["classes"], predictions, positions, nb_areas_per_filter)

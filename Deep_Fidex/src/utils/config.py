@@ -11,6 +11,9 @@ AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset"]
 # List of statistics allowed
 AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_multi_nets"]
 
+# List of CNN models available
+AVAILABLE_CNN_MODELS = ["VGG", "resnet", "small", "MLP", "MLP_Patch"]
+
 # Filters
 FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
 STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
@@ -80,11 +83,14 @@ def load_config(args, script_dir):
     patches_sufix = ""
     if args.train_with_patches:
         patches_sufix = "_train_patches"
+    folder_suf = ""
+    if args.folder_sufix is not None:
+        folder_suf = args.folder_sufix
     STATISTIC_FOLDERS = {
-        "histogram": "Histograms" + patches_sufix,
-        "activation_layer": "Activations_Sum" + patches_sufix,
-        "probability_multi_nets": "Probability_Multi_Nets_Images" + patches_sufix,
-        "probability": "Probability_Images" + patches_sufix,
+        "histogram": "Histograms" + patches_sufix + folder_suf,
+        "activation_layer": "Activations_Sum" + patches_sufix + folder_suf,
+        "probability_multi_nets": "Probability_Multi_Nets_Images" + patches_sufix + folder_suf,
+        "probability": "Probability_Images" + patches_sufix + folder_suf,
     }
     scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
 
@@ -114,18 +120,24 @@ def load_config(args, script_dir):
 
     # 📌 Training (model and batch size)
     if args.test:
-        config["model"] = "small"
+        config["model"] = "RF"
         config["nbIt"] = 4
         config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
-        config["model"] = "VGG"
+        config["model"] = "RF"
         config["nbIt"] = 50
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16
 
     if args.train_with_patches:
-        config["model"] = "MLP_Patch"
+        if config["model"] in AVAILABLE_CNN_MODELS:
+            config["model"] = "MLP_Patch"
+        elif config["model"] != "RF":
+            raise ValueError("Wrong model given, give one of VGG, resnet, small, MLP, MLP_Patch, RF")
+
+    if config["model"] == "RF" and args.statistic == "activation_layer":
+        raise ValueError("activation_layer can't use a Random Forest to train.")
 
     # 📊 Managment of statistics
     config["with_leaky_relu"] = args.statistic == "activation_layer"
@@ -174,7 +186,6 @@ def load_config(args, script_dir):
     # 📊 Parameters specific to probabilities
     if args.statistic in ["probability", "probability_multi_nets"]:
         config["output_size"] = (config["size_Height_proba_stat"], config["size_Width_proba_stat"], config["nb_classes"] + config["nb_channels"])
-        print(config["size_Height_proba_stat"], config["size_Width_proba_stat"], (config["nb_classes"] + config["nb_channels"]))
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
 
     # Display parameters
