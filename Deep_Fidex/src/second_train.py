@@ -15,7 +15,7 @@ from utils.utils import (
 )
 from utils.config import *
 
-def train_second_model(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args):
+def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model, args):
     """
     Train a second model (For ex. RandomForest, dimlpTrn, or a second CNN)
     with respect to cfg["second_model"].

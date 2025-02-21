@@ -22,6 +22,7 @@ import argparse
 import numpy as np
 import keras
 import tensorflow as tf
+import joblib
 
 # Import intern modules
 import utils.config as config
@@ -31,7 +32,7 @@ from dimlpfidex import fidex, dimlp
 from trainings import randForestsTrn, gradBoostTrn
 
 # Import step files
-from train import train_cnn
+from train import train_model
 from stats import compute_stats
 from second_train import train_second_model
 from generate_rules import generate_rules
@@ -40,7 +41,7 @@ from heatmap import generate_heatmaps
 
 # GPU arguments
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 np.random.seed(seed=None)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -65,6 +66,9 @@ def parse_arguments():
     parser.add_argument(
         "--train_with_patches", type=lambda x: (str(x).lower() in ['true', '1', 'yes']), required=True,
         help="Set to True if training with patches, False otherwise (Accepted values: True, False, 1, 0, Yes, No)"
+    )
+    parser.add_argument(
+        "--folder_sufix", type=str, help="Add a sufix to the folder name"
     )
 
     # Optionals arguments
@@ -143,34 +147,37 @@ if __name__ == "__main__":
     # TRAINING
     if args.train:
         if args.train_with_patches:
-            train_cnn(cfg, (X_train_patches, train_positions), Y_train_patches, (X_test_patches, test_positions), Y_test_patches, args)
+            train_model(cfg, (X_train_patches, train_positions), Y_train_patches, (X_test_patches, test_positions), Y_test_patches, args)
         else:
-            train_cnn(cfg, X_train, Y_train, X_test, Y_test, args)
+            train_model(cfg, X_train, Y_train, X_test, Y_test, args)
 
     print("Loading model...")
-    CNNModel = keras.saving.load_model(cfg["model_file"])
+    if cfg["model"] =="RF":
+        firstModel = joblib.load(cfg["model_file"])
+    else:
+        firstModel = keras.saving.load_model(cfg["model_file"])
     print("Model loaded.")
 
     # Get intermediate model if with activation_layer
     intermediate_model = None
     if args.statistic == "activation_layer": # Get intermediate model
-        input_channels = CNNModel.input_shape[-1]
+        input_channels = firstModel.input_shape[-1]
         dummy_input = np.zeros((1, cfg["size1D"], cfg["size1D"], input_channels))
-        _ = CNNModel(dummy_input)
-        flatten_layer_output = CNNModel.get_layer("flatten").output
-        intermediate_model = Model(inputs=CNNModel.inputs, outputs=flatten_layer_output)
+        _ = firstModel(dummy_input)
+        flatten_layer_output = firstModel.get_layer("flatten").output
+        intermediate_model = Model(inputs=firstModel.inputs, outputs=flatten_layer_output)
         cfg["nb_stats_attributes"] = intermediate_model.output_shape[1]
 
     # STATISTICS
     if args.stats:
         if args.train_with_patches:
-            compute_stats(cfg, X_train_patches, X_test_patches, CNNModel, intermediate_model, args)
+            compute_stats(cfg, X_train_patches, X_test_patches, firstModel, intermediate_model, args)
         else:
-            compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args)
+            compute_stats(cfg, X_train, X_test, firstModel, intermediate_model, args)
 
     # TRAIN SECOND MODEL
     if args.second_train:
-        train_second_model(cfg, X_train, Y_train, X_test, Y_test, CNNModel, intermediate_model, args)
+        train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model, args)
 
     # Define attributes file for histograms
     if args.statistic == "histogram":
@@ -191,17 +198,17 @@ if __name__ == "__main__":
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images:
-        if args.train_with_patches:
-            generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions)
+        if args.train_with_patches and args.statistic == "histogram":
+            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions)
         else:
-            generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args)
+            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args)
 
     # HEATMAP
     if args.heatmap:
         if args.train_with_patches:
-            generate_heatmaps(cfg, X_test, CNNModel, args, test_positions)
+            generate_heatmaps(cfg, X_test, firstModel, args, test_positions)
         else:
-            generate_heatmaps(cfg, X_test, CNNModel, args)
+            generate_heatmaps(cfg, X_test, firstModel, args)
 
     end_time = time.time()
     full_time = end_time - start_time
