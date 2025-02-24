@@ -77,7 +77,8 @@ def parse_arguments():
     parser.add_argument("--stats", action="store_true", help="Compute statistics") # Stats computation
     parser.add_argument("--second_train", action="store_true", help="Train a second model")
     parser.add_argument("--rules", action="store_true", help="Compute global rules")
-    parser.add_argument("--images", action="store_true", help="Generate explaining images")
+    parser.add_argument("--images", type=check_positive, help="Generate N explaining images", default=None)
+    parser.add_argument("--each_class", action="store_true", help="Generate N images per class")
     parser.add_argument("--heatmap", action="store_true", help="Generate a heatmap") # Only evaluation on patches
 
     return parser.parse_args()
@@ -91,7 +92,7 @@ if __name__ == "__main__":
 
     # If generating rules, we force CPU only
     if args.rules:
-        if any((args.train, args.stats, args.second_train, args.images)):
+        if any((args.train, args.stats, args.second_train, args.images is not None)):
             raise ValueError("Global rules have to be computed alone because we don't want to use a GPU during global rules generation.")
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -140,7 +141,7 @@ if __name__ == "__main__":
     ##############################################################################
 
     # Create patch dataset if training with patches or computing stats after training with patches
-    if args.train_with_patches and (args.train or args.stats or (args.images and args.statistic == "histogram") or args.heatmap):
+    if args.train_with_patches and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
         X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
 
@@ -197,7 +198,7 @@ if __name__ == "__main__":
         generate_rules(cfg, args)
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
-    if args.images:
+    if args.images is not None:
         if args.train_with_patches and args.statistic == "histogram":
             generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions)
         else:

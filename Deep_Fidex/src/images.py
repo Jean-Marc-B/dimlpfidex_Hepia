@@ -499,15 +499,21 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
 
 
     # 4) For each rule we get filter images for train samples covering the rule
-    good_classes = [9]
-    counter = 0
+    nb_rules = args.images
+    counters = [0] * cfg["nb_classes"]
+
     for rule_id, rule in enumerate(global_rules):
-        if counter == 10:
-            exit()
-        if rule.target_class not in good_classes:
+        if args.each_class:
+            if all(count >= nb_rules for count in counters):
+                break
+        else:
+            if sum(counters) >= nb_rules:
+                break
+
+        if args.each_class and counters[rule.target_class] >= nb_rules:
             continue
         else:
-            counter += 1
+            counters[rule.target_class] += 1
 
         if args.statistic == "histogram":
             rule.include_X = False

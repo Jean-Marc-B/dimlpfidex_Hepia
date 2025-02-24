@@ -16,6 +16,7 @@ from .rule import Rule
 from .antecedent import Antecedent
 import json
 import math
+import argparse
 from PIL import Image
 import os
 import time
@@ -1106,6 +1107,13 @@ def get_top_ids(array, X=10, largest=True):
     else:
         return np.argpartition(array, X)[:X] # Get X smaller indices (not sorted)
 
+###############################################################
+
+def check_positive(value):
+    ivalue = int(value)
+    if ivalue < 0:
+        raise argparse.ArgumentTypeError(f"{value} is not a valid number. Enter an positive integer (≥ 0).")
+    return ivalue
 
 ###############################################################
 ###############################################################

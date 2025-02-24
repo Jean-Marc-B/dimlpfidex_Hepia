@@ -125,7 +125,7 @@ def load_config(args, script_dir):
         config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
-        config["model"] = "RF"
+        config["model"] = "VGG"
         config["nbIt"] = 50
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16
@@ -228,7 +228,7 @@ def load_config(args, script_dir):
         if args.statistic == "activation_layer":
             print("With Leaky Relu" if config["with_leaky_relu"] else "Without Leaky Relu")
 
-    if args.images or args.heatmap or args.stats:
+    if args.images is not None or args.heatmap or args.stats:
         print("\n-------------")
         print("Statistics :")
         print("-------------")
