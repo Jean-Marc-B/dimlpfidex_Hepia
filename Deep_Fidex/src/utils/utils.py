@@ -29,6 +29,32 @@ nbStairsPerUnit    = 30
 nbStairsPerUnitInv = 1.0/nbStairsPerUnit
 
 
+def load_data(cfg):
+    print("\nLoading data...")
+
+    # Load train data
+    train = np.loadtxt(cfg["train_data_file"])
+    X_train = train.reshape(train.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
+    X_train = X_train.astype('int32' if cfg["data_type"] == "integer" else 'float32')
+
+    # Load test data
+    test = np.loadtxt(cfg["test_data_file"])
+    X_test = test.reshape(test.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
+    X_test = X_test.astype('int32' if cfg["data_type"] == "integer" else 'float32')
+
+    # Load labels
+    Y_train = np.loadtxt(cfg["train_class_file"]).astype('int32')
+    Y_test = np.loadtxt(cfg["test_class_file"]).astype('int32')
+
+    # Normalize if necessary
+    if cfg["data_type"] != "integer":
+        X_train = normalize_data(X_train)
+        X_test = normalize_data(X_test)
+
+    print("Data loaded.\n")
+
+    return X_train, Y_train, X_test, Y_test
+
 def output_data(data, data_file):
     """
     Outputs a given dataset to a specified file.
@@ -178,20 +204,21 @@ def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_o
 
         # Save weights and bias
         if weights_outfile is not None:
-         try:
-               with open(weights_outfile, "w") as my_file:
-                  for b in biais:
-                     my_file.write(str(b))
-                     my_file.write(" ")
-                  my_file.write("\n")
-                  for w in weights:
-                     my_file.write(str(w))
-                     my_file.write(" ")
-                  my_file.close()
-         except (FileNotFoundError):
-               raise ValueError(f"Error : File {weights_outfile} not found.")
-         except (IOError):
-               raise ValueError(f"Error : Couldn't open file {weights_outfile}.")
+            try:
+                print("Saving weights...")
+                with open(weights_outfile, "w") as my_file:
+                    for b in biais:
+                        my_file.write(str(b))
+                        my_file.write(" ")
+                    my_file.write("\n")
+                    for w in weights:
+                        my_file.write(str(w))
+                        my_file.write(" ")
+                    my_file.close()
+            except (FileNotFoundError):
+                raise ValueError(f"Error : File {weights_outfile} not found.")
+            except (IOError):
+                raise ValueError(f"Error : Couldn't open file {weights_outfile}.")
 
     # Compute new data after first hidden layer
     h = k*(input_data-mu)/sigma # With indices : hij=K*(xij-muj)/sigmaj
@@ -199,6 +226,24 @@ def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_o
     out_data = np.vectorize(stair.funct)(h) # Apply staircase activation function
 
     return (out_data, mu, sigma) if step == "train" else out_data
+
+###############################################################
+
+def apply_Dimlp(x_train, x_test, size1D, nb_channels, K_val, nb_quant_levels, hiknot, output_weights):
+    print("Applying DIMLP layer...")
+    x_train = x_train.reshape(x_train.shape[0], size1D*size1D*nb_channels)
+    x_test = x_test.reshape(x_test.shape[0], size1D*size1D*nb_channels)
+
+    x_train_h1, mu, sigma = compute_first_hidden_layer("train", x_train, K_val, nb_quant_levels, hiknot, output_weights)
+    x_test_h1 = compute_first_hidden_layer("test", x_test, K_val, nb_quant_levels, hiknot, mu=mu, sigma=sigma)
+
+    x_train_h1 = x_train_h1.reshape(x_train_h1.shape[0], size1D, size1D, nb_channels)
+    x_test_h1 = x_test_h1.reshape(x_test_h1.shape[0], size1D, size1D, nb_channels)
+
+    print(f"Training set: {x_train_h1.shape}")
+    print(f"Testing set: {x_test_h1.shape}")
+
+    return x_train_h1, x_test_h1
 
 ###############################################################
 
@@ -644,7 +689,7 @@ def gathering_predictions(file_list, output_file):
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
-def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu, with_probability=False):
+def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu=False, with_probability=False, remove_first_conv=False):
     """
     Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
 
@@ -822,16 +867,21 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
         model.add(Input(shape=(height, width, nbChannels)))
 
+        if not remove_first_conv:
+            model.add(Convolution2D(32, (5, 5), activation='relu'))
+            model.add(Dropout(0.3))
+            model.add(MaxPooling2D(pool_size=(2, 2), name='first_conv_end'))
+
         model.add(Convolution2D(32, (5, 5), activation='relu'))
         model.add(Dropout(0.3))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
-        if with_leaky_relu:
-            model.add(DepthwiseConv2D((5, 5), activation='leaky_relu'))
-        else:
-            model.add(DepthwiseConv2D((5, 5), activation='relu'))
-        model.add(Dropout(0.3))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        # if with_leaky_relu:
+        #     model.add(DepthwiseConv2D((5, 5), activation='leaky_relu'))
+        # else:
+        #     model.add(DepthwiseConv2D((5, 5), activation='relu'))
+        # model.add(Dropout(0.3))
+        # model.add(MaxPooling2D(pool_size=(2, 2)))
 
         model.add(Flatten())
 

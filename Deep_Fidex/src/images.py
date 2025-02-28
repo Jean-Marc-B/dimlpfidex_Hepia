@@ -337,10 +337,7 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
 
 
     for antecedent in rule.antecedents:
-        channel_id = antecedent.attribute % (nb_classes + nb_channels)
-        area_number = antecedent.attribute // (nb_classes + nb_channels)
-        area_Height = area_number // size_Width_proba_stat
-        area_Width = area_number % size_Width_proba_stat
+        area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
         filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
 
         if channel_id < nb_classes: # Attrubute corresponds to an area
@@ -439,10 +436,7 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
     # Show each antecedent image
     for i,img in enumerate(filtered_images):
         antecedent = rule.antecedents[i]
-        channel_id = antecedent.attribute % (nb_classes + nb_channels)
-        area_number = antecedent.attribute // (nb_classes + nb_channels)
-        area_Height = area_number // size_Width_proba_stat
-        area_Width = area_number % size_Width_proba_stat
+        area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
         img = img.astype(np.uint8)
         ineq = ">=" if antecedent.inequality else "<"
         axes[i+2].imshow(img)
@@ -471,14 +465,14 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
 
 ###############################################################
 
-def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions=None):
+def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args, train_positions=None, height_feature_map=-1, width_feature_map=-1, nb_channels_feature_map=-1):
     """
     Generate explaining images.
     """
     print("Generation of images...")
 
     # Get train predictions
-    if args.train_with_patches:
+    if getattr(args, "train_with_patches", False):
         print("Loading train predictions...")
         train_positions = np.array(train_positions)
         train_pred = np.loadtxt(cfg["train_pred_file"])
@@ -518,8 +512,8 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
         if args.statistic == "histogram":
             rule.include_X = False
             for ant in rule.antecedents:
-                ant.attribute = attributes[ant.attribute] # Replace the attribute's indiex by its true name
-        elif args.statistic in ["probability", "probability_multi_nets"]:
+                ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
+        elif args.statistic in ["probability", "probability_multi_nets", "convDimlpFilter"]:
                 rule.include_X = False
         # Create folder for this rule
         rule_folder = os.path.join(cfg["rules_folder"], f"rule_{rule_id}_class_{cfg['classes'][rule.target_class]}")
@@ -550,12 +544,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             scale_w = cfg["size1D"] / cfg["size_Width_proba_stat"]
             for antecedent in rule_to_print.antecedents: # TODO : handle stride, different filter sizes, etc
                 # area_index (size_Height_proba_stat, size_Width_proba_stat) : 0 : (1,1), 1: (1,2), ...
-                channel_id = antecedent.attribute % (cfg["nb_classes"] + cfg["nb_channels"]) # (probas of each class + image rgb concatenated)
-                area_number = antecedent.attribute // (cfg["nb_classes"] + cfg["nb_channels"])
-                # channel_id = attribut_de_test % (cfg["nb_classes"] + cfg["nb_channels"])
-                # area_number = attribut_de_test // (cfg["nb_classes"] + cfg["nb_channels"])
-                area_Height = area_number // cfg["size_Width_proba_stat"]
-                area_Width = area_number % cfg["size_Width_proba_stat"]
+                area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]))
                 if channel_id < cfg["nb_classes"]: #Proba of area
                     class_name = cfg["classes"][channel_id]
                     antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+FILTER_SIZE[0][0]-1}]x[{area_Width}-{area_Width+FILTER_SIZE[0][1]-1}]"
@@ -565,6 +554,13 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     height_original = round(area_Height * scale_h)
                     width_original = round(area_Width * scale_w)
                     antecedent.attribute = f"Pixel_{height_original}x{width_original}x{channel}"
+        elif args.statistic == "convDimlpFilter":
+            if -1 in [height_feature_map, width_feature_map, nb_channels_feature_map]:
+                raise ValueError("Missing height, width or nb_channels of feature map")
+            for antecedent in rule_to_print.antecedents:
+                feature_height, feature_width, feature_channel = np.unravel_index(antecedent.attribute, (height_feature_map, width_feature_map, nb_channels_feature_map))
+
+
 
         if os.path.exists(readme_file):
             os.remove(readme_file)
@@ -575,7 +571,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             if args.statistic == "histogram":
-                if args.train_with_patches:
+                if getattr(args, "train_with_patches", False):
                     nb_areas_per_filter = [nb_patches_per_image]
                     start_idx = img_id * nb_patches_per_image
                     end_idx = start_idx + nb_patches_per_image
@@ -589,7 +585,8 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, rule, FILTER_SIZE, STRIDE, cfg["classes"])
             elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
                 highlighted_image = highlight_area_probability_image(img, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
-            highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png")
+            elif args.statistic == "convDimlpFilter":
+                highlighted_image = plt.figure()
 
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png")
             plt.close(highlighted_image)

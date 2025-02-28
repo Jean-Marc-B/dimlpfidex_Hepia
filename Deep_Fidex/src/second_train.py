@@ -59,18 +59,16 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
         # The we train the second model depending on the type (RF, CNN, etc.)
         if cfg["second_model"] == "cnn":
             # Pass on the DIMLP layer
-            train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_rules"])
+            train_probas_h1, mu, sigma = compute_first_hidden_layer("train", train_probas, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"])
             test_probas_h1 = compute_first_hidden_layer("test", test_probas, K_VAL, NB_QUANT_LEVELS, HIKNOT, mu=mu, sigma=sigma)
             train_probas_h1 = train_probas_h1.reshape((nb_train_samples,)+cfg["output_size"]) #(100, 26, 26, 13)
             print("train_probas_h1 reshaped : ", train_probas_h1.shape)
             test_probas_h1 = test_probas_h1.reshape((nb_test_samples,)+cfg["output_size"])
             #print(train_probas.shape)  # (nb_train_samples, 22, 22, 10)
             #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
-            second_model_file = os.path.join(cfg["files_folder"], "scanSecondModel.keras")
-            second_model_checkpoint_weights = os.path.join(cfg["files_folder"], "weightsSecondModel.weights.h5")
 
             if args.statistic == "probability": # Train with a CNN now
-                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "small", 80, cfg["batch_size_second_model"], second_model_file, second_model_checkpoint_weights, train_probas_h1, Y_train, test_probas_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], False, True)
+                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "small", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_h1, Y_train, test_probas_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], False, True)
 
             else: # Create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
 
@@ -213,7 +211,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                 f'--nb_classes {cfg["nb_classes"]} '
                 f'--root_folder . '
                 )
-            command += f'--rules_outfile {cfg["second_model_output_rules"]} '
+            command += f'--rules_outfile {cfg["second_model_output_weights"]} '
             status = randForestsTrn(command)
 
     else:
@@ -233,9 +231,9 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
             )
 
         if cfg["using_decision_tree_model"]:
-            command += f'--rules_outfile {cfg["second_model_output_rules"]} '
+            command += f'--rules_outfile {cfg["second_model_output_weights"]} '
         else:
-            command += f'--weights_outfile {cfg["second_model_output_rules"]} '
+            command += f'--weights_outfile {cfg["second_model_output_weights"]} '
 
         print("\nTraining second model...\n")
 
