@@ -41,9 +41,12 @@ from heatmap import generate_heatmaps
 
 # GPU arguments
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
+# Initialize random generator of numpy
 np.random.seed(seed=None)
+
+# Add parent folders to Python path for importation
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 ###############################################################
@@ -77,7 +80,7 @@ def parse_arguments():
     parser.add_argument("--stats", action="store_true", help="Compute statistics") # Stats computation
     parser.add_argument("--second_train", action="store_true", help="Train a second model")
     parser.add_argument("--rules", action="store_true", help="Compute global rules")
-    parser.add_argument("--images", type=check_positive, help="Generate N explaining images", default=None)
+    parser.add_argument("--images", type=check_positive, metavar="N", help="Generate N explaining images", default=None)
     parser.add_argument("--each_class", action="store_true", help="Generate N images per class")
     parser.add_argument("--heatmap", action="store_true", help="Generate a heatmap") # Only evaluation on patches
 
@@ -86,6 +89,8 @@ def parse_arguments():
 
 if __name__ == "__main__":
     start_time = time.time()
+
+    # Get user arguments
     args = parse_arguments()
 
     # Check on inline parameters
@@ -103,39 +108,9 @@ if __name__ == "__main__":
 
     ##############################################################################
 
-    # Get data
+    # Load data
+    X_train, Y_train, X_test, Y_test = load_data(cfg)
 
-    print("\nLoading data...")
-
-    train   = np.loadtxt(cfg["train_data_file"])
-    X_train = train.reshape(train.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
-    if cfg["data_type"] == "integer":
-        X_train = X_train.astype('int32')
-    else:
-        X_train = X_train.astype('float32')
-    print(X_train.shape)
-
-    test   = np.loadtxt(cfg["test_data_file"])
-    X_test = test.reshape(test.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
-    if cfg["data_type"] == "integer":
-        X_test = X_test.astype('int32')
-    else:
-        X_test = X_test.astype('float32')
-    print(X_test.shape)
-
-    Y_train = np.loadtxt(cfg["train_class_file"])
-    Y_train = Y_train.astype('int32')
-
-    Y_test  = np.loadtxt(cfg["test_class_file"])
-    Y_test  = Y_test.astype('int32')
-
-    print("Data loaded.\n")
-
-
-    # Normalize if necessary
-    if cfg["data_type"] != "integer":
-        X_train = normalize_data(X_train)
-        X_test = normalize_data(X_test)
     ##############################################################################
 
     ##############################################################################
@@ -200,9 +175,9 @@ if __name__ == "__main__":
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images is not None:
         if args.train_with_patches and args.statistic == "histogram":
-            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions)
+            generate_explaining_images(cfg, X_train, firstModel, intermediate_model, args, train_positions)
         else:
-            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args)
+            generate_explaining_images(cfg, X_train, firstModel, intermediate_model, args)
 
     # HEATMAP
     if args.heatmap:

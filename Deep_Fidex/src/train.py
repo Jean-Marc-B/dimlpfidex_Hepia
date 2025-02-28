@@ -7,11 +7,14 @@ from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 import joblib
 
-def train_model(cfg, X_train, Y_train, X_test, Y_test, args):
+def train_model(cfg, X_train, Y_train, X_test, Y_test, args, model = None):
 
     start_time_train_model = time.time()
 
-    if args.train_with_patches:
+    if model is None:
+        model = cfg["model"]
+
+    if getattr(args, "train_with_patches", False):
         height = FILTER_SIZE[0][0]
         width = FILTER_SIZE[0][1]
     else:
@@ -24,7 +27,7 @@ def train_model(cfg, X_train, Y_train, X_test, Y_test, args):
             width = width,
             nbChannels = cfg["nb_channels"],
             nb_classes = cfg["nb_classes"],
-            model = cfg["model"],
+            model = model,
             nbIt = cfg["nbIt"],
             batch_size = cfg["batch_size"],
             model_file = cfg["model_file"],
@@ -46,9 +49,7 @@ def train_model(cfg, X_train, Y_train, X_test, Y_test, args):
 
     end_time_train_model = time.time()
     full_time_train_model = end_time_train_model - start_time_train_model
-    print(f"\nTrain first model time = {full_time_train_model:.2f} sec")
-
-
+    print(f"\nTrain model time = {full_time_train_model:.2f} sec")
 
 
 
@@ -65,14 +66,14 @@ def train_random_forest(cfg, X_train, Y_train, X_test, Y_test, args):
 
     # Flatten data
 
-    if args.train_with_patches:
+    if getattr(args, "train_with_patches", False):
         X_train, coord_train = X_train
         X_test, coord_test = X_test
 
     X_train = X_train.reshape(X_train.shape[0], -1)
     X_test = X_test.reshape(X_test.shape[0], -1)
 
-    if args.train_with_patches:
+    if getattr(args, "train_with_patches", False):
         X_train = np.append(X_train, coord_train, axis=1)
         X_test = np.append(X_test, coord_test, axis=1)
 
@@ -83,9 +84,9 @@ def train_random_forest(cfg, X_train, Y_train, X_test, Y_test, args):
     # Create and train the Random Forest model
     rf_model = RandomForestClassifier(
         n_estimators=cfg.get("n_estimators", 100),
-        max_depth=cfg.get("max_depth", None),
+        max_depth=cfg.get("max_depth", 20),
         random_state=cfg.get("random_state", 42),
-        n_jobs=6
+        n_jobs=8
     )
     rf_model.fit(X_train, Y_train_labels)
 

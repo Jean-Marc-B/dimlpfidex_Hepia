@@ -75,13 +75,13 @@ def load_config(args, script_dir):
 
     config["nb_classes"] = len(config["classes"])
 
-    if args.train_with_patches and len(FILTER_SIZE) != 1:
+    if getattr(args, "train_with_patches", False) and len(FILTER_SIZE) != 1:
         raise ValueError("Error : When training with patches, only one stride and one filter size can be chosen.")
 
     # 📊 Definition of the scan folder
     scan_folder = "evaluation/Scan" if args.test else "evaluation/ScanFull"
     patches_sufix = ""
-    if args.train_with_patches:
+    if getattr(args, "train_with_patches", False):
         patches_sufix = "_train_patches"
     folder_suf = ""
     if args.folder_sufix is not None:
@@ -91,6 +91,7 @@ def load_config(args, script_dir):
         "activation_layer": "Activations_Sum" + patches_sufix + folder_suf,
         "probability_multi_nets": "Probability_Multi_Nets_Images" + patches_sufix + folder_suf,
         "probability": "Probability_Images" + patches_sufix + folder_suf,
+        "convDimlpFilter": "Conv_DIMLP_Filter" + folder_suf
     }
     scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
 
@@ -125,12 +126,12 @@ def load_config(args, script_dir):
         config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
-        config["model"] = "VGG"
+        config["model"] = "RF"
         config["nbIt"] = 50
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16
 
-    if args.train_with_patches:
+    if getattr(args, "train_with_patches", False):
         if config["model"] in AVAILABLE_CNN_MODELS:
             config["model"] = "MLP_Patch"
         elif config["model"] != "RF":
@@ -138,6 +139,8 @@ def load_config(args, script_dir):
 
     if config["model"] == "RF" and args.statistic == "activation_layer":
         raise ValueError("activation_layer can't use a Random Forest to train.")
+    if args.statistic == "convDimlpFilter":
+        config["model"] = "small"
 
     # 📊 Managment of statistics
     config["with_leaky_relu"] = args.statistic == "activation_layer"
@@ -147,7 +150,7 @@ def load_config(args, script_dir):
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_hist.txt")
         config["nb_stats_attributes"] = config["nb_classes"]*NB_BINS
     elif args.statistic == "activation_layer":
-        if args.train_with_patches:
+        if getattr(args, "train_with_patches", False):
             raise ValueError("Not possible to use sum of activation layers stats when training with patches.")
         config["train_stats_file"] = os.path.join(config["files_folder"], "train_activation_sum.txt")
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_activation_sum.txt")
@@ -156,7 +159,11 @@ def load_config(args, script_dir):
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_probability_images.txt")
         config["train_stats_file_with_image"] = os.path.join(config["files_folder"], "train_probability_images_with_original_img.txt")
         config["test_stats_file_with_image"] = os.path.join(config["files_folder"], "test_probability_images_with_original_img.txt")
-
+    elif args.statistic == "convDimlpFilter":
+        config["train_feature_map_file_npy"] = os.path.join(config["files_folder"], "train_feature_map.npy")
+        config["test_feature_map_file_npy"] = os.path.join(config["files_folder"], "test_feature_map.npy")
+        config["train_feature_map_file"] = os.path.join(config["files_folder"], "train_feature_map.txt")
+        config["test_feature_map_file"] = os.path.join(config["files_folder"], "test_feature_map.txt")
     # Parameters for second model training
     if args.statistic == "probability":
         config["second_model"] = "cnn"
@@ -165,6 +172,8 @@ def load_config(args, script_dir):
         config["second_model"] = "cnn"
         config["with_hsl"] = False # Only if we have 3 chanels
         config["with_rg"] = True
+    elif args.statistic == "convDimlpFilter":
+        config["second_model"] = "small"
     else:
         # config["second_model"] = "randomForests"
         config["second_model"] = "gradientBoosting"
@@ -176,10 +185,12 @@ def load_config(args, script_dir):
     config["second_model_stats"] = os.path.join(config["files_folder"], "second_model_stats.txt")
     config["second_model_train_pred"] = os.path.join(config["files_folder"], "second_model_train_pred.txt")
     config["second_model_test_pred"] = os.path.join(config["files_folder"], "second_model_test_pred.txt")
+    config["second_model_file"] = os.path.join(config["files_folder"], "scanSecondModel.keras")
+    config["second_model_checkpoint_weights"] = os.path.join(config["files_folder"], "weightsSecondModel.weights.h5")
     if config["using_decision_tree_model"]:
-        config["second_model_output_rules"] = os.path.join(config["files_folder"], "second_model_rules.rls")
+        config["second_model_output_weights"] = os.path.join(config["files_folder"], "second_model_rules.rls")
     else:
-        config["second_model_output_rules"] = os.path.join(config["files_folder"], "second_model_weights.wts")
+        config["second_model_output_weights"] = os.path.join(config["files_folder"], "second_model_weights.wts")
 
     config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
     config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
@@ -199,7 +210,7 @@ def load_config(args, script_dir):
 
     print("Statistic :")
     print(STATISTIC_FOLDERS.get(args.statistic, "UNKNOWN"))
-    if args.train_with_patches:
+    if getattr(args, "train_with_patches", False):
         print("Training with patches")
 
     print("\n-------------")
@@ -222,20 +233,23 @@ def load_config(args, script_dir):
         print("-------------")
         print(f"Model checkpoint weights : {config['model_checkpoint_weights']}")
         print(f"Model stats file : {config['model_stats']}")
-        print(f"Model : {config['model']}")
+        if args.statistic == "convDimlpFilter":
+            print("Model : small")
+        else:
+            print(f"Model : {config['model']}")
         print(f"Number of iterations : {config['nbIt']}")
         print(f"Batch size : {config['batch_size']}")
         if args.statistic == "activation_layer":
             print("With Leaky Relu" if config["with_leaky_relu"] else "Without Leaky Relu")
 
-    if args.images is not None or args.heatmap or args.stats:
+    if args.images is not None or getattr(args, "heatmap", False) or getattr(args, "stats", False):
         print("\n-------------")
         print("Statistics :")
         print("-------------")
         print(f"Filter size : {FILTER_SIZE}")
         print(f"Stride : {STRIDE}")
 
-    if args.stats:
+    if getattr(args, "stats", False):
         print(f"Train statistics file : {config['train_stats_file']}")
         print(f"Test statistics file : {config['test_stats_file']}")
         if args.statistic in ["probability", "probability_multi_nets"]:
@@ -245,7 +259,11 @@ def load_config(args, script_dir):
             print(f"Number of bins : {NB_BINS}")
             print(f"Probability thresholds : {PROBABILITY_THRESHOLDS}")
 
-    if args.heatmap and not (args.stats and args.statistic == "histogram"):
+    if args.statistic == "convDimlpFilter":
+        print(f"Train data file after first conv layer : {config['train_feature_map_file']}")
+        print(f"Test data file after first conv layer : {config['test_feature_map_file']}")
+
+    if getattr(args, "heatmap", False) and not (getattr(args, "stats", False) and args.statistic == "histogram"):
         print(f"Probability thresholds : {PROBABILITY_THRESHOLDS}")
 
     if args.second_train:
@@ -257,7 +275,9 @@ def load_config(args, script_dir):
         print(f"Second model statistics file : {config['second_model_stats']}")
         print(f"Second model train predictions file : {config['second_model_train_pred']}")
         print(f"Second model test predictions file : {config['second_model_test_pred']}")
-        print(f"Second model output rules file : {config['second_model_output_rules']}")
+        print(f"Second model output weights file : {config['second_model_output_weights']}")
+        print(f"Second model output file : {config['second_model_file']}")
+        print(f"Second model checkpoint weights : {config['second_model_checkpoint_weights']}")
 
     if args.rules:
         print("\n-------------")
