@@ -126,7 +126,7 @@ def load_config(args, script_dir):
         config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
-        config["model"] = "RF"
+        config["model"] = "VGG"
         config["nbIt"] = 50
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16

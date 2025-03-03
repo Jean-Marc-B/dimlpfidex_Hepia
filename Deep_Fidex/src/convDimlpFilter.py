@@ -22,7 +22,7 @@ from generate_rules import generate_rules
 from images import generate_explaining_images
 
 # GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
