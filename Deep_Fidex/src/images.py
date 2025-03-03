@@ -6,6 +6,9 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import math
+from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout
 
 from utils.utils import (
     getRules,
@@ -465,6 +468,168 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
 
 ###############################################################
 
+def get_receptive_field_coordinates(model, layer_name, output_pixel):
+    """
+    Returns the coordinates of the 4 corners of the receptive field in the input image
+    that influence the specified output pixel in the given layer.
+
+    Parameters:
+      - model: the loaded Keras model.
+      - layer_name: the name of the layer (up to which the calculation is performed).
+      - output_pixel: a tuple (row, col) indicating the position of the pixel in the layer's output.
+
+    Returns:
+      A tuple of 4 points corresponding to the corners (top_left, top_right,
+      bottom_left, bottom_right) with coordinates (row, col) in the input image.
+
+    We assume that the model contains at most one of each type of layer among:
+      - Convolution2D (with kernel_size, strides, and padding)
+      - Dropout (which does not affect the spatial dimensions)
+      - MaxPooling2D (with pool_size, strides, and padding, here simplified with padding=0)
+    """
+
+    # Retrieve the list of layers from the input up to the target layer
+    layer_configs = []
+    for layer in model.layers:
+        if isinstance(layer, Conv2D):
+            # Assume a square kernel and identical strides for height and width.
+            kernel_size = layer.kernel_size[0]
+            stride = layer.strides[0]
+            # For simplicity, if padding is 'same', assume a padding of floor(kernel_size/2)
+            padding = kernel_size // 2 if layer.padding == 'same' else 0
+            layer_configs.append({'type': 'conv', 'kernel': kernel_size, 'stride': stride, 'padding': padding})
+        elif isinstance(layer, MaxPooling2D):
+            pool_size = layer.pool_size[0]
+            stride = layer.strides[0]
+            # For simplicity, assume no padding (padding='valid').
+            # Use getattr in case the 'padding' attribute is not present.
+            padding = pool_size // 2 if getattr(layer, 'padding', 'valid') == 'same' else 0
+            layer_configs.append({'type': 'maxpool', 'kernel': pool_size, 'stride': stride, 'padding': padding})
+        elif isinstance(layer, Dropout):
+            layer_configs.append({'type': 'dropout'})
+
+        if layer.name == layer_name:
+            break
+
+    # Initialize the receptive field at the output of the target layer
+    row_start, row_end = output_pixel[0], output_pixel[0]
+    col_start, col_end = output_pixel[1], output_pixel[1]
+
+    # Iterate in reverse order (from the target layer back to the input)
+    for config in reversed(layer_configs):
+        if config['type'] in ['conv', 'maxpool']:
+            k = config['kernel']
+            s = config['stride']
+            p = config['padding']
+            # Update for the vertical dimension
+            row_start = row_start * s - p
+            row_end   = row_end * s - p + k - 1
+            # Update for the horizontal dimension
+            col_start = col_start * s - p
+            col_end   = col_end * s - p + k - 1
+        # Dropout does not affect spatial dimensions
+
+    # Return the 4 corners as tuples (row, col)
+    top_left = (row_start, col_start)
+    top_right = (row_start, col_end)
+    bottom_left = (row_end, col_start)
+    bottom_right = (row_end, col_end)
+    return top_left, top_right, bottom_left, bottom_right
+
+###############################################################
+
+def highlight_area_first_conv(img, rule, model, height_feature_map, width_feature_map, nb_channels_feature_map):
+    # Convert to RGB if necessary
+    original_image_rgb = image_to_rgb(img)
+    filtered_images = []
+    combined_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+
+    feature_coords = []
+    for antecedent in rule.antecedents:
+        feature_coords.append(np.unravel_index(antecedent.attribute, (height_feature_map, width_feature_map, nb_channels_feature_map)))
+        top_left, top_right, bottom_left, bottom_right = get_receptive_field_coordinates(model, "first_conv_end", feature_coords[-1])
+        filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+
+        if antecedent.inequality:  # >=
+            filtered_image_intensity[top_left[0]:bottom_left[0] + 1, top_left[1]:top_right[1] + 1, 1] += 1
+            combined_image_intensity[top_left[0]:bottom_left[0] + 1, top_left[1]:top_right[1] + 1, 1] += 1
+        else:  # <
+            filtered_image_intensity[top_left[0]:bottom_left[0] + 1, top_left[1]:top_right[1] + 1, 0] += 1
+            combined_image_intensity[top_left[0]:bottom_left[0] + 1, top_left[1]:top_right[1] + 1, 0] += 1
+
+        filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8) # Normalize to be between 0 and 255.
+        filtered_image = original_image_rgb.copy()
+        filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1].astype(float) + filtered_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel type unint16 is mandatory otherwise addition will be cyclic (255+1=0)
+        filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0].astype(float) + filtered_image_intensity[:, :, 0].astype(float), 0, 255)  # Red channel
+
+        filtered_images.append(filtered_image)
+
+    # Normalise combined image between 0 and 255
+    combined_masked_intensity = combined_image_intensity.copy()
+    combined_max_value = np.max(combined_masked_intensity)
+
+    if combined_max_value > 0:
+        combined_image_intensity = np.clip(combined_image_intensity / combined_max_value * 255, 0, 255) # Normalize to be between 0 and 255
+    else:
+        combined_image_intensity = np.zeros_like(combined_image_intensity)
+
+    combined_image = original_image_rgb.copy()
+    combined_image[:, :, 1] = np.clip(combined_image[:, :, 1].astype(float) + combined_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel
+    combined_image[:, :, 0] = np.clip(combined_image[:, :, 0].astype(float) + combined_image_intensity[:, :, 0].astype(float), 0, 255)  # Red channel
+
+    # Plotting
+
+    # Determine the number of rows and columns for the subplots
+    num_antecedents = len(rule.antecedents)
+    total_images = num_antecedents + 2  # Original, combined, and individual filters
+
+    # We set a maximum number of columns per row for better visualization
+    max_columns = 4
+    num_columns = min(max_columns, total_images)
+    num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
+
+    # Create the matplotlib figure with dynamic rows and columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+
+    # If axes is a single AxesSubplot, convert it to a list for consistent indexing
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+
+    # Show the original image on top left
+    axes[0].imshow(original_image_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis('off')
+
+    # Show combined image
+    axes[1].imshow(combined_image.astype(np.uint8))
+    axes[1].set_title("Combined Filters")
+    axes[1].axis('off')
+
+
+    # Show each antecedent image
+    for i,img in enumerate(filtered_images):
+        antecedent = rule.antecedents[i]
+        feature_height, feature_width, feature_channel = feature_coords[i]
+        img = img.astype(np.uint8)
+        ineq = ">=" if antecedent.inequality else "<"
+        axes[i+2].imshow(img)
+        axes[i+2].set_title(f"Feature_map_{feature_height}x{feature_width}x{feature_channel}{ineq}{antecedent.value:.6f}")
+        axes[i+2].axis('off')
+    # Hide any remaining empty subplots if total_images < num_rows * num_columns
+    for j in range(total_images, len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout() # Adjust spacing
+    plt.subplots_adjust(top=0.85)  # Let space for the main title
+
+    plt.close(fig)
+
+    return fig
+###############################################################
+
 def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args, train_positions=None, height_feature_map=-1, width_feature_map=-1, nb_channels_feature_map=-1):
     """
     Generate explaining images.
@@ -524,7 +689,7 @@ def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args,
         # Add a readme containing the rule
         readme_file = os.path.join(rule_folder, 'Readme.md')
         rule_to_print = copy.deepcopy(rule)
-
+        rule_to_print.target_class = cfg['classes'][rule.target_class]
         if args.statistic == "histogram":
             # Change antecedent with real class names
             for antecedent in rule_to_print.antecedents:
@@ -559,8 +724,7 @@ def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args,
                 raise ValueError("Missing height, width or nb_channels of feature map")
             for antecedent in rule_to_print.antecedents:
                 feature_height, feature_width, feature_channel = np.unravel_index(antecedent.attribute, (height_feature_map, width_feature_map, nb_channels_feature_map))
-
-
+                antecedent.attribute = f"Feature_map_{feature_height}x{feature_width}x{feature_channel}"
 
         if os.path.exists(readme_file):
             os.remove(readme_file)
@@ -586,7 +750,7 @@ def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args,
             elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
                 highlighted_image = highlight_area_probability_image(img, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
             elif args.statistic == "convDimlpFilter":
-                highlighted_image = plt.figure()
+                highlighted_image = highlight_area_first_conv(img, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
 
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png")
             plt.close(highlighted_image)
