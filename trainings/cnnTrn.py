@@ -239,18 +239,17 @@ def cnnTrn(args: str = None):
         classes = set(range(args.nb_classes))
         miss_train_classes = classes - set(y_train) # Check if a class is not represented during training
 
-        nb_train_samples = len(x_train[0])
         # (x-mu)/sigma between -5 and 5
         if args.data_format == "normalized_01":
             mu_val = 0.5
             sigma_val = (1-0.5)/hiknot
-            mu = np.full(nb_train_samples, mu_val)
-            sigma = np.full(nb_train_samples, sigma_val)
+            mu = np.full(nb_attributes, mu_val)
+            sigma = np.full(nb_attributes, sigma_val)
         elif args.data_format == "classic":
             mu_val = 127.5
             sigma_val = (255-127.5)/hiknot
-            mu = np.full(nb_train_samples, mu_val)
-            sigma = np.full(nb_train_samples, sigma_val)
+            mu = np.full(nb_attributes, mu_val)
+            sigma = np.full(nb_attributes, sigma_val)
 
         print("Data loaded")
         # Data are flattend : nbSamples x nbAttributes (not nbSamples x 32x32x3 for example)
