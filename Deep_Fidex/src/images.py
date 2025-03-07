@@ -13,6 +13,7 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout
 from utils.utils import (
     getRules,
     image_to_rgb,
+    denormalize_to_255,
     get_top_ids,
     generate_filtered_images_and_predictions
 )
@@ -45,6 +46,7 @@ def highlight_area_histograms(CNNModel, image, filter_size, rule, classes, predi
 
     # Convert to RGB if necessary
     original_image_rgb = image_to_rgb(image)
+    original_image_rgb = denormalize_to_255(original_image_rgb)
 
     # Initialize the combined intensity maps for green and red
     combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
@@ -196,6 +198,7 @@ def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, rul
 
     # Convert to RGB if necessary
     original_image_rgb = image_to_rgb(image)
+    original_image_rgb = denormalize_to_255(original_image_rgb)
 
     # Initialize the combined intensity maps for green and red
     combined_green_intensity = np.zeros((image.shape[0], image.shape[1]))
@@ -328,6 +331,7 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
 
     # Convert to RGB if necessary
     original_image_rgb = image_to_rgb(image)
+    original_image_rgb = denormalize_to_255(original_image_rgb)
 
     filtered_images = []
     combined_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
@@ -468,9 +472,11 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
 
 ###############################################################
 
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout, Resizing
+
 def get_receptive_field_coordinates(model, layer_name, output_pixel):
     """
-    Returns the coordinates of the 4 corners of the receptive field in the input image
+    Returns the coordinates of the 4 corners of the receptive field in the original input image
     that influence the specified output pixel in the given layer.
 
     Parameters:
@@ -480,18 +486,30 @@ def get_receptive_field_coordinates(model, layer_name, output_pixel):
 
     Returns:
       A tuple of 4 points corresponding to the corners (top_left, top_right,
-      bottom_left, bottom_right) with coordinates (row, col) in the input image.
+      bottom_left, bottom_right) with coordinates (row, col) in the original input image.
 
     We assume that the model contains at most one of each type of layer among:
       - Convolution2D (with kernel_size, strides, and padding)
       - Dropout (which does not affect the spatial dimensions)
       - MaxPooling2D (with pool_size, strides, and padding, here simplified with padding=0)
+      - Resizing (which resizes the input image)
     """
 
     # Retrieve the list of layers from the input up to the target layer
     layer_configs = []
     for layer in model.layers:
-        if isinstance(layer, Conv2D):
+        if isinstance(layer, Resizing):
+            # Get original input size from the model's input shape (ignoring batch dimension)
+            orig_height = model.input_shape[1]
+            orig_width = model.input_shape[2]
+            # Get target size from the Resizing layer
+            new_height = layer.height
+            new_width = layer.width
+            # Compute scaling factors to map coordinates from the resized image back to the original image
+            row_scale = orig_height / new_height
+            col_scale = orig_width / new_width
+            layer_configs.append({'type': 'resize', 'row_scale': row_scale, 'col_scale': col_scale})
+        elif isinstance(layer, Conv2D):
             # Assume a square kernel and identical strides for height and width.
             kernel_size = layer.kernel_size[0]
             stride = layer.strides[0]
@@ -515,7 +533,7 @@ def get_receptive_field_coordinates(model, layer_name, output_pixel):
     row_start, row_end = output_pixel[0], output_pixel[0]
     col_start, col_end = output_pixel[1], output_pixel[1]
 
-    # Iterate in reverse order (from the target layer back to the input)
+    # Iterate in reverse order (from the target layer back to the original input)
     for config in reversed(layer_configs):
         if config['type'] in ['conv', 'maxpool']:
             k = config['kernel']
@@ -527,6 +545,12 @@ def get_receptive_field_coordinates(model, layer_name, output_pixel):
             # Update for the horizontal dimension
             col_start = col_start * s - p
             col_end   = col_end * s - p + k - 1
+        elif config['type'] == 'resize':
+            # Undo the resizing transformation by scaling coordinates back to the original image
+            row_start = row_start * config['row_scale']
+            row_end   = row_end * config['row_scale']
+            col_start = col_start * config['col_scale']
+            col_end   = col_end * config['col_scale']
         # Dropout does not affect spatial dimensions
 
     # Return the 4 corners as tuples (row, col)
@@ -536,11 +560,14 @@ def get_receptive_field_coordinates(model, layer_name, output_pixel):
     bottom_right = (row_end, col_end)
     return top_left, top_right, bottom_left, bottom_right
 
+
 ###############################################################
 
 def highlight_area_first_conv(img, rule, model, height_feature_map, width_feature_map, nb_channels_feature_map):
     # Convert to RGB if necessary
     original_image_rgb = image_to_rgb(img)
+    original_image_rgb = denormalize_to_255(original_image_rgb)
+
     filtered_images = []
     combined_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
 

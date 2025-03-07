@@ -2,16 +2,16 @@
 import numpy as np
 import tensorflow as tf
 from .stairObj import StairObj
-from keras import backend as K
-from keras.models     import Sequential
-from keras.layers     import Dense, Dropout, Flatten, Input, Convolution2D, DepthwiseConv2D, MaxPooling2D, LeakyReLU, Resizing
-from keras.layers     import BatchNormalization, GlobalAveragePooling2D, Concatenate
-from keras.applications     import ResNet50, VGG16
-from keras.optimizers import Adam
-from tensorflow.keras.models import Model
+from tensorflow.keras import backend as K
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import (Dense, Dropout, Flatten, Input, Conv2D,
+                                     DepthwiseConv2D, MaxPooling2D, LeakyReLU, Resizing,
+                                     BatchNormalization, GlobalAveragePooling2D, Concatenate)
+from tensorflow.keras.applications import ResNet50, VGG16
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.backend import clear_session
-
-from keras.callbacks  import ModelCheckpoint
 from .rule import Rule
 from .antecedent import Antecedent
 import json
@@ -47,7 +47,7 @@ def load_data(cfg):
     Y_test = np.loadtxt(cfg["test_class_file"]).astype('int32')
 
     # Normalize if necessary
-    if cfg["data_type"] != "integer":
+    if cfg["data_type"] == "integer":
         X_train = normalize_data(X_train)
         X_test = normalize_data(X_test)
 
@@ -234,8 +234,21 @@ def apply_Dimlp(x_train, x_test, size1D, nb_channels, K_val, nb_quant_levels, hi
     x_train = x_train.reshape(x_train.shape[0], size1D*size1D*nb_channels)
     x_test = x_test.reshape(x_test.shape[0], size1D*size1D*nb_channels)
 
+    # print("avant")
+    # for i in range(0,50):
+    #     #if (x_train[i][70]) != 0:
+    #     print(x_train[i][70])
+
     x_train_h1, mu, sigma = compute_first_hidden_layer("train", x_train, K_val, nb_quant_levels, hiknot, output_weights)
     x_test_h1 = compute_first_hidden_layer("test", x_test, K_val, nb_quant_levels, hiknot, mu=mu, sigma=sigma)
+
+    # print("apres")
+    # for i in range(0,50):
+    # #     if (x_train_h1[i][70]) != 0.4750208125210601:
+    #     print(x_train_h1[i][70])
+
+
+
 
     x_train_h1 = x_train_h1.reshape(x_train_h1.shape[0], size1D, size1D, nb_channels)
     x_test_h1 = x_test_h1.reshape(x_test_h1.shape[0], size1D, size1D, nb_channels)
@@ -639,18 +652,35 @@ def image_to_rgb(image):
 
     return original_image_rgb
 
-#Normalize data to range [0,255]
+#Normalize data to range [0,1]
 def normalize_data(data):
-
     min_val = np.min(data)
     max_val = np.max(data)
 
-    if max_val - min_val == 0:  # Éviter la division par zéro
-        return np.zeros_like(data, dtype=np.int32)
+    if max_val - min_val == 0:  # Avoid division by zero
+        return np.zeros_like(data, dtype=np.float32)
 
-    # Normaliser entre 0 et 255, puis convertir en uint8
-    normalized_data = (data - min_val) / (max_val - min_val) * 255
-    return normalized_data.astype(np.int32)
+    # Normalize between 0 and 1
+    normalized_data = (data - min_val) / (max_val - min_val)
+    return normalized_data.astype(np.float32)
+
+def denormalize_to_255(data, min_val=0, max_val=255):
+    """
+    Converts normalized data [0,1] back to values in the range [0,255].
+
+    Arguments:
+    - data: numpy array containing normalized values (float32 between 0 and 1).
+    - min_val: original minimum value (default is 0).
+    - max_val: original maximum value (default is 255).
+
+    Returns:
+    - Integer (uint8) array with values in the range [0,255].
+    """
+    # Restore the original scale
+    denormalized_data = data * (max_val - min_val) + min_val
+
+    # Clip values and convert to uint8
+    return np.clip(denormalized_data, min_val, max_val).astype(np.uint8)
 
 # Convert image to black and white
 def image_to_black_and_white(image):
@@ -698,7 +728,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     - width: The size of the second dimension of the input image (image is height x width).
     - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - nb_classes: The number of classes for classification.
-    - model: Can be resnet, VGG or small indicating the model architecture to use (small is a smaller custom model).
+    - model: Can be resnet, VGG, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
     - nbIt: The number of epochs to train the model.
     - model_file: File path to save the trained model.
     - model_checkpoint_weights: File path for saving the best model weights during training.
@@ -721,8 +751,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     gc.collect()
     tf.keras.backend.clear_session()
 
-    if model not in ["resnet", "VGG", "small", "MLP", "MLP_Patch"]:
-        raise ValueError("The model needs to be one of resnet, VGG, small, MLP or MLP_Patch")
+    if model not in ["resnet", "VGG", "small", "big", "MLP", "MLP_Patch"]:
+        raise ValueError("The model needs to be one of resnet, VGG, small, big, MLP or MLP_Patch")
 
     if model == "MLP_Patch":
         if len(X_train) != 2 or len(X_test) != 2 or len(X_train[1][0]) != 2 or len(X_test[1][0]) != 2:
@@ -864,15 +894,14 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
     elif model == "small":
         model = Sequential()
-
         model.add(Input(shape=(height, width, nbChannels)))
 
         if not remove_first_conv:
-            model.add(Convolution2D(32, (5, 5), activation='relu'))
+            model.add(Conv2D(32, (5, 5), activation='relu'))
             model.add(Dropout(0.3))
             model.add(MaxPooling2D(pool_size=(2, 2), name='first_conv_end'))
 
-        model.add(Convolution2D(32, (5, 5), activation='relu'))
+        model.add(Conv2D(32, (5, 5), activation='relu'))
         model.add(Dropout(0.3))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
@@ -893,6 +922,47 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.summary()
 
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    elif model == "big":
+        model = Sequential()
+        model.add(Input(shape=(height, width, nbChannels)))
+
+        if not remove_first_conv:
+            model.add(Resizing(64, 64))
+
+            # Première couche de convolution
+            model.add(Conv2D(64, (3, 3), activation=None, padding='same', strides=2, kernel_regularizer=l2(0.0005)))
+            model.add(BatchNormalization())
+            model.add(tf.keras.layers.LeakyReLU(alpha=0.1))
+            model.add(MaxPooling2D(pool_size=(2, 2), name='first_conv_end'))
+
+        # Deuxième couche de convolution
+        model.add(Conv2D(128, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005)))
+        model.add(BatchNormalization())
+        model.add(tf.keras.layers.LeakyReLU(alpha=0.1))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        # Troisième couche de convolution
+        model.add(Conv2D(256, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005)))
+        model.add(BatchNormalization())
+        model.add(tf.keras.layers.LeakyReLU(alpha=0.1))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        # Passage à une couche dense
+        model.add(Flatten())
+        model.add(Dense(512, activation=None))
+        model.add(BatchNormalization())
+        model.add(tf.keras.layers.LeakyReLU(alpha=0.1))
+        model.add(Dropout(0.4))
+
+        # Couche de sortie
+        model.add(Dense(nb_classes, activation='softmax'))
+
+        model.summary()
+
+        # Compilation du modèle
+        model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.001), metrics=['accuracy'])
+
 
     elif model == "MLP":
         model = Sequential()

@@ -22,7 +22,7 @@ from generate_rules import generate_rules
 from images import generate_explaining_images
 
 # GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
     # TRAINING
     if args.train:
-        train_model(cfg, X_train, Y_train, X_test, Y_test, args, model = "small")
+        train_model(cfg, X_train, Y_train, X_test, Y_test, args, model = "big")
 
     if args.get_data or args.images:
         print("Loading first model...")
@@ -82,8 +82,9 @@ if __name__ == '__main__':
         intermediate_model = Model(inputs=model.layers[0].input,
                                 outputs=model.get_layer("first_conv_end").output)
         print("getting data after first convolution...")
-        X_train_conv = intermediate_model.predict(X_train)
-        X_test_conv = intermediate_model.predict(X_test)
+        batch_size = 32
+        X_train_conv = intermediate_model.predict(X_train, batch_size=batch_size)
+        X_test_conv = intermediate_model.predict(X_test, batch_size=batch_size)
         print(f"Train feature map shape : {X_train_conv.shape}")
         print(f"Test feature map shape : {X_test_conv.shape}")
         # Output data after conv layer
@@ -94,20 +95,20 @@ if __name__ == '__main__':
         output_data(X_test_conv.reshape(X_test_conv.shape[0], -1), cfg["test_feature_map_file"])
 
     # Load data if necessary
-    if not args.get_data:
-        print("Loading feature map data...")
-        X_train_conv = np.load(cfg["train_feature_map_file_npy"])
-        X_test_conv = np.load(cfg["test_feature_map_file_npy"])
-
-    height = X_train_conv.shape[1]
-    width = X_train_conv.shape[2]
-    n_channels = X_train_conv.shape[3]
-    nb_attr = height*width*n_channels
+    if args.second_train or args.rules or args.images:
+        if (not args.get_data):
+            print("Loading feature map data...")
+            X_train_conv = np.load(cfg["train_feature_map_file_npy"])
+            X_test_conv = np.load(cfg["test_feature_map_file_npy"])
+        height = X_train_conv.shape[1]
+        width = X_train_conv.shape[2]
+        n_channels = X_train_conv.shape[3]
+        nb_attr = height*width*n_channels
 
     #TRAINING WITH DIMLP
     if args.second_train:
         X_train_conv_h1, X_test_conv_h1 = apply_Dimlp(X_train_conv, X_test_conv, height, n_channels, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"])
-        trainCNN(height, width, n_channels, cfg["nb_classes"], "small", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], X_train_conv_h1, Y_train, X_test_conv_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], remove_first_conv=True)
+        trainCNN(height, width, n_channels, cfg["nb_classes"], "big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], X_train_conv_h1, Y_train, X_test_conv_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], remove_first_conv=True)
 
     # GENERATE GLOBAL RULES
     if args.rules:

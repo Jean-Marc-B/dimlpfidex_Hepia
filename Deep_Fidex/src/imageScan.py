@@ -41,7 +41,7 @@ from heatmap import generate_heatmaps
 
 # GPU arguments
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
