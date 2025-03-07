@@ -6,8 +6,7 @@ import tensorflow as tf
 from utils.utils import (
     getHistogram,
     generate_filtered_images_and_predictions,
-    output_data,
-    normalize_data
+    output_data
 )
 from tensorflow.keras import Model
 from utils.config import *

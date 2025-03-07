@@ -12,7 +12,7 @@ AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset"]
 AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_multi_nets"]
 
 # List of CNN models available
-AVAILABLE_CNN_MODELS = ["VGG", "resnet", "small", "MLP", "MLP_Patch"]
+AVAILABLE_CNN_MODELS = ["VGG", "resnet", "small", "big", "MLP", "MLP_Patch"]
 
 # Filters
 FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
@@ -121,13 +121,13 @@ def load_config(args, script_dir):
 
     # 📌 Training (model and batch size)
     if args.test:
-        config["model"] = "RF"
+        config["model"] = "small"
         config["nbIt"] = 4
         config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
         config["model"] = "VGG"
-        config["nbIt"] = 50
+        config["nbIt"] = 80
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16
 
@@ -135,7 +135,7 @@ def load_config(args, script_dir):
         if config["model"] in AVAILABLE_CNN_MODELS:
             config["model"] = "MLP_Patch"
         elif config["model"] != "RF":
-            raise ValueError("Wrong model given, give one of VGG, resnet, small, MLP, MLP_Patch, RF")
+            raise ValueError("Wrong model given, give one of VGG, resnet, small, big, MLP, MLP_Patch, RF")
 
     if config["model"] == "RF" and args.statistic == "activation_layer":
         raise ValueError("activation_layer can't use a Random Forest to train.")
