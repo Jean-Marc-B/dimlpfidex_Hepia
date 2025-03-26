@@ -6,13 +6,13 @@ from .utils import getProbabilityThresholds
 # ===============================
 
 # List of datasets allowed
-AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset"]
+AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset", "HAM10000"]
 
 # List of statistics allowed
 AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_multi_nets"]
 
 # List of CNN models available
-AVAILABLE_CNN_MODELS = ["VGG", "resnet", "small", "big", "MLP", "MLP_Patch"]
+AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "resnet", "small", "big", "MLP", "MLP_Patch"]
 
 # Filters
 FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
@@ -26,8 +26,8 @@ PROBABILITY_THRESHOLDS = getProbabilityThresholds(NB_BINS)
 HIKNOT = 5
 NB_QUANT_LEVELS = 100
 K_VAL = 1.0
-DROPOUT_HYP = 0.9
-DROPOUT_DIM = 0.9
+DROPOUT_HYP = 0.97
+DROPOUT_DIM = 0.97
 
 # ===============================
 # FONCTION TO INITIALIZE PARAMETERS WITH RESPECT TO THE ARGUMENTS
@@ -63,6 +63,13 @@ def load_config(args, script_dir):
         config["base_folder"] = os.path.join(os.path.dirname(script_dir), "../../data", "Happy")
         config["data_type"] = "float"
         config["classes"] = {0: "happy", 1: "not happy"}
+
+    elif args.dataset == "HAM10000":
+        config["size1D"] = 28#33
+        config["nb_channels"] = 3
+        config["base_folder"] = os.path.join(os.path.dirname(script_dir), "../../data", "HAM10000")
+        config["data_type"] = "integer"
+        config["classes"] = {0: "akiec", 1: "bcc", 2: "bkl", 3: "df", 4: "nv", 5: "vasc", 6: "mel"}
 
     elif args.dataset == "testDataset":
         config["size1D"] = 20
@@ -107,8 +114,10 @@ def load_config(args, script_dir):
     test_particle = "_test_version" if args.test else ""
     config["train_data_file"] = os.path.join(config["data_folder"], f"trainData{test_particle}.txt")
     config["train_class_file"] = os.path.join(config["data_folder"], f"trainClass{test_particle}.txt")
+    config["train_meta_file"] = os.path.join(config["data_folder"], f"trainMetaData.txt")
     config["test_data_file"] = os.path.join(config["data_folder"], f"testData{test_particle}.txt")
     config["test_class_file"] = os.path.join(config["data_folder"], f"testClass{test_particle}.txt")
+    config["test_meta_file"] = os.path.join(config["data_folder"], f"testMetaData.txt")
     config["model_file"] = os.path.join(config["files_folder"], "scanModel.keras")
     config["train_pred_file"] = os.path.join(config["files_folder"], "train_pred.out")
     config["test_pred_file"] = os.path.join(config["files_folder"], "test_pred.out")
@@ -126,7 +135,7 @@ def load_config(args, script_dir):
         config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
-        config["model"] = "VGG"
+        config["model"] = "VGG_metadatas"
         config["nbIt"] = 80
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16
@@ -135,7 +144,7 @@ def load_config(args, script_dir):
         if config["model"] in AVAILABLE_CNN_MODELS:
             config["model"] = "MLP_Patch"
         elif config["model"] != "RF":
-            raise ValueError("Wrong model given, give one of VGG, resnet, small, big, MLP, MLP_Patch, RF")
+            raise ValueError("Wrong model given, give one of VGG, VGG_metadatas, resnet, small, big, MLP, MLP_Patch, RF")
 
     if config["model"] == "RF" and args.statistic == "activation_layer":
         raise ValueError("activation_layer can't use a Random Forest to train.")

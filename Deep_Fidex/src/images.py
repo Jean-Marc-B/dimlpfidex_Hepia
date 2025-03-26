@@ -553,6 +553,18 @@ def get_receptive_field_coordinates(model, layer_name, output_pixel):
             col_end   = col_end * config['col_scale']
         # Dropout does not affect spatial dimensions
 
+    # Get integer indices
+    row_start = math.floor(row_start)
+    row_end = math.ceil(row_end)
+    col_start = math.floor(col_start)
+    col_end = math.ceil(col_end)
+
+    # Stay inside the image
+    row_start = max(0, min(orig_height - 1, row_start))
+    row_end = max(0, min(orig_height - 1, row_end))
+    col_start = max(0, min(orig_width - 1, col_start))
+    col_end = max(0, min(orig_width - 1, col_end))
+
     # Return the 4 corners as tuples (row, col)
     top_left = (row_start, col_start)
     top_right = (row_start, col_end)
@@ -583,7 +595,9 @@ def highlight_area_first_conv(img, rule, model, height_feature_map, width_featur
         else:  # <
             filtered_image_intensity[top_left[0]:bottom_left[0] + 1, top_left[1]:top_right[1] + 1, 0] += 1
             combined_image_intensity[top_left[0]:bottom_left[0] + 1, top_left[1]:top_right[1] + 1, 0] += 1
-
+        if np.max(filtered_image_intensity) == 0:
+            print(antecedent)
+            print(top_left, top_right, bottom_left, bottom_right)
         filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8) # Normalize to be between 0 and 255.
         filtered_image = original_image_rgb.copy()
         filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1].astype(float) + filtered_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel type unint16 is mandatory otherwise addition will be cyclic (255+1=0)

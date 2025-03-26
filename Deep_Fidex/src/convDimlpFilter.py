@@ -22,7 +22,7 @@ from generate_rules import generate_rules
 from images import generate_explaining_images
 
 # GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     #TRAINING WITH DIMLP
     if args.second_train:
-        X_train_conv_h1, X_test_conv_h1 = apply_Dimlp(X_train_conv, X_test_conv, height, n_channels, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"])
+        X_train_conv_h1, X_test_conv_h1 = apply_Dimlp(X_train_conv, X_test_conv, height, n_channels, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"], activation_fct_stairobj="identity")
         trainCNN(height, width, n_channels, cfg["nb_classes"], "big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], X_train_conv_h1, Y_train, X_test_conv_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], remove_first_conv=True)
 
     # GENERATE GLOBAL RULES

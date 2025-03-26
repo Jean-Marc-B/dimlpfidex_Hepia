@@ -30,7 +30,7 @@ class StairObj:
         sigmoid(x): The sigmoid activation function.
     """
 
-    def __init__(self, nb_bins, hiknot):
+    def __init__(self, nb_bins, hiknot, activation_function = "sigmoid"):
         """
         Initializes a StairObj with the specified number of bins and high knot value.
 
@@ -52,6 +52,13 @@ class StairObj:
 
         self.knots = []
         self.evalknots = []
+
+        if activation_function=="sigmoid":
+            self.activation_function = self.sigmoid
+        elif activation_function=="identity":
+            self.activation_function = self.identity
+        else:
+            raise ValueError(f"Error : the activation function given is unknown ({activation_function}), choose sigmoid or identity")
 
         self.init_member_const_for_ansi()
         self.activate_knots()
@@ -89,7 +96,7 @@ class StairObj:
         :return: The activation level for `x`.
         :rtype: float
         """
-        return self.sigmoid(x)
+        return self.activation_function(x)
 
     def funct(self, x):
         """
@@ -125,3 +132,13 @@ class StairObj:
                 return 1.0
             else:
                 return 0.0
+
+    def identity(self, x):
+        """
+        The identity function between lowknot and hiknot, used as the activation function in this stair object.
+        :param x: The input value.
+        :type x: float
+        :return: The identity activation for `x` between lowknot and hiknot.
+        :rtype: float
+        """
+        return min(max(x, self.lowknot), self.hiknot)
