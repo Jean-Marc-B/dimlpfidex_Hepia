@@ -34,11 +34,13 @@ def load_data(cfg):
 
     # Load train data
     train = np.loadtxt(cfg["train_data_file"])
+    print("train data shape : ", train.shape)
     X_train = train.reshape(train.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
     X_train = X_train.astype('int32' if cfg["data_type"] == "integer" else 'float32')
 
     # Load test data
     test = np.loadtxt(cfg["test_data_file"])
+    print("test data shape : ", test.shape)
     X_test = test.reshape(test.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
     X_test = X_test.astype('int32' if cfg["data_type"] == "integer" else 'float32')
 
@@ -48,8 +50,8 @@ def load_data(cfg):
 
     # Normalize if necessary
     if cfg["data_type"] == "integer":
-        X_train = normalize_data(X_train)
-        X_test = normalize_data(X_test)
+        X_train = normalize_data(X_train, 0, 255)
+        X_test = normalize_data(X_test, 0, 255)
 
     print("Data loaded.\n")
 
@@ -174,7 +176,7 @@ def zeroThreshold(x):
 
 ###############################################################
 
-def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_outfile=None, mu=None, sigma=None):
+def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_outfile=None, mu=None, sigma=None, activation_fct_stairobj = "sigmoid"):
     """
     Computes the first hidden layer of the model using a staircase activation function.
 
@@ -222,14 +224,14 @@ def compute_first_hidden_layer(step, input_data, k, nb_stairs, hiknot, weights_o
 
     # Compute new data after first hidden layer
     h = k*(input_data-mu)/sigma # With indices : hij=K*(xij-muj)/sigmaj
-    stair = StairObj(nb_stairs, hiknot)
+    stair = StairObj(nb_stairs, hiknot, activation_fct_stairobj)
     out_data = np.vectorize(stair.funct)(h) # Apply staircase activation function
 
     return (out_data, mu, sigma) if step == "train" else out_data
 
 ###############################################################
 
-def apply_Dimlp(x_train, x_test, size1D, nb_channels, K_val, nb_quant_levels, hiknot, output_weights):
+def apply_Dimlp(x_train, x_test, size1D, nb_channels, K_val, nb_quant_levels, hiknot, output_weights, activation_fct_stairobj="sigmoid"):
     print("Applying DIMLP layer...")
     x_train = x_train.reshape(x_train.shape[0], size1D*size1D*nb_channels)
     x_test = x_test.reshape(x_test.shape[0], size1D*size1D*nb_channels)
@@ -239,8 +241,8 @@ def apply_Dimlp(x_train, x_test, size1D, nb_channels, K_val, nb_quant_levels, hi
     #     #if (x_train[i][70]) != 0:
     #     print(x_train[i][70])
 
-    x_train_h1, mu, sigma = compute_first_hidden_layer("train", x_train, K_val, nb_quant_levels, hiknot, output_weights)
-    x_test_h1 = compute_first_hidden_layer("test", x_test, K_val, nb_quant_levels, hiknot, mu=mu, sigma=sigma)
+    x_train_h1, mu, sigma = compute_first_hidden_layer("train", x_train, K_val, nb_quant_levels, hiknot, output_weights, activation_fct_stairobj=activation_fct_stairobj)
+    x_test_h1 = compute_first_hidden_layer("test", x_test, K_val, nb_quant_levels, hiknot, mu=mu, sigma=sigma, activation_fct_stairobj=activation_fct_stairobj)
 
     # print("apres")
     # for i in range(0,50):
@@ -653,9 +655,11 @@ def image_to_rgb(image):
     return original_image_rgb
 
 #Normalize data to range [0,1]
-def normalize_data(data):
-    min_val = np.min(data)
-    max_val = np.max(data)
+def normalize_data(data, min_val=None, max_val=None):
+    if min_val is None:
+        min_val = np.min(data)
+    if max_val is None:
+        max_val = np.max(data)
 
     if max_val - min_val == 0:  # Avoid division by zero
         return np.zeros_like(data, dtype=np.float32)
@@ -728,7 +732,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     - width: The size of the second dimension of the input image (image is height x width).
     - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - nb_classes: The number of classes for classification.
-    - model: Can be resnet, VGG, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
+    - model: Can be resnet, VGG, VGG_metadatas, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
     - nbIt: The number of epochs to train the model.
     - model_file: File path to save the trained model.
     - model_checkpoint_weights: File path for saving the best model weights during training.
@@ -751,8 +755,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     gc.collect()
     tf.keras.backend.clear_session()
 
-    if model not in ["resnet", "VGG", "small", "big", "MLP", "MLP_Patch"]:
-        raise ValueError("The model needs to be one of resnet, VGG, small, big, MLP or MLP_Patch")
+    if model not in ["resnet", "VGG", "VGG_metadatas", "small", "big", "MLP", "MLP_Patch"]:
+        raise ValueError("The model needs to be one of resnet, VGG, VGG_metadatas, small, big, MLP or MLP_Patch")
 
     if model == "MLP_Patch":
         if len(X_train) != 2 or len(X_test) != 2 or len(X_train[1][0]) != 2 or len(X_test[1][0]) != 2:
@@ -760,10 +764,17 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         if not isinstance(X_train, tuple) or not isinstance(X_test, tuple):
             raise ValueError("X_train and X_test must be tuples (image patches, positions).")
 
-        X_train, coord_train = X_train
-        X_test, coord_test = X_test
-        coord_train = np.array(coord_train)
-        coord_test = np.array(coord_test)
+    if model == "VGG_metadatas":
+        if len(X_train) != 2 or len(X_test) != 2:
+            raise ValueError("Wrong shape of data when training VGG with metadatas.")
+        if not isinstance(X_train, tuple) or not isinstance(X_test, tuple):
+            raise ValueError("X_train and X_test must be tuples (images, metadatas).")
+
+    if model in ["MLP_Patch", "VGG_metadatas"]:
+        X_train, meta_train = X_train
+        X_test, meta_test = X_test
+        meta_train = np.array(meta_train)
+        meta_test = np.array(meta_test)
         X_test = np.array(X_test)
 
     split_index = int(0.8 * len(X_train))
@@ -772,24 +783,29 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     y_train = Y_train[0:split_index]
     y_val   = Y_train[split_index:]
 
-    if model == "MLP_Patch":
-        coord_train, coord_val = coord_train[:split_index], coord_train[split_index:]
+    if model in ["MLP_Patch", "VGG_metadatas"]:
+        meta_train, meta_val = meta_train[:split_index], meta_train[split_index:]
 
     print(f"Training set: {x_train.shape}, {y_train.shape}")
     print(f"Validation set: {x_val.shape}, {y_val.shape}")
     print(f"Test set: {X_test.shape}, {Y_test.shape}")
 
-    if (nbChannels == 1 and model in ["resnet", "VGG"] and not with_probability):
+    if model == "VGG_metadatas":
+        print(f"Training set meta: {meta_train.shape}")
+        print(f"Validation set meta: {meta_val.shape}")
+        print(f"Test set meta: {meta_test.shape}")
+
+    if (nbChannels == 1 and model in ["resnet", "VGG", "VGG_metadatas"] and not with_probability):
         # B&W to RGB
         x_train = np.repeat(x_train, 3, axis=-1)
         X_test = np.repeat(X_test, 3, axis=-1)
         x_val = np.repeat(x_val, 3, axis=-1)
         nbChannels = 3
 
-    if model == "MLP_Patch":
-        x_train = [x_train, coord_train]
-        x_val = [x_val,coord_val]
-        X_test = [X_test,coord_test]
+    if model in ["MLP_Patch", "VGG_metadatas"]:
+        x_train = [x_train, meta_train]
+        x_val = [x_val,meta_val]
+        X_test = [X_test,meta_test]
 
     ##############################################################################
     if model == "resnet":
@@ -892,6 +908,42 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
         model.summary()
 
+    elif model == "VGG_metadatas":
+        if with_leaky_relu:
+            raise ValueError("VGG with leakyRelu is not yet implemented.")
+
+        # IMAGE BRANCH
+        image_input = Input(shape=(height, width, 3))
+
+        resized_image_input = Resizing(224, 224, name='resizing_layer')(image_input)
+
+        # charge pre-trained model vgg with imageNet weights
+        model_base = VGG16(include_top=False, weights="imagenet", input_tensor=resized_image_input)
+
+        x = model_base.output
+        x = Flatten()(x)
+        x = Dense(256, activation='relu')(x)
+        x = Dropout(0.3)(x)
+        x = BatchNormalization()(x)
+
+        # METADATA BRANCH
+        metadatas_input = Input(shape=(meta_train.shape[1],))
+        y = Dense(64, activation='relu')(metadatas_input)
+        y = Dropout(0.3)(y)
+        y = Dense(64, activation='relu')(y)
+
+        # MERGING BRANCHES
+        merged = Concatenate()([x, y])
+        merged = Dense(64, activation='relu')(merged)
+        output = Dense(nb_classes, activation='softmax')(merged)
+
+        # FINAL MODEL
+        model = Model(inputs=[image_input, metadatas_input], outputs=output)
+
+        # COMPILATION
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model.summary()
+
     elif model == "small":
         model = Sequential()
         model.add(Input(shape=(height, width, nbChannels)))
@@ -928,7 +980,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.add(Input(shape=(height, width, nbChannels)))
 
         if not remove_first_conv:
-            model.add(Resizing(64, 64))
+            model.add(Resizing(2*height, 2*width))
 
             # Première couche de convolution
             model.add(Conv2D(64, (3, 3), activation=None, padding='same', strides=2, kernel_regularizer=l2(0.0005)))

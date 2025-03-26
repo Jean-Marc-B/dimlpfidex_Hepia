@@ -41,7 +41,7 @@ from heatmap import generate_heatmaps
 
 # GPU arguments
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
@@ -110,6 +110,13 @@ if __name__ == "__main__":
 
     # Load data
     X_train, Y_train, X_test, Y_test = load_data(cfg)
+    # Load meta data
+    train_meta = np.loadtxt(cfg["train_meta_file"])
+    print("train metadata shape : ", train_meta.shape)
+    X_train_meta = train_meta.astype('float32')
+    test_meta = np.loadtxt(cfg["test_meta_file"])
+    print("test metadata shape : ", test_meta.shape)
+    X_test_meta = test_meta.astype('float32')
 
     ##############################################################################
 
@@ -124,6 +131,8 @@ if __name__ == "__main__":
     if args.train:
         if args.train_with_patches:
             train_model(cfg, (X_train_patches, train_positions), Y_train_patches, (X_test_patches, test_positions), Y_test_patches, args)
+        elif cfg["model"] == "VGG_metadatas":
+            train_model(cfg, (X_train, X_train_meta), Y_train, (X_test, X_test_meta), Y_test, args)
         else:
             train_model(cfg, X_train, Y_train, X_test, Y_test, args)
 
