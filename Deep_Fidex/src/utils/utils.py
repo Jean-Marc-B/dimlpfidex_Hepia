@@ -929,11 +929,13 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         # METADATA BRANCH
         metadatas_input = Input(shape=(meta_train.shape[1],))
         y = Dense(64, activation='relu')(metadatas_input)
-        y = Dropout(0.3)(y)
+        y = BatchNormalization()(y)
         y = Dense(64, activation='relu')(y)
 
         # MERGING BRANCHES
         merged = Concatenate()([x, y])
+        merged = Dense(256, activation='relu')(merged)
+        merged = Dense(128, activation='relu')(merged)
         merged = Dense(64, activation='relu')(merged)
         output = Dense(nb_classes, activation='softmax')(merged)
 
@@ -941,7 +943,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model = Model(inputs=[image_input, metadatas_input], outputs=output)
 
         # COMPILATION
-        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.00001), metrics=['accuracy'])
         model.summary()
 
     elif model == "small":
