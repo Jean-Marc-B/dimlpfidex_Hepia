@@ -65,7 +65,7 @@ def load_config(args, script_dir):
         config["classes"] = {0: "happy", 1: "not happy"}
 
     elif args.dataset == "HAM10000":
-        config["size1D"] = 28#33
+        config["size1D"] = 33 #28
         config["nb_channels"] = 3
         config["base_folder"] = os.path.join(os.path.dirname(script_dir), "../../data", "HAM10000")
         config["data_type"] = "integer"
@@ -135,8 +135,8 @@ def load_config(args, script_dir):
         config["batch_size"] = 16
         config["batch_size_second_model"] = 32
     else:
-        config["model"] = "VGG_metadatas"
-        config["nbIt"] = 80
+        config["model"] = "VGG"
+        config["nbIt"] = 40
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16
 

@@ -16,6 +16,11 @@ we go back to the filtered images to see where the rule is applied on the image 
 respect to this rule.
 """
 import os
+
+# GPU arguments
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import sys
 import time
 import argparse
@@ -39,9 +44,19 @@ from generate_rules import generate_rules
 from images import generate_explaining_images
 from heatmap import generate_heatmaps
 
-# GPU arguments
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# GPUS
+
+# gpus = tf.config.list_physical_devices('GPU')
+# if gpus:
+#     try:
+#         tf.config.set_logical_device_configuration(
+#             gpus[0],
+#             [tf.config.LogicalDeviceConfiguration(memory_limit=8192)] # LIMIT GPU TP 8 GO
+#         )
+#         # in option :
+#         # tf.config.experimental.set_memory_growth(gpus[0], True)
+#     except RuntimeError as e:
+#         print("GPU configuration ERROR:", e)
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
@@ -111,12 +126,13 @@ if __name__ == "__main__":
     # Load data
     X_train, Y_train, X_test, Y_test = load_data(cfg)
     # Load meta data
-    train_meta = np.loadtxt(cfg["train_meta_file"])
-    print("train metadata shape : ", train_meta.shape)
-    X_train_meta = train_meta.astype('float32')
-    test_meta = np.loadtxt(cfg["test_meta_file"])
-    print("test metadata shape : ", test_meta.shape)
-    X_test_meta = test_meta.astype('float32')
+    if cfg["model"] == "VGG_metadatas":
+        train_meta = np.loadtxt(cfg["train_meta_file"])
+        print("train metadata shape : ", train_meta.shape)
+        X_train_meta = train_meta.astype('float32')
+        test_meta = np.loadtxt(cfg["test_meta_file"])
+        print("test metadata shape : ", test_meta.shape)
+        X_test_meta = test_meta.astype('float32')
 
     ##############################################################################
 
