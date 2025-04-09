@@ -497,7 +497,7 @@ def __obtain_trial_data(file_path: str) -> pd.DataFrame:
     # Check that values are consistant
     for c in __possible_values:
         for v in set(attributes[c]):
-            if v.upper() not in __possible_values[c]:
+            if str(v).upper() not in __possible_values[c]:
                 raise ValueError(f"Value {v} is not applicable for attribute {c}. Must be one of {__possible_values[c]}")
 
     # planned axillary columns is categorical in trial, must transform to 0/1/nan to match training
