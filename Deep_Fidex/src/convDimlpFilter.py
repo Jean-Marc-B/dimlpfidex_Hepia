@@ -22,7 +22,7 @@ from generate_rules import generate_rules
 from images import generate_explaining_images
 
 # GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
@@ -116,7 +116,7 @@ if __name__ == '__main__':
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images is not None:
-        generate_explaining_images(cfg, X_train, model, None, args, height_feature_map=height, width_feature_map=width, nb_channels_feature_map=n_channels)
+        generate_explaining_images(cfg, X_train, Y_train, model, None, args, height_feature_map=height, width_feature_map=width, nb_channels_feature_map=n_channels)
 
     end_time = time.time()
     print(f"\nFull execution time : {(end_time - start_time):.2f}sec")

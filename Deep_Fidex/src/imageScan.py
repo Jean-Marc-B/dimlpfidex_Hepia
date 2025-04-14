@@ -200,9 +200,9 @@ if __name__ == "__main__":
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images is not None:
         if args.train_with_patches and args.statistic == "histogram":
-            generate_explaining_images(cfg, X_train, firstModel, intermediate_model, args, train_positions)
+            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions)
         else:
-            generate_explaining_images(cfg, X_train, firstModel, intermediate_model, args)
+            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args)
 
     # HEATMAP
     if args.heatmap:
