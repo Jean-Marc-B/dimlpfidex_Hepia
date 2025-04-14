@@ -22,7 +22,7 @@ from utils.constants import HISTOGRAM_ANTECEDENT_PATTERN
 from utils.config import *
 
 
-def highlight_area_histograms(CNNModel, image, filter_size, rule, classes, predictions, positions, nb_areas_per_filter):
+def highlight_area_histograms(CNNModel, image, true_class, filter_size, rule, classes, predictions, positions, nb_areas_per_filter):
     """
     Highlights important areas in an image based on the rule's antecedents using the CNN model.
 
@@ -136,7 +136,7 @@ def highlight_area_histograms(CNNModel, image, filter_size, rule, classes, predi
 
     # Show the original image on top left
     axes[0].imshow(original_image_rgb)
-    axes[0].set_title("Original Image")
+    axes[0].set_title(f"Original Image of class {true_class}")
     axes[0].axis('off')
 
     # Show combined image
@@ -187,7 +187,7 @@ def highlight_area_histograms(CNNModel, image, filter_size, rule, classes, predi
 
 ###############################################################
 
-def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, rule, filter_size, stride, classes):
+def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, true_class, rule, filter_size, stride, classes):
 
     nb_top_filters = 20 # Number of filters to show in an image
 
@@ -283,7 +283,7 @@ def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, rul
 
     # Show the original image on top left
     axes[0].imshow(original_image_rgb)
-    axes[0].set_title("Original Image")
+    axes[0].set_title(f"Original Image of class {true_class}")
     axes[0].axis('off')
 
     # Show combined image
@@ -325,7 +325,7 @@ def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, rul
 
 ###############################################################
 
-def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
+def highlight_area_probability_image(image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
 
     nb_classes = len(classes)
 
@@ -432,7 +432,7 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
 
     # Show the original image on top left
     axes[0].imshow(original_image_rgb)
-    axes[0].set_title("Original Image")
+    axes[0].set_title(f"Original Image of class {true_class}")
     axes[0].axis('off')
 
     # Show combined image
@@ -450,7 +450,7 @@ def highlight_area_probability_image(image, rule, size1D, size_Height_proba_stat
         if channel_id < nb_classes:
             area_Height_end = area_Height+filter_size[0][0]-1
             area_Width_end = area_Width+filter_size[0][1]-1
-            class_name = classes[antecedent.attribute % nb_classes]
+            class_name = classes[channel_id]
             axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
         else:
             channel = channel_id - nb_classes
@@ -575,7 +575,7 @@ def get_receptive_field_coordinates(model, layer_name, output_pixel):
 
 ###############################################################
 
-def highlight_area_first_conv(img, rule, model, height_feature_map, width_feature_map, nb_channels_feature_map):
+def highlight_area_first_conv(img, true_class, rule, model, height_feature_map, width_feature_map, nb_channels_feature_map):
     # Convert to RGB if necessary
     original_image_rgb = image_to_rgb(img)
     original_image_rgb = denormalize_to_255(original_image_rgb)
@@ -641,7 +641,7 @@ def highlight_area_first_conv(img, rule, model, height_feature_map, width_featur
 
     # Show the original image on top left
     axes[0].imshow(original_image_rgb)
-    axes[0].set_title("Original Image")
+    axes[0].set_title(f"Original Image of class {true_class}")
     axes[0].axis('off')
 
     # Show combined image
@@ -671,7 +671,7 @@ def highlight_area_first_conv(img, rule, model, height_feature_map, width_featur
     return fig
 ###############################################################
 
-def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args, train_positions=None, height_feature_map=-1, width_feature_map=-1, nb_channels_feature_map=-1):
+def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions=None, height_feature_map=-1, width_feature_map=-1, nb_channels_feature_map=-1):
     """
     Generate explaining images.
     """
@@ -775,6 +775,7 @@ def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args,
         # We create and save an image for each covered sample
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
+            true_class = cfg['classes'][np.argmax(Y_train[img_id])]
             if args.statistic == "histogram":
                 if getattr(args, "train_with_patches", False):
                     nb_areas_per_filter = [nb_patches_per_image]
@@ -785,13 +786,13 @@ def generate_explaining_images(cfg, X_train, CNNModel, intermediate_model, args,
                 else:
                     predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
                     cfg, CNNModel, img, FILTER_SIZE, STRIDE)
-                highlighted_image = highlight_area_histograms(CNNModel, img, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
+                highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
-                highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, rule, FILTER_SIZE, STRIDE, cfg["classes"])
+                highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
             elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
-                highlighted_image = highlight_area_probability_image(img, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
+                highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
             elif args.statistic == "convDimlpFilter":
-                highlighted_image = highlight_area_first_conv(img, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
+                highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
 
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png")
             plt.close(highlighted_image)
