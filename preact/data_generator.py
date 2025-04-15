@@ -30,8 +30,6 @@ if __name__ == "__main__":
 
     data = pd.read_csv(dataset_path, index_col=False)
 
-    print(data.info())
-
     generated_data = pd.DataFrame(
         {
     "height":                                   rand_int(data["height"], 20.0, n),
