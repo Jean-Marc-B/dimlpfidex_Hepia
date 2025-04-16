@@ -1,4 +1,4 @@
-import matplotlib
+from datetime import datetime
 from matplotlib import pyplot as plt
 from sys import argv
 import pandas as pd
@@ -7,8 +7,8 @@ from math import ceil
 from os import makedirs
 
 
-def init_subplots(nrows:int, ncols:int, nplots:int) -> list:
-    subplots = [plt.subplots(nrows, ncols, figsize=(15,10)) for _ in range(nplots)] 
+def init_subplots(nrows: int, ncols: int, nplots: int) -> list:
+    subplots = [plt.subplots(nrows, ncols, figsize=(15, 10)) for _ in range(nplots)]
 
     for i, subplot in enumerate(subplots):
         subplot[0].suptitle(f"Data gen. comparision page {i+1}/{nplots}")
@@ -17,8 +17,47 @@ def init_subplots(nrows:int, ncols:int, nplots:int) -> list:
     return subplots
 
 
+def save_data_gen_cmp_charts(original_data: pd.DataFrame, generated_data: pd.DataFrame) -> None:
+    today = datetime.now().strftime("%Y-%m-%d-%H-%M")
+    save_path = f"plots/{today}"
+    makedirs(save_path, exist_ok=True)
+
+    n = 0
+    i_sp = 0
+    nplots = 10
+    n_per_plot = ceil(len(generated_data.columns) / nplots)
+    ncols = 4
+    nrows = ceil(n_per_plot / ncols)
+
+    subplots = init_subplots(nrows, ncols, nplots)
+
+    current_fig = subplots[i_sp][0]
+    current_subplot_axes = subplots[i_sp][1]
+
+    for name in generated_data:
+        if n == n_per_plot:
+            current_fig.savefig(f"{save_path}/subplot_{i_sp+1}of{nplots}.png")
+            i_sp += 1
+            n = 0
+            current_subplot_axes = subplots[i_sp][1]
+            current_fig = subplots[i_sp][0]
+
+        ir = n // ncols
+        ic = n % ncols
+
+        original_col = original_data[name].dropna()
+        generated_col = generated_data[name].dropna()
+
+        current_subplot_axes[ir, ic].set_title(name, fontsize=10)
+        current_subplot_axes[ir, ic].hist(original_col, alpha=0.5)
+        current_subplot_axes[ir, ic].hist(generated_col, alpha=0.5)
+        n += 1
+
+    current_fig.savefig(f"{save_path}/subplot_{nplots}of{nplots}.png")
+
+
 def rand_number(column: pd.Series, n: int, precision: int = 0) -> list[float]:
-    # cleaned_col = column.dropna()
+    column = column.dropna()
     mean = column.mean()
     std = column.std()
     res = [round(r.gauss(mean, std), precision) for _ in range(n)]
@@ -158,5 +197,4 @@ if __name__ == "__main__":
         current_subplot_axes[ir, ic].hist(generated_col, alpha=0.5)
         n+=1
 
-    makedirs("plots",exist_ok=True)
-    current_fig.savefig(f"plots/subplot_{nplots}of{nplots}.png") 
+    save_data_gen_cmp_charts(data, generated_data)
