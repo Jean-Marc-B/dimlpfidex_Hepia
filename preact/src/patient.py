@@ -414,10 +414,10 @@ def write_samples_file(abspath: str, n: int) -> list[Patient]:
 
     metadata = pd.Series(
         data={
-            "STUDYID": "PRE-ACT-01-DRAFT",
-            "SITEIDN": "FRA-98",
+            "STUDYID": "PRE-ACT-TEST",
+            "SITEIDN": "FRA-TEST",
             "SITENAME": "UNICANCER_TEST",
-            "SUBJID": "FRA-98-002",
+            "SUBJID": "FRA-TEST-000",
             "VISIT": "BASELINE",
         }
     )
