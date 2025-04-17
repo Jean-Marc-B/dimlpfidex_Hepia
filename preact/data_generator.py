@@ -1,10 +1,15 @@
-from datetime import datetime
 from matplotlib import pyplot as plt
 from sys import argv
 import pandas as pd
 import random as r
 from math import ceil
 from os import makedirs
+from src.data_helper import obtain_data
+
+
+def today_str() -> str:
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d-%H-%M")
 
 
 def init_subplots(nrows: int, ncols: int, nplots: int) -> list:
@@ -18,9 +23,9 @@ def init_subplots(nrows: int, ncols: int, nplots: int) -> list:
 
 
 def save_data_gen_cmp_charts(original_data: pd.DataFrame, generated_data: pd.DataFrame) -> None:
-    today = datetime.now().strftime("%Y-%m-%d-%H-%M")
+    today = today_str()
     save_path = f"plots/{today}"
-    makedirs(save_path, exist_ok=True)
+    makedirs(save_path)
 
     n = 0
     i_sp = 0
@@ -35,6 +40,10 @@ def save_data_gen_cmp_charts(original_data: pd.DataFrame, generated_data: pd.Dat
     current_subplot_axes = subplots[i_sp][1]
 
     for name in generated_data:
+        # ignore useless columns
+        if name in ["Subject ID", "DB"]:
+            continue
+
         if n == n_per_plot:
             current_fig.savefig(f"{save_path}/subplot_{i_sp+1}of{nplots}.png")
             i_sp += 1
@@ -83,8 +92,10 @@ if __name__ == "__main__":
 
     data = pd.read_csv(dataset_path, index_col=False)
     data = data.iloc[1:,]
+    zero_pad = len(str(n))-1 
 
     generated_data = pd.DataFrame({
+    "Subject ID":                               [f"testgen-{str(i).zfill(zero_pad)}" for i in range(n)],
     "height":                                   rand_number(data["height"], n, 0),
     "weight":                                   rand_number(data["weight"], n, 0),
     "Age":                                      rand_number(data["Age"], n, 0),
@@ -166,35 +177,11 @@ if __name__ == "__main__":
     })
 
 
-    nplots = 10
-    n_per_plot = ceil(len(generated_data.columns) / nplots)
-    ncols = 4
-    nrows = ceil(n_per_plot / ncols)
+    # save_data_gen_cmp_charts(data, generated_data)
+    today = today_str()
+    generated_filename =f"gendata_{today}.csv"
+    generated_data.to_csv(generated_filename)
+    data = obtain_data(generated_filename)
 
-    subplots = init_subplots(nrows, ncols, nplots)
-
-    n = 0
-    i_sp = 0
-    current_fig = subplots[i_sp][0]
-    current_subplot_axes = subplots[i_sp][1]
-
-    for name in generated_data:
-        if n == n_per_plot:
-            current_fig.savefig(f"plots/subplot_{i_sp+1}of{nplots}.png")
-            i_sp +=1
-            n = 0
-            current_subplot_axes = subplots[i_sp][1]
-            current_fig = subplots[i_sp][0]
-
-        ir = n // ncols
-        ic = n % ncols
-
-        original_col = data[name].dropna()
-        generated_col = generated_data[name].dropna()
-
-        current_subplot_axes[ir, ic].set_title(name, fontsize=10)
-        current_subplot_axes[ir, ic].hist(original_col, alpha=0.5)
-        current_subplot_axes[ir, ic].hist(generated_col, alpha=0.5)
-        n+=1
-
-    save_data_gen_cmp_charts(data, generated_data)
+    print(data[0].info())
+    print(data[0].head())
