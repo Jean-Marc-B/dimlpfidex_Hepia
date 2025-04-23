@@ -140,7 +140,7 @@ for id_sample, rule in enumerate(deep_rules):
     os.makedirs(current_dir)
 
     # Get the covered samples
-    _, covered_samples_ids = getCovering(rule, X_train_deep)
+    _, covered_samples_ids = getCoveredSamples(rule, X_train_deep)
     # Process the test image
     image_path = os.path.join(current_dir, f"_test_img_{id_sample}_out.png")
 

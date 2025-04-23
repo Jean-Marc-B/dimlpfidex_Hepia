@@ -22,7 +22,7 @@ from generate_rules import generate_rules
 from images import generate_explaining_images
 
 # GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 # Initialize random generator of numpy
 np.random.seed(seed=None)
@@ -99,7 +99,14 @@ if __name__ == '__main__':
         if (not args.get_data):
             print("Loading feature map data...")
             X_train_conv = np.load(cfg["train_feature_map_file_npy"])
-            X_test_conv = np.load(cfg["test_feature_map_file_npy"])
+            if args.second_train:
+                X_test_conv = np.load(cfg["test_feature_map_file_npy"])
+        print(X_train_conv.shape)
+        # if args.dataset == "Mnist_Guido":
+        #     height = 12
+        #     width = 12
+        #     n_channels = 32
+        # else:
         height = X_train_conv.shape[1]
         width = X_train_conv.shape[2]
         n_channels = X_train_conv.shape[3]
@@ -116,7 +123,7 @@ if __name__ == '__main__':
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images is not None:
-        generate_explaining_images(cfg, X_train, Y_train, model, None, args, height_feature_map=height, width_feature_map=width, nb_channels_feature_map=n_channels)
+        generate_explaining_images(cfg, X_train, Y_train, model, None, args, height_feature_map=height, width_feature_map=width, nb_channels_feature_map=n_channels, data_in_rules=X_train_conv)
 
     end_time = time.time()
     print(f"\nFull execution time : {(end_time - start_time):.2f}sec")

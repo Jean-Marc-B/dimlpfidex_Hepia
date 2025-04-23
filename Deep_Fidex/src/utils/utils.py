@@ -358,7 +358,7 @@ def ruleToIMLP(current_rule, nb_attributes):
 
 ###############################################################
 
-def getRules(rules_file):
+def getRules(rules_file, with_covered_samples=False, data=None):
     """
     Loads and parses rules from a specified file.
 
@@ -368,6 +368,7 @@ def getRules(rules_file):
     Returns:
     list: A list of Rule objects parsed from the file.
     """
+    print("Getting rules...")
     rules = []
     if rules_file.endswith(".json"):
         with open(rules_file, "r") as myFile:
@@ -389,10 +390,8 @@ def getRules(rules_file):
         with open(rules_file, "r") as myFile:
             line = myFile.readline()
             while line:
-                if line.startswith("Rule for sample"):
-
-                    myFile.readline()
-                    rule_line = myFile.readline().strip()
+                if line.startswith("Rule "):
+                    rule_line = line.strip().split(": ")[1]
                     [antecedents_str, class_str] = rule_line.split("->")
                     rule_class = int(class_str.split()[-1])
                     antecedents_str = antecedents_str.split()
@@ -417,13 +416,18 @@ def getRules(rules_file):
                     accuracy = float(line.split(" : ")[1])
                     line = myFile.readline()
                     confidence = float(line.split(" : ")[1])
-                    rules.append(Rule(antecedents, rule_class, cov_size, fidelity, accuracy, confidence))
+                    new_rule = Rule(antecedents, rule_class, cov_size, fidelity, accuracy, confidence)
+                    if with_covered_samples:
+                        new_rule.covered_samples = getCoveredSamples(new_rule, data)[1]
+
+                    rules.append(new_rule)
                 line = myFile.readline()
+    print("Rules obtained.")
     return rules
 
 ###############################################################
 
-def getCovering(rule, samples):
+def getCoveredSamples(rule, samples):
     """
     Identifies the samples that a given rule covers.
 
@@ -434,13 +438,12 @@ def getCovering(rule, samples):
     Returns:
     tuple: A tuple containing the list of covered samples and their respective indices.
     """
-
     covered_samples = [
         (sample, n)
         for n, sample in enumerate(samples)
         if all(
-            (sample[antecedant.attribute] >= antecedant.value if antecedant.inequality
-             else sample[antecedant.attribute] < antecedant.value)
+            (sample[antecedant.attribute] >= antecedant.value+2 if antecedant.inequality
+             else sample[antecedant.attribute] < antecedant.value+2)
             for antecedant in rule.antecedents
         )
     ]
@@ -504,7 +507,7 @@ def process_rules(rules, X_test, X_train, image_save_folder, nb_channels, classe
         os.makedirs(current_dir)
 
         # Get the covered samples
-        covered_samples, covered_samples_ids = getCovering(rule, X_train)
+        covered_samples, covered_samples_ids = getCoveredSamples(rule, X_train)
         # Process the test image
         baseimage = X_test[id_sample]
         if with_pad:
