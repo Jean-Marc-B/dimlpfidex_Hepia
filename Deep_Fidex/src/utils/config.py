@@ -15,7 +15,7 @@ AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probabi
 AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "resnet", "small", "big", "MLP", "MLP_Patch"]
 
 # Filters
-FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
+FILTER_SIZE = [[2, 2]]  # Filter size applied on the image
 STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
@@ -26,8 +26,8 @@ PROBABILITY_THRESHOLDS = getProbabilityThresholds(NB_BINS)
 HIKNOT = 5
 NB_QUANT_LEVELS = 100
 K_VAL = 1.0
-DROPOUT_HYP = 0.97
-DROPOUT_DIM = 0.97
+DROPOUT_HYP = 0.95
+DROPOUT_DIM = 0.95
 
 # ===============================
 # FONCTION TO INITIALIZE PARAMETERS WITH RESPECT TO THE ARGUMENTS
@@ -114,16 +114,19 @@ def load_config(args, script_dir):
     test_particle = "_test_version" if args.test else ""
     config["train_data_file"] = os.path.join(config["data_folder"], f"trainData{test_particle}.txt")
     config["train_class_file"] = os.path.join(config["data_folder"], f"trainClass{test_particle}.txt")
-    config["train_meta_file"] = os.path.join(config["data_folder"], f"trainMetaData.txt")
+    config["train_meta_file"] = os.path.join(config["data_folder"], f"trainMetaData{test_particle}.txt")
     config["test_data_file"] = os.path.join(config["data_folder"], f"testData{test_particle}.txt")
     config["test_class_file"] = os.path.join(config["data_folder"], f"testClass{test_particle}.txt")
-    config["test_meta_file"] = os.path.join(config["data_folder"], f"testMetaData.txt")
+    config["test_meta_file"] = os.path.join(config["data_folder"], f"testMetaData{test_particle}.txt")
     config["model_file"] = os.path.join(config["files_folder"], "scanModel.keras")
     config["train_pred_file"] = os.path.join(config["files_folder"], "train_pred.out")
     config["test_pred_file"] = os.path.join(config["files_folder"], "test_pred.out")
     config["attributes_file"] = os.path.join(config["files_folder"], "attributes.txt")
     config["model_checkpoint_weights"] = os.path.join(config["files_folder"], "weightsModel.weights.h5")
     config["model_stats"] = os.path.join(config["files_folder"], "stats_model.txt")
+    # if args.dataset == "Mnist_Guido":
+    #     config["global_rules_file"] = os.path.join(config["files_folder"], "globalRules.rls")
+    # else:
     config["global_rules_file"] = os.path.join(config["files_folder"], "globalRules.json")
     config["global_rules_with_test_stats"] = os.path.join(config["files_folder"], "globalRulesWithStats.json")
     config["global_rules_stats"] = os.path.join(config["files_folder"], "global_rules_stats.txt")
@@ -136,7 +139,7 @@ def load_config(args, script_dir):
         config["batch_size_second_model"] = 32
     else:
         config["model"] = "VGG"
-        config["nbIt"] = 40
+        config["nbIt"] = 60
         config["batch_size"] = 16
         config["batch_size_second_model"] = 16
 

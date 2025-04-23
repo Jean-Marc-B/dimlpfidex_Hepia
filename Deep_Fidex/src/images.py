@@ -15,7 +15,8 @@ from utils.utils import (
     image_to_rgb,
     denormalize_to_255,
     get_top_ids,
-    generate_filtered_images_and_predictions
+    generate_filtered_images_and_predictions,
+    getCoveredSamples
 )
 from trainings.trnFun import get_attribute_file
 from utils.constants import HISTOGRAM_ANTECEDENT_PATTERN
@@ -497,11 +498,11 @@ def get_receptive_field_coordinates(model, layer_name, output_pixel):
 
     # Retrieve the list of layers from the input up to the target layer
     layer_configs = []
+    # Get original input size from the model's input shape (ignoring batch dimension)
+    orig_height = model.input_shape[1]
+    orig_width = model.input_shape[2]
     for layer in model.layers:
         if isinstance(layer, Resizing):
-            # Get original input size from the model's input shape (ignoring batch dimension)
-            orig_height = model.input_shape[1]
-            orig_width = model.input_shape[2]
             # Get target size from the Resizing layer
             new_height = layer.height
             new_width = layer.width
@@ -671,7 +672,7 @@ def highlight_area_first_conv(img, true_class, rule, model, height_feature_map, 
     return fig
 ###############################################################
 
-def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions=None, height_feature_map=-1, width_feature_map=-1, nb_channels_feature_map=-1):
+def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions=None, height_feature_map=-1, width_feature_map=-1, nb_channels_feature_map=-1, data_in_rules=None):
     """
     Generate explaining images.
     """
@@ -773,6 +774,10 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             file.write(str(rule_to_print))
 
         # We create and save an image for each covered sample
+        if not cfg["global_rules_file"].endswith(".json"):
+            if data_in_rules is None:
+                data_in_rules = X_train
+            rule.covered_samples = getCoveredSamples(rule, data_in_rules)[1]
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             true_class = cfg['classes'][np.argmax(Y_train[img_id])]
