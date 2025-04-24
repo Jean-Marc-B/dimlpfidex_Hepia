@@ -45,7 +45,7 @@ def train_model(cfg, X_train, Y_train, X_test, Y_test, args, model = None):
     elif cfg["model"] == "RF":
         train_random_forest(cfg, X_train, Y_train, X_test, Y_test, args)
     else:
-        raise ValueError("Wrong model given, give one of VGG, VGG_metadatas, resnet, small, big, MLP, MLP_Patch, RF")
+        raise ValueError("Wrong model given, give one of VGG, VGG_metadatas, VGG_and_big, resnet, small, big, MLP, MLP_Patch, RF")
 
     end_time_train_model = time.time()
     full_time_train_model = end_time_train_model - start_time_train_model

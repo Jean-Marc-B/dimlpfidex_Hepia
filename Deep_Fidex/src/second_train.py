@@ -24,7 +24,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
     nb_train_samples = len(X_train)
     nb_test_samples = len(X_test)
 
-    if args.statistic in ["probability", "probability_multi_nets"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
         # Load probas of areas from file
         print("Loading probability stats...")
         train_probas = np.loadtxt(cfg["train_stats_file"]).astype('float32')
@@ -68,8 +68,9 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
             #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
 
             if args.statistic == "probability": # Train with a CNN now
-                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_h1, Y_train, test_probas_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], False, True)
-
+                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_h1, Y_train, test_probas_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"], with_leaky_relu=False, with_probability=True)
+            elif args.statistic == "probability_and_image": #Train with VGG for image and CNN for probas
+                trainCNN((cfg["size1D"],cfg["size_Width_proba_stat"]), (cfg["size1D"], cfg["size_Width_proba_stat"]), (cfg["nb_channels"],cfg["nb_classes"]), cfg["nb_classes"], "VGG_and_big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (X_train, train_probas_h1[:,:,:,:cfg["nb_classes"]]), Y_train, (X_test, test_probas_h1[:,:,:,:cfg["nb_classes"]]), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
             else: # Create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
 
                 if args.test:
@@ -155,7 +156,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
 
                     print("Dataset n°",i," created.")
                     # Train new model
-                    trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3, 2, "VGG", nbIt_current, cfg["batch_size_second_model"], current_model_file, current_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats, False, True)
+                    trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3, 2, "VGG", nbIt_current, cfg["batch_size_second_model"], current_model_file, current_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats, with_leaky_relu=False, with_probability=True)
                     print("Dataset n°",i," trained.")
 
                 # Create test and train predictions

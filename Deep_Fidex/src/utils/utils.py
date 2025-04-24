@@ -735,7 +735,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     - width: The size of the second dimension of the input image (image is height x width).
     - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - nb_classes: The number of classes for classification.
-    - model: Can be resnet, VGG, VGG_metadatas, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
+    - model: Can be resnet, VGG, VGG_metadatas, VGG_and_big, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
     - nbIt: The number of epochs to train the model.
     - model_file: File path to save the trained model.
     - model_checkpoint_weights: File path for saving the best model weights during training.
@@ -758,8 +758,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     gc.collect()
     tf.keras.backend.clear_session()
 
-    if model not in ["resnet", "VGG", "VGG_metadatas", "small", "big", "MLP", "MLP_Patch"]:
-        raise ValueError("The model needs to be one of resnet, VGG, VGG_metadatas, small, big, MLP or MLP_Patch")
+    if model not in ["resnet", "VGG", "VGG_metadatas", "VGG_and_big", "small", "big", "MLP", "MLP_Patch"]:
+        raise ValueError("The model needs to be one of resnet, VGG, VGG_metadatas, VGG_and_big, small, big, MLP or MLP_Patch")
 
     if model == "MLP_Patch":
         if len(X_train) != 2 or len(X_test) != 2 or len(X_train[1][0]) != 2 or len(X_test[1][0]) != 2:
@@ -773,7 +773,13 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         if not isinstance(X_train, tuple) or not isinstance(X_test, tuple):
             raise ValueError("X_train and X_test must be tuples (images, metadatas).")
 
-    if model in ["MLP_Patch", "VGG_metadatas"]:
+    if model == "VGG_and_big":
+        if len(X_train) != 2 or len(X_test) != 2 or len(height) != 2 or len(width) != 2 or len(nbChannels) != 2:
+            raise ValueError("Wrong shape of data when training VGG with metadatas.")
+        if not isinstance(X_train, tuple) or not isinstance(X_test, tuple) or not isinstance(height, tuple) or not isinstance(width, tuple) or not isinstance(nbChannels, tuple):
+            raise ValueError("X_train, X_test, height, width and nb_channels must be tuples (images, metadatas).")
+
+    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]:
         X_train, meta_train = X_train
         X_test, meta_test = X_test
         meta_train = np.array(meta_train)
@@ -786,26 +792,33 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     y_train = Y_train[0:split_index]
     y_val   = Y_train[split_index:]
 
-    if model in ["MLP_Patch", "VGG_metadatas"]:
+    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]:
         meta_train, meta_val = meta_train[:split_index], meta_train[split_index:]
 
     print(f"Training set: {x_train.shape}, {y_train.shape}")
     print(f"Validation set: {x_val.shape}, {y_val.shape}")
     print(f"Test set: {X_test.shape}, {Y_test.shape}")
 
-    if model == "VGG_metadatas":
+    if model in ["VGG_metadatas", "VGG_and_big"]:
         print(f"Training set meta: {meta_train.shape}")
         print(f"Validation set meta: {meta_val.shape}")
         print(f"Test set meta: {meta_test.shape}")
-
-    if (nbChannels == 1 and model in ["resnet", "VGG", "VGG_metadatas"] and not with_probability):
+    if model == "VGG_and_big":
+        nbChannel_img = nbChannels[0]
+    else:
+        nbChannel_img = nbChannels
+    if (((nbChannel_img == 1 and model in ["resnet", "VGG", "VGG_and_big", "VGG_metadatas"])) and not with_probability):
         # B&W to RGB
         x_train = np.repeat(x_train, 3, axis=-1)
         X_test = np.repeat(X_test, 3, axis=-1)
         x_val = np.repeat(x_val, 3, axis=-1)
-        nbChannels = 3
+        if model == "VGG_and_big":
+            print("ENTRE")
+            nbChannels = (3, nbChannels[1])
+        else:
+            nbChannels=3
 
-    if model in ["MLP_Patch", "VGG_metadatas"]:
+    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]:
         x_train = [x_train, meta_train]
         x_val = [x_val,meta_val]
         X_test = [X_test,meta_test]
@@ -944,6 +957,68 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
         # FINAL MODEL
         model = Model(inputs=[image_input, metadatas_input], outputs=output)
+
+        # COMPILATION
+        model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.00001), metrics=['accuracy'])
+        model.summary()
+
+    elif model == "VGG_and_big": # A VGG for images and a big for probabilities, reuniting at the end
+        if with_leaky_relu:
+            raise ValueError("VGG with leakyRelu is not yet implemented.")
+
+        # IMAGE BRANCH
+        image_input = Input(shape=(height[0], width[0], nbChannels[0]))
+
+        resized_image_input = Resizing(224, 224, name='resizing_layer')(image_input)
+
+        # charge pre-trained model vgg with imageNet weights
+        model_base = VGG16(include_top=False, weights="imagenet", input_tensor=resized_image_input)
+
+        x = model_base.output
+        x = Flatten()(x)
+        x = Dense(256, activation='relu')(x)
+        x = Dropout(0.3)(x)
+        x = BatchNormalization()(x)
+
+        # PROBABILITY BRANCH
+
+        probability_input = Input(shape=(height[1], width[1], nbChannels[1]))
+        y = Resizing(2*height[1], 2*width[1])(probability_input)
+
+        # Première couche de convolution
+        y = Conv2D(64, (3, 3), activation=None, padding='same', strides=2, kernel_regularizer=l2(0.0005))(y)
+        y = BatchNormalization()(y)
+        y = tf.keras.layers.LeakyReLU(alpha=0.1)(y)
+        y = MaxPooling2D(pool_size=(2, 2), name='first_conv_end')(y)
+
+        # Deuxième couche de convolution
+        y = Conv2D(128, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005))(y)
+        y = BatchNormalization()(y)
+        y = tf.keras.layers.LeakyReLU(alpha=0.1)(y)
+        y = MaxPooling2D(pool_size=(2, 2))(y)
+
+        # Troisième couche de convolution
+        y = Conv2D(256, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005))(y)
+        y = BatchNormalization()(y)
+        y = tf.keras.layers.LeakyReLU(alpha=0.1)(y)
+        y = MaxPooling2D(pool_size=(2, 2))(y)
+
+        # Passage à une couche dense
+        y = Flatten()(y)
+        y = Dense(256, activation=None)(y)
+        y = BatchNormalization()(y)
+        y = tf.keras.layers.LeakyReLU(alpha=0.1)(y)
+        y = Dropout(0.4)(y)
+
+        # MERGING BRANCHES
+        merged = Concatenate()([x, y])
+        merged = Dense(256, activation='relu')(merged)
+        merged = Dense(128, activation='relu')(merged)
+        merged = Dense(64, activation='relu')(merged)
+        output = Dense(nb_classes, activation='softmax')(merged)
+
+        # FINAL MODEL
+        model = Model(inputs=[image_input, probability_input], outputs=output)
 
         # COMPILATION
         model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.00001), metrics=['accuracy'])
