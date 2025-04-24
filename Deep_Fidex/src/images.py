@@ -720,7 +720,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             rule.include_X = False
             for ant in rule.antecedents:
                 ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
-        elif args.statistic in ["probability", "probability_multi_nets", "convDimlpFilter"]:
+        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "convDimlpFilter"]:
                 rule.include_X = False
         # Create folder for this rule
         rule_folder = os.path.join(cfg["rules_folder"], f"rule_{rule_id}_class_{cfg['classes'][rule.target_class]}")
@@ -743,7 +743,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     antecedent.attribute = f"P_{class_name}>={pred_threshold}"
                 else:
                     raise ValueError("Wrong antecedent...")
-        elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
+        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
             # Change antecedent with area and class involved
 
             # Scales of changes of original image to reshaped image
@@ -794,7 +794,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                 highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
-            elif args.statistic == "probability" or args.statistic == "probability_multi_nets":
+            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets"]:
                 highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)

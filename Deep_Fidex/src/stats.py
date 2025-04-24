@@ -184,7 +184,7 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
         output_data(test_sums, cfg["test_stats_file"])
         print("Sums saved.")
 
-    elif args.statistic in ["probability", "probability_multi_nets"]: # We create an image out of the probabilities (for each class) of cropped areas of the original image
+    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]: # We create an image out of the probabilities (for each class) of cropped areas of the original image
         if args.train_with_patches:
             print("\nGathering train probability of patches...")
             train_pred_data = train_pred # shape (nb_images_train*cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"], nb_classes)

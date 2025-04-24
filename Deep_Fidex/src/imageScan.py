@@ -19,7 +19,7 @@ import os
 
 # GPU arguments
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import sys
 import time
@@ -188,7 +188,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
     # Update stats file
-    if args.statistic in ["probability", "probability_multi_nets"]:
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 

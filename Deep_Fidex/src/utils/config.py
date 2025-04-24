@@ -9,13 +9,13 @@ from .utils import getProbabilityThresholds
 AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset", "HAM10000"]
 
 # List of statistics allowed
-AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_multi_nets"]
+AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_and_image", "probability_multi_nets"]
 
 # List of CNN models available
-AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "resnet", "small", "big", "MLP", "MLP_Patch"]
+AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "VGG_and_big", "resnet", "small", "big", "MLP", "MLP_Patch"]
 
 # Filters
-FILTER_SIZE = [[2, 2]]  # Filter size applied on the image
+FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
 STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
@@ -98,6 +98,7 @@ def load_config(args, script_dir):
         "activation_layer": "Activations_Sum" + patches_sufix + folder_suf,
         "probability_multi_nets": "Probability_Multi_Nets_Images" + patches_sufix + folder_suf,
         "probability": "Probability_Images" + patches_sufix + folder_suf,
+        "probability_and_image": "Probability_and_image" + patches_sufix + folder_suf,
         "convDimlpFilter": "Conv_DIMLP_Filter" + folder_suf
     }
     scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
@@ -147,7 +148,7 @@ def load_config(args, script_dir):
         if config["model"] in AVAILABLE_CNN_MODELS:
             config["model"] = "MLP_Patch"
         elif config["model"] != "RF":
-            raise ValueError("Wrong model given, give one of VGG, VGG_metadatas, resnet, small, big, MLP, MLP_Patch, RF")
+            raise ValueError("Wrong model given, give one of VGG, VGG_metadatas, VGG_and_big, resnet, small, big, MLP, MLP_Patch, RF")
 
     if config["model"] == "RF" and args.statistic == "activation_layer":
         raise ValueError("activation_layer can't use a Random Forest to train.")
@@ -166,7 +167,7 @@ def load_config(args, script_dir):
             raise ValueError("Not possible to use sum of activation layers stats when training with patches.")
         config["train_stats_file"] = os.path.join(config["files_folder"], "train_activation_sum.txt")
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_activation_sum.txt")
-    elif args.statistic in ["probability", "probability_multi_nets"]:
+    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
         config["train_stats_file"] = os.path.join(config["files_folder"], "train_probability_images.txt")
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_probability_images.txt")
         config["train_stats_file_with_image"] = os.path.join(config["files_folder"], "train_probability_images_with_original_img.txt")
@@ -177,7 +178,7 @@ def load_config(args, script_dir):
         config["train_feature_map_file"] = os.path.join(config["files_folder"], "train_feature_map.txt")
         config["test_feature_map_file"] = os.path.join(config["files_folder"], "test_feature_map.txt")
     # Parameters for second model training
-    if args.statistic == "probability":
+    if args.statistic in ["probability", "probability_and_image"]:
         config["second_model"] = "cnn"
         #second_model = "randomForests"
     elif args.statistic == "probability_multi_nets":
@@ -207,7 +208,7 @@ def load_config(args, script_dir):
     config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
     config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
     # 📊 Parameters specific to probabilities
-    if args.statistic in ["probability", "probability_multi_nets"]:
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
         config["output_size"] = (config["size_Height_proba_stat"], config["size_Width_proba_stat"], config["nb_classes"] + config["nb_channels"])
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
 
@@ -264,7 +265,7 @@ def load_config(args, script_dir):
     if getattr(args, "stats", False):
         print(f"Train statistics file : {config['train_stats_file']}")
         print(f"Test statistics file : {config['test_stats_file']}")
-        if args.statistic in ["probability", "probability_multi_nets"]:
+        if args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
             print(f"Train statistics file with image : {config['train_stats_file_with_image']}")
             print(f"Test statistics file with image : {config['test_stats_file_with_image']}")
         elif args.statistic == "histogram":
