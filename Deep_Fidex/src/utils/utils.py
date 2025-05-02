@@ -726,7 +726,7 @@ def gathering_predictions(file_list, output_file):
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
-def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu=False, with_probability=False, remove_first_conv=False):
+def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu=False, remove_first_conv=False):
     """
     Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
 
@@ -807,7 +807,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         nbChannel_img = nbChannels[0]
     else:
         nbChannel_img = nbChannels
-    if (((nbChannel_img == 1 and model in ["resnet", "VGG", "VGG_and_big", "VGG_metadatas"])) and not with_probability):
+    if (nbChannel_img == 1 and model in ["resnet", "VGG", "VGG_and_big", "VGG_metadatas"]):
         # B&W to RGB
         x_train = np.repeat(x_train, 3, axis=-1)
         X_test = np.repeat(X_test, 3, axis=-1)

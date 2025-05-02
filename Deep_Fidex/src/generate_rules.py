@@ -23,7 +23,7 @@ def generate_rules(cfg, args, nb_attributes = None):
         f'--global_rules_outfile {cfg["global_rules_file"]} '
         f'--nb_attributes {nb_attributes} '
         f'--heuristic 1 '
-        f'--nb_threads 48 '
+        f'--nb_threads 64 '
         f'--max_iterations 25 '
         f'--nb_quant_levels {NB_QUANT_LEVELS} '
         f'--dropout_dim {DROPOUT_DIM} '
