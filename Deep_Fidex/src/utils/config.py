@@ -183,8 +183,6 @@ def load_config(args, script_dir):
         #second_model = "randomForests"
     elif args.statistic == "probability_multi_nets":
         config["second_model"] = "cnn"
-        config["with_hsl"] = False # Only if we have 3 chanels
-        config["with_rg"] = True
     elif args.statistic == "convDimlpFilter":
         config["second_model"] = "small"
     else:
@@ -208,10 +206,10 @@ def load_config(args, script_dir):
     config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
     config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
     # 📊 Parameters specific to probabilities
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
-        config["output_size"] = (config["size_Height_proba_stat"], config["size_Width_proba_stat"], config["nb_classes"] + config["nb_channels"])
+    if args.statistic == "probability":
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
-
+    elif args.statistic in ["probability_and_image", "probability_multi_nets"]:
+        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * config["nb_classes"] + config["size1D"] * config["size1D"] * config["nb_channels"]
     # Display parameters
     print("\n--------------------------------------------------------------------------")
     print("Parameters :")
