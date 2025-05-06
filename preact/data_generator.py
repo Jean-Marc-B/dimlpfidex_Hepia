@@ -6,6 +6,41 @@ from math import ceil
 from os import makedirs
 from src.data_helper import obtain_data
 
+__values_translation_dict = {
+    "AISMOKE":          (["NO", "YES", "FORMER"], ["NEVER", "CURRENT", "FORMER"]),
+    "AIMENO":           (["PRE-MENOPAUSAL", "POST-MENOPAUSAL", "NOT MENOPAUSAL"], ["UNKNOWN", "POST-MENOPAUSAL", "NOT-MENOPAUSAL"]),
+    "AIDIABE":          ([0.0, 1.0], ["NO", "YES"]), 
+    "AISIDE":           (["Left", "Right"],["LEFT", "RIGHT"]),
+    "AISURG":           ([0,1],["NO", "YES"]),
+    "AISURGTYP":        (["Breast conserving surgery", "Mastectomy"],["BREAST CONSERVING SURGERY", "MASTECTOMY"]),
+    "AIAXI":            ([0,1], ["NO", "YES"]),
+    "AISENTNOD":        ([0,1], ["NO", "YES"]),
+    "AIHISTO":          (["DUCTAL", "LOBULAR", "OTHER"],["DUCTAL/INVASIVE CARCINOMA NST", "LOBULAR", "OTHER"]),
+    "AICT":             (["T0", "Tis", "T1", "T2", "T3", "T4", "T4a", "T4b","T4c", "T4d", "TX"],["0", "Tis", "1", "2", "3", "4", "4a", "4b", "4c", "4d", "X"]),
+    "AICN":             (["N0", "N1", "N2", "NX", "N3"],["0", "1", "2", "3", "X"]),
+    "AIERSTAT":         (["Positive", "Negative"], ["POSITIVE", "NEGATIVE"]),
+    "AIPRSTAT":         (["Positive", "Negative"], ["POSITIVE", "NEGATIVE"]),
+    "AITBRSIDE":        (["Left", "Right"], ["LEFT", "RIGHT"]),
+    "AIBEDBOOST":       ([0.0, 1.0], ["NO", "YES"]),
+    "AINEOADJCH":       ([0.0, 1.0], ["NO", "YES"]),
+    "AIADJCH":          ([0.0, 1.0], ["NO", "YES"]),
+    "AIARMLYM":         ([0.0, 1.0], ["NO", "YES"]),
+}
+
+
+def convert_dataset_to_trial_format(selected_data: pd.DataFrame) -> pd.DataFrame:
+    def __convert(x, src_values: list, dest_values: list):
+        if x in src_values:
+            i = src_values.index(x)
+            return dest_values[i]
+        
+    for key, values in __values_translation_dict.items():
+        src_values = values[0]
+        dest_values = values[1]
+        selected_data[key] = selected_data[key].apply(lambda x: __convert(x, src_values, dest_values))
+
+    return selected_data
+
 
 def today_str() -> str:
     from datetime import datetime
@@ -71,7 +106,8 @@ def rand_number(column: pd.Series, n: int, precision: int = 0) -> list[float]:
     std = column.std()
     res = [round(r.gauss(mean, std), precision) for _ in range(n)]
 
-    return [n if n >= 0.0 else 0.0 for n in res]
+    # abs used to remove -0.0
+    return [abs(n) if n >= 0.0 else 0.0 for n in res]
 
 
 def rand_choice(column: pd.Series, n: int) -> list[bool]:
@@ -81,6 +117,45 @@ def rand_choice(column: pd.Series, n: int) -> list[bool]:
     weights = (column.value_counts(sort=False) / size).to_list()
 
     return r.choices(values, weights=weights, k=n)
+
+
+def write_fake_data_test_file(source_data: pd.DataFrame, nb_records: int = 10):
+    original_colnames = ["Age", "height", "weight", "Smoker", "Menopausal", "Diabetes", "Side of Primary", "Surgery", "Type Surgery", "Planned axillary dissection", "Nodes examined", "Nodes involved", "Sentinel node biopsy", "Histological Type", "Pathological tumour size", "Clinical T-Stage", "Clinical N-Stage", "Ki-67 status", "ER Status", "PR Status", "HER-2 Status", "Number of fractions", "IMRT", "3D", "Treated breast radio","Boost",  "neoadjuvant chemotherapy", "adjuvant chemotherapy", "Baseline Arm Lymphedema"]
+    target_colnames = ["AIAGE","AIHEIGHT","AIWEIGHT","AISMOKE","AIMENO","AIDIABE","AISIDE","AISURG","AISURGTYP","AIAXI","AINODREM","AINODINV","AISENTNOD","AIHISTO","AIPATHOSIZ","AICT","AICN","AIKISTAT","AIERSTAT","AIPRSTAT","AIHERSTAT","AINBFRAC","AITBRSIDE","AIBEDBOOST","AINEOADJCH","AIADJCH","AIARMLYM"]
+    ordered_colnames = ["STUDYID", "SITEIDN", "SITENAME", "SUBJID","VISIT", "AIAGE","AIHEIGHT","AIWEIGHT","AISMOKE","AIMENO","AIDIABE","AISIDE","AISURG","AISURGTYP","AIAXI","AINODREM","AINODINV","AISENTNOD","AIHISTO","AIPATHOSIZ","AICT","AICN","AIKISTAT","AIERSTAT","AIPRSTAT","AIHERSTAT","AINBFRAC","AIRTTEC","AITBRSIDE","AIBEDBOOST","AINEOADJCH","AIADJCH","AIARMLYM"]
+    integer_columns = ["AIAGE", "AIHEIGHT", "AIWEIGHT", "AINODREM", "AINODINV", "AIPATHOSIZ", "AIKISTAT", "AINBFRAC"]
+
+    filename = f"ecrf_test_{today_str()}.csv"
+
+    def __rttec(row: pd.Series) -> str:
+        if row["IMRT"] == 1.0 or row["IMRT"] == 1:
+            return "IMRT"
+        if row["3D"] == 1.0 or row["3D"] == 1:
+            return "3D-CRT"
+        
+        return r.choices(["IMRT", "3D-CRT"], k=1)[0]
+
+    selected_data = source_data[original_colnames].iloc[0:nb_records,:].copy()
+    selected_data["AIRTTEC"] = selected_data.apply(__rttec, axis=1)
+    selected_data = selected_data.drop(["IMRT", "3D"], axis=1)
+    original_colnames.remove("IMRT")
+    original_colnames.remove("3D")
+    
+    renaming_dict = dict(zip(original_colnames, target_colnames))
+    selected_data = selected_data.rename(renaming_dict, axis=1)
+    selected_data = convert_dataset_to_trial_format(selected_data)
+    selected_data[integer_columns] = selected_data[integer_columns].astype("int32")
+
+    zero_pad = len(str(n))-1 
+    selected_data["STUDYID"]    =   ["PRE-ACT-00-TEST"] * nb_records
+    selected_data["SITEIDN"]    =   ["CH-25"] * nb_records
+    selected_data["SITENAME"]   =   ["HEPIA-TEST"] * nb_records
+    selected_data["SUBJID"]     =   [f"CH-25-{str(i).zfill(zero_pad)}" for i in range(nb_records)]
+    selected_data["VISIT"]      =   ["BASELINE"] * nb_records
+
+    selected_data = selected_data.reindex(ordered_colnames, axis=1)
+
+    selected_data.to_csv(filename, index=False)
 
 
 if __name__ == "__main__":
@@ -178,10 +253,10 @@ if __name__ == "__main__":
 
 
     # save_data_gen_cmp_charts(data, generated_data)
+    
     today = today_str()
     generated_filename =f"gendata_{today}.csv"
     generated_data.to_csv(generated_filename)
     data = obtain_data(generated_filename)
 
-    print(data[0].info())
-    print(data[0].head())
+    write_fake_data_test_file(generated_data, 2000)
