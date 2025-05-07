@@ -47,7 +47,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
             test_probas_img = test_probas_img.reshape(nb_test_samples, -1) # flatten for export
         else:
             X_train_flatten = X_train.reshape(nb_train_samples, -1)
-            X_test_flatten = X_train.reshape(nb_test_samples, -1)
+            X_test_flatten = X_test.reshape(nb_test_samples, -1)
             train_probas_img = np.concatenate((train_probas, X_train_flatten), axis=-1)
             test_probas_img = np.concatenate((test_probas, X_test_flatten), axis=-1)
         # print(train_probas_img.shape) #(nb_train_samples, 5324) (22*22*11)
@@ -91,7 +91,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                 test_probas_img_h1 = test_probas_img_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
                 trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_img_h1, Y_train, test_probas_img_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
             elif args.statistic == "probability_and_image": #Train with VGG for image and CNN for probas
-                trainCNN(cfg["size_Width_proba_stat"], cfg["size_Width_proba_stat"], (cfg["nb_channels"],cfg["nb_classes"]), cfg["nb_classes"], "VGG_and_big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (train_probas_img_h1[:,:,:,cfg["nb_classes"]:], train_probas_img_h1[:,:,:,:cfg["nb_classes"]]), Y_train, (test_probas_img_h1[:,:,:,cfg["nb_classes"]:], test_probas_img_h1[:,:,:,:cfg["nb_classes"]]), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+                trainCNN((cfg["size1D"], cfg["size_Height_proba_stat"]), (cfg["size1D"], cfg["size_Width_proba_stat"]), (cfg["nb_channels"], cfg["nb_classes"]), cfg["nb_classes"], "VGG_and_big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (train_img_part, train_proba_part), Y_train, (test_img_part, test_proba_part), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
             else: # Probability_multi_nets Create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
 
                 if args.test:

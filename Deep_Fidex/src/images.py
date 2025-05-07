@@ -326,7 +326,12 @@ def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, tru
 
 ###############################################################
 
-def highlight_area_probability_image(image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels):
+def highlight_area_probability_image(image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels, statistic):
+
+    if statistic == "probability_and_image":
+        prob_and_img_in_one_matrix = False
+    else:
+        prob_and_img_in_one_matrix = True
 
     nb_classes = len(classes)
 
@@ -339,19 +344,25 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
     mask_green_combined = np.zeros((size1D, size1D), dtype=bool)
     mask_red_combined = np.zeros((size1D, size1D), dtype=bool)
 
-    # Scales of changes of original image to reshaped image
-    scale_h = size1D / size_Height_proba_stat
+    scale_h = size1D / size_Height_proba_stat # For probabilities and image in one matrix
     scale_w = size1D / size_Width_proba_stat
-
+    split_id = size_Height_proba_stat * size_Width_proba_stat * nb_classes # For separated probability and image
 
     for antecedent in rule.antecedents:
-        area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
         filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
 
-        if channel_id < nb_classes: # Attrubute corresponds to an area
-            # Get attribute information
-            area_Height_end = area_Height+filter_size[0][0]-1
-            area_Width_end = area_Width+filter_size[0][1]-1
+        if prob_and_img_in_one_matrix:
+            area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
+            is_proba_part = channel_id < nb_classes
+        else:
+            is_proba_part = antecedent.attribute < split_id
+
+        if is_proba_part:
+            if not prob_and_img_in_one_matrix:
+                area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes))
+
+            area_Height_end = area_Height + filter_size[0][0] - 1
+            area_Width_end = area_Width + filter_size[0][1] - 1
 
             if antecedent.inequality:  # >=
                 filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 1] += 1
@@ -359,15 +370,20 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
             else:  # <
                 filtered_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
                 combined_image_intensity[area_Height:area_Height_end+1, area_Width:area_Width_end+1, 0] += 1
-        else: # Antecedant corresponds to a pixel
-            height_original = round(area_Height * scale_h)
-            width_original = round(area_Width * scale_w)
+
+        else: # image part
+            if not prob_and_img_in_one_matrix:
+                height, width, channel = np.unravel_index(antecedent.attribute - split_id, (size1D, size1D, nb_channels))
+            else:
+                height = round(area_Height * scale_h)
+                width = round(area_Width * scale_w)
+
             if antecedent.inequality:  # >=
-                filtered_image_intensity[height_original, width_original, :] = [0, 255, 0]  # Green
-                combined_image_intensity[height_original, width_original, :] = [0, 255, 0]
+                filtered_image_intensity[height, width, :] = [0, 255, 0]  # Green
+                combined_image_intensity[height, width, :] = [0, 255, 0]
             else:  # <
-                filtered_image_intensity[height_original, width_original, :] = [255, 0, 0]  # Red
-                combined_image_intensity[height_original, width_original, :] = [255, 0, 0]
+                filtered_image_intensity[height, width, :] = [255, 0, 0]  # Red
+                combined_image_intensity[height, width, :] = [255, 0, 0]
 
 
         # We force pixel specifics to be green or red
@@ -377,7 +393,13 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
         mask_green_combined |= mask_green
         mask_red_combined |= mask_red
 
-        filtered_image_intensity = np.clip(filtered_image_intensity / np.max(filtered_image_intensity) * 255, 0, 255).astype(np.uint8) # Normalize to be between 0 and 255.
+        # Normalize to be between 0 and 255.
+        max_val = np.max(filtered_image_intensity)
+        if max_val > 0:
+            filtered_image_intensity = np.clip(filtered_image_intensity / max_val * 255, 0, 255).astype(np.uint8)
+        else:
+            filtered_image_intensity = np.zeros_like(filtered_image_intensity, dtype=np.uint8)
+
         filtered_image = original_image_rgb.copy()
         filtered_image[:, :, 1] = np.clip(filtered_image[:, :, 1].astype(float) + filtered_image_intensity[:, :, 1].astype(float), 0, 255)  # Green channel type unint16 is mandatory otherwise addition will be cyclic (255+1=0)
         filtered_image[:, :, 0] = np.clip(filtered_image[:, :, 0].astype(float) + filtered_image_intensity[:, :, 0].astype(float), 0, 255)  # Red channel
@@ -410,6 +432,7 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
     combined_image[mask_green_combined] = [0, 255, 0]
     # Red Pixels
     combined_image[mask_red_combined] = [255, 0, 0]
+
     # Plotting
 
     # Determine the number of rows and columns for the subplots
@@ -444,22 +467,34 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
     # Show each antecedent image
     for i,img in enumerate(filtered_images):
         antecedent = rule.antecedents[i]
-        area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
-        img = img.astype(np.uint8)
         ineq = ">=" if antecedent.inequality else "<"
-        axes[i+2].imshow(img)
-        if channel_id < nb_classes:
+        axes[i+2].imshow(img.astype(np.uint8))
+
+        if prob_and_img_in_one_matrix:
+            area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
+            is_proba_part = channel_id < nb_classes
+        else:
+            is_proba_part = antecedent.attribute < split_id
+
+        if is_proba_part: # proba part
+            if not prob_and_img_in_one_matrix:
+                area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes))
+
             area_Height_end = area_Height+filter_size[0][0]-1
             area_Width_end = area_Width+filter_size[0][1]-1
             class_name = classes[channel_id]
             axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
-        else:
-            channel = channel_id - nb_classes
-            # Conversion of resized coordinates into originales
-            height_original = round(area_Height * scale_h)
-            width_original = round(area_Width * scale_w)
-            axes[i+2].set_title(f"Pixel_{height_original}x{width_original}x{channel}{ineq}{antecedent.value:.6f}")
+
+        else: # image part
+            if statistic == "probability_and_image":
+                height, width, channel = np.unravel_index(antecedent.attribute - split_id, (size1D, size1D, nb_channels))
+            else:
+                height = round(area_Height * scale_h)
+                width = round(area_Width * scale_w)
+                channel = antecedent.attribute % nb_channels
+            axes[i+2].set_title(f"Pixel_{height}x{width}x{channel}{ineq}{antecedent.value:.6f}")
         axes[i+2].axis('off')
+
     # Hide any remaining empty subplots if total_images < num_rows * num_columns
     for j in range(total_images, len(axes)):
         axes[j].axis('off')
@@ -743,7 +778,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     antecedent.attribute = f"P_{class_name}>={pred_threshold}"
                 else:
                     raise ValueError("Wrong antecedent...")
-        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
+        elif args.statistic in ["probability", "probability_multi_nets"]:
             # Change antecedent with area and class involved
 
             # Scales of changes of original image to reshaped image
@@ -761,6 +796,17 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     height_original = round(area_Height * scale_h)
                     width_original = round(area_Width * scale_w)
                     antecedent.attribute = f"Pixel_{height_original}x{width_original}x{channel}"
+        elif args.statistic == "probability_and_image":
+            split_id = cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"] * cfg["nb_classes"]
+            for antecedent in rule_to_print.antecedents:
+                if antecedent.attribute < split_id: # proba part
+                    area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]))
+                    class_name = cfg["classes"][channel_id]
+                    antecedent.attribute = f"P_class_{class_name}_area_[{area_Height}-{area_Height+FILTER_SIZE[0][0]-1}]x[{area_Width}-{area_Width+FILTER_SIZE[0][1]-1}]"
+                else: # image part
+                    height, width, channel = np.unravel_index(antecedent.attribute - split_id, (cfg["size1D"], cfg["size1D"], cfg["nb_channels"]))
+                    antecedent.attribute = f"Pixel_{height}x{width}x{channel}"
+
         elif args.statistic == "convDimlpFilter":
             if -1 in [height_feature_map, width_feature_map, nb_channels_feature_map]:
                 raise ValueError("Missing height, width or nb_channels of feature map")
@@ -795,7 +841,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
             elif args.statistic in ["probability", "probability_and_image","probability_multi_nets"]:
-                highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"])
+                highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
 
