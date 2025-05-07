@@ -774,12 +774,12 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
             raise ValueError("X_train and X_test must be tuples (images, metadatas).")
 
     if model == "VGG_and_big":
-        if len(X_train) != 2 or len(X_test) != 2 or len(nbChannels) != 2:
+        if len(X_train) != 2 or len(X_test) != 2 or len(height) != 2 or len(width) != 2 or len(nbChannels) != 2:
             raise ValueError("Wrong shape of data when training VGG with metadatas.")
         if not isinstance(X_train, tuple) or not isinstance(X_test, tuple) or not isinstance(nbChannels, tuple):
-            raise ValueError("X_train, X_test and nb_channels must be tuples (images, metadatas).")
+            raise ValueError("X_train, X_test, height, width and nb_channels must be tuples (image, probas).")
 
-    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]:
+    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]: # meta = probas for VGG_and_big
         X_train, meta_train = X_train
         X_test, meta_test = X_test
         meta_train = np.array(meta_train)
@@ -966,7 +966,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
             raise ValueError("VGG with leakyRelu is not yet implemented.")
 
         # IMAGE BRANCH
-        image_input = Input(shape=(height, width, nbChannels[0]))
+        image_input = Input(shape=(height[0], width[0], nbChannels[0]))
 
         resized_image_input = Resizing(224, 224, name='resizing_layer')(image_input)
 
@@ -981,8 +981,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
         # PROBABILITY BRANCH
 
-        probability_input = Input(shape=(height, width, nbChannels[1]))
-        y = Resizing(2*height, 2*width)(probability_input)
+        probability_input = Input(shape=(height[1], width[1], nbChannels[1]))
+        y = Resizing(2*height[1], 2*width[1])(probability_input)
 
         # Première couche de convolution
         y = Conv2D(64, (3, 3), activation=None, padding='same', strides=2, kernel_regularizer=l2(0.0005))(y)
