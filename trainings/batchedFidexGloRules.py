@@ -1,7 +1,17 @@
 from argparse import ArgumentParser
+from datetime import datetime
 from dimlpfidex import fidex 
 import multiprocessing
 import os
+
+
+class TemporaryWorkspace:
+
+    def __init__(self):
+        absolute_path = os.path(__file__, "batched_tmp")
+        data_dir_path =  os.path(absolute_path, "datas")
+        class_dir_path =   os.path(absolute_path, "classes")
+        pred_data_dir_path =   os.path(absolute_path, "preds")
 
 
 def init_args() -> ArgumentParser:
@@ -19,9 +29,21 @@ def init_args() -> ArgumentParser:
     return parser
 
 
-def is_valid_file(parser: ArgumentParser, arg: str):
+def is_valid_file(parser: ArgumentParser, arg: str)-> None:
     if not os.path.exists(arg):
         parser.error(f"The path '{arg}' given is not leading to a existing file.")
+
+
+
+def create_tmp_directories() -> None: 
+    os.mkdir()
+    pass
+
+
+
+def split_file(src_path: str, n_splits: int) -> None:
+    pass
+
 
 
 def batched_fidexglorules():
@@ -30,6 +52,11 @@ def batched_fidexglorules():
 
 def merge_results():
     pass
+
+
+def clean_tmp_directories() -> None:
+    pass
+
 
 
 if __name__ == "__main__":
