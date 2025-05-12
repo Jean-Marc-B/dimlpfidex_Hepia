@@ -442,8 +442,8 @@ def getCoveredSamples(rule, samples):
         (sample, n)
         for n, sample in enumerate(samples)
         if all(
-            (sample[antecedant.attribute] >= antecedant.value+2 if antecedant.inequality
-             else sample[antecedant.attribute] < antecedant.value+2)
+            (sample[antecedant.attribute] >= antecedant.value if antecedant.inequality
+             else sample[antecedant.attribute] < antecedant.value)
             for antecedant in rule.antecedents
         )
     ]
@@ -451,6 +451,37 @@ def getCoveredSamples(rule, samples):
     if covered_samples:
         covered_samples_list, covered_samples_ids = zip(*covered_samples)
         return list(covered_samples_list), list(covered_samples_ids)
+    else:
+        return [], []
+
+
+###############################################################
+
+def getCoveringRulesForSample(sample, rules):
+    """
+    Identifies the rules that a given sample covers.
+
+    Parameters:
+    sample (np.ndarray): Sample to analyse.
+    rules (list[Rule]): The rules to be checked against the sample
+
+    Returns:
+    tuple: A tuple containing the list of rules and their respective indices.
+    """
+
+    covering_rules = [
+        (rule, n)
+        for n, rule in enumerate(rules)
+        if all(
+            (sample[antecedant.attribute] >= antecedant.value if antecedant.inequality
+             else sample[antecedant.attribute] < antecedant.value)
+            for antecedant in rule.antecedents
+        )
+    ]
+
+    if covering_rules:
+        covering_rules_list, covering_rules_ids = zip(*covering_rules)
+        return list(covering_rules_list), list(covering_rules_ids)
     else:
         return [], []
 

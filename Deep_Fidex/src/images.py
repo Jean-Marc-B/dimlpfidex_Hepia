@@ -6,6 +6,7 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import random
 import math
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout
@@ -16,7 +17,8 @@ from utils.utils import (
     denormalize_to_255,
     get_top_ids,
     generate_filtered_images_and_predictions,
-    getCoveredSamples
+    getCoveredSamples,
+    getCoveringRulesForSample
 )
 from trainings.trnFun import get_attribute_file
 from utils.constants import HISTOGRAM_ANTECEDENT_PATTERN
@@ -328,7 +330,7 @@ def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, tru
 
 def highlight_area_probability_image(image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels, statistic):
 
-    if statistic == "probability_and_image":
+    if statistic in ["probability_and_image", "probability_multi_nets"]:
         prob_and_img_in_one_matrix = False
     else:
         prob_and_img_in_one_matrix = True
@@ -486,7 +488,7 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
             axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
 
         else: # image part
-            if statistic == "probability_and_image":
+            if not prob_and_img_in_one_matrix:
                 height, width, channel = np.unravel_index(antecedent.attribute - split_id, (size1D, size1D, nb_channels))
             else:
                 height = round(area_Height * scale_h)
@@ -734,7 +736,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
     os.makedirs(cfg["rules_folder"])
 
 
-    # 4) For each rule we get filter images for train samples covering the rule
+    # 4) For each rule we get filter images for train samples covering the rule (if image_version, it's the opposite, for each image we get filter images for rules covered by the train sample)
     nb_rules = args.images
     counters = [0] * cfg["nb_classes"]
 
@@ -778,7 +780,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     antecedent.attribute = f"P_{class_name}>={pred_threshold}"
                 else:
                     raise ValueError("Wrong antecedent...")
-        elif args.statistic in ["probability", "probability_multi_nets"]:
+        elif args.statistic == "probability":
             # Change antecedent with area and class involved
 
             # Scales of changes of original image to reshaped image
@@ -796,7 +798,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     height_original = round(area_Height * scale_h)
                     width_original = round(area_Width * scale_w)
                     antecedent.attribute = f"Pixel_{height_original}x{width_original}x{channel}"
-        elif args.statistic == "probability_and_image":
+        elif args.statistic in ["probability_and_image", "probability_multi_nets"]:
             split_id = cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"] * cfg["nb_classes"]
             for antecedent in rule_to_print.antecedents:
                 if antecedent.attribute < split_id: # proba part
@@ -846,4 +848,108 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
 
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png")
+            plt.close(highlighted_image)
+
+
+
+
+
+
+
+
+
+def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, intermediate_model, args, train_positions=None, height_feature_map=-1, width_feature_map=-1, nb_channels_feature_map=-1, data_in_rules=None):
+    """
+    Generate explaining images.
+    """
+    print("Generation of images...")
+
+    # Get train predictions
+    if getattr(args, "train_with_patches", False):
+        print("Loading train predictions...")
+        train_positions = np.array(train_positions)
+        train_pred = np.loadtxt(cfg["train_pred_file"])
+        nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
+        print("Train predictions loaded.")
+
+    # 1) Load rules
+    global_rules = getRules(cfg["global_rules_file"])
+
+    # 2) Load attributes
+    if args.statistic == "histogram":
+        attributes = get_attribute_file(cfg["attributes_file"], cfg["nb_stats_attributes"])[0]
+
+    # 3) Create out folder
+    if os.path.exists(cfg["rules_folder"]):
+        shutil.rmtree(cfg["rules_folder"])
+    os.makedirs(cfg["rules_folder"])
+
+
+    # 4) For each image we get filter images for rules covered by the train sample
+    nb_images = args.images
+    counters = [0] * cfg["nb_classes"]
+
+    img_id_shuffled = list(range(len(X_train)))
+    random.shuffle(img_id_shuffled)
+    for img_id in img_id_shuffled:
+        img = X_train[img_id]
+        img_class_id = np.argmax(Y_train[img_id])
+        true_class = cfg['classes'][img_class_id]
+        if args.each_class:
+            if all(count >= nb_images for count in counters):
+                break
+        else:
+            if sum(counters) >= nb_images:
+                break
+
+        if args.each_class and counters[img_class_id] >= nb_images:
+            continue
+        else:
+            counters[img_class_id] += 1
+            print(counters)
+
+
+
+
+        # We create and save an image for each rules covering the sample
+        if data_in_rules is None:
+            data_in_rules = X_train
+        covering_rules_list, covering_rules_ids = getCoveringRulesForSample(data_in_rules[img_id], global_rules)
+        if len(covering_rules_ids) <= 1 :
+            counters[img_class_id] -= 1
+            continue
+
+        # Create folder for this image
+        rule_folder = os.path.join(cfg["rules_folder"], f"image_{img_id}_class_{true_class}")
+        if os.path.exists(rule_folder):
+            shutil.rmtree(rule_folder)
+        os.makedirs(rule_folder)
+
+        for rule, id_rule in zip(covering_rules_list, covering_rules_ids):
+            if args.statistic == "histogram":
+                rule.include_X = False
+                for ant in rule.antecedents:
+                    ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
+            elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "convDimlpFilter"]:
+                    rule.include_X = False
+
+            if args.statistic == "histogram":
+                if getattr(args, "train_with_patches", False):
+                    nb_areas_per_filter = [nb_patches_per_image]
+                    start_idx = img_id * nb_patches_per_image
+                    end_idx = start_idx + nb_patches_per_image
+                    predictions = train_pred[start_idx:end_idx, :]
+                    positions = train_positions[start_idx:end_idx, :]
+                else:
+                    predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
+                    cfg, CNNModel, img, FILTER_SIZE, STRIDE)
+                highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
+            elif args.statistic == "activation_layer":
+                highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
+            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets"]:
+                highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
+            elif args.statistic == "convDimlpFilter":
+                highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
+
+            highlighted_image.savefig(f"{rule_folder}/rule_{id_rule}.png")
             plt.close(highlighted_image)
