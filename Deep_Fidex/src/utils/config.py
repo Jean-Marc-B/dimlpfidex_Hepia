@@ -108,7 +108,10 @@ def load_config(args, script_dir):
     config["plot_folder"] = os.path.join(config["base_folder"], scan_folder, "plots")
     config["files_folder"] = os.path.join(config["base_folder"], scan_folder, "files")
     config["data_folder"] = os.path.join(config["base_folder"], "data")
-    config["rules_folder"] = os.path.join(config["plot_folder"], "Rules")
+    if args.image_version:
+        config["rules_folder"] = os.path.join(config["plot_folder"], "Images")
+    else:
+        config["rules_folder"] = os.path.join(config["plot_folder"], "Rules")
     config["heat_maps_folder"] = os.path.join(config["plot_folder"], "Heat_maps")
 
     # 📄 Files

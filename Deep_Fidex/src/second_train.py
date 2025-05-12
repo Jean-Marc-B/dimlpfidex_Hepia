@@ -110,17 +110,21 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                     print("Creating dataset n°",i,"...")
 
                     # Create train data for each model
-                    built_data_train = np.empty((nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3))
+                    # OLD built_data_train = np.empty((nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3))
+                    built_data_train = np.empty((nb_train_samples, cfg["size1D"], cfg["size1D"], 3))
                     # Add probas on first channel
-                    built_data_train[:,:,:,0] = train_probas_img_h1[:,:,:,i]
+                    print(train_proba_part[:,:,:,i].shape)
+                    train_proba_part_padded = np.pad(train_proba_part[:,:,:,i], ((0,0),(0, cfg["size1D"]-cfg["size_Height_proba_stat"]), (0, cfg["size1D"]-cfg["size_Width_proba_stat"])))
+                    test_proba_part_padded = np.pad(test_proba_part[:,:,:,i], ((0,0),(0, cfg["size1D"]-cfg["size_Height_proba_stat"]), (0, cfg["size1D"]-cfg["size_Width_proba_stat"])))
+                    built_data_train[:,:,:,0] = train_proba_part_padded
                     # Add H and S on last 2 channels (or R and G)
                     if cfg["nb_channels"] == 3:
-                        built_data_train[:,:,:,1] = train_probas_img_h1[..., cfg["nb_classes"]]
-                        built_data_train[:,:,:,2] = train_probas_img_h1[..., cfg["nb_classes"]+1]
+                        built_data_train[:,:,:,1] = train_img_part[..., 0]
+                        built_data_train[:,:,:,2] = train_img_part[..., 1]
 
                     else: # Add 1-probas and B&W on last 2 channels
-                        built_data_train[:,:,:,1] = 1-train_probas_img_h1[:,:,:,i]
-                        built_data_train[:,:,:,2] = train_probas_img_h1[..., cfg["nb_classes"]]
+                        built_data_train[:,:,:,1] = 1-train_proba_part_padded
+                        built_data_train[:,:,:,2] = train_img_part[..., 0]
                     # built_data_train :  (100, 26, 26, 3)
 
                     # Create classes for these datas
@@ -130,23 +134,23 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                     current_model_train_pred = os.path.join(models_folder, f"second_model_train_pred_{i}.txt")
                     data_filename = f"train_probability_images_with_original_img_{i}.txt"
                     class_filename = f"Y_train_probability_images_with_original_img_{i}.txt"
-                    built_data_train_flatten = built_data_train.reshape(nb_train_samples, cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*3)
+                    built_data_train_flatten = built_data_train.reshape(nb_train_samples, cfg["size1D"]*cfg["size1D"]*3)
 
                     # output new train data
                     output_data(built_data_train_flatten, os.path.join(models_folder, data_filename))
                     output_data(built_Y_train, os.path.join(models_folder, class_filename))
 
                     # Create test data for each model
-                    built_data_test = np.empty((nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3))
+                    built_data_test = np.empty((nb_test_samples, cfg["size1D"], cfg["size1D"], 3))
                     # Add probas on first channel
-                    built_data_test[:,:,:,0] = test_probas_img_h1[:,:,:,i]
+                    built_data_test[:,:,:,0] = test_proba_part_padded
                     # Add H and S on last 2 channels
                     if cfg["nb_channels"] == 3:
-                        built_data_test[:,:,:,1] = test_probas_img_h1[..., cfg["nb_classes"]]
-                        built_data_test[:,:,:,2] = test_probas_img_h1[..., cfg["nb_classes"]+1]
+                        built_data_test[:,:,:,1] = test_img_part[..., 0]
+                        built_data_test[:,:,:,2] = test_img_part[..., 1]
                     else: # Add 1-probas and B&W on last 2 channels
-                        built_data_test[:,:,:,1] = 1-test_probas_img_h1[:,:,:,i]
-                        built_data_test[:,:,:,2] = test_probas_img_h1[..., cfg["nb_classes"]]
+                        built_data_test[:,:,:,1] = 1-test_proba_part_padded
+                        built_data_test[:,:,:,2] = test_img_part[..., 0]
 
                     # Create classes for these datas
                     built_Y_test = np.zeros((nb_test_samples, 2), dtype=int)
@@ -155,7 +159,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                     current_model_test_pred = os.path.join(models_folder, f"second_model_test_pred_{i}.txt")
                     data_filename = f"test_probability_images_with_original_img_{i}.txt"
                     class_filename = f"Y_test_probability_images_with_original_img_{i}.txt"
-                    built_data_test_flatten = built_data_test.reshape(nb_test_samples, cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*3)
+                    built_data_test_flatten = built_data_test.reshape(nb_test_samples, cfg["size1D"]*cfg["size1D"]*3)
 
                     # output new test data
                     output_data(built_data_test_flatten, os.path.join(models_folder, data_filename))
@@ -167,7 +171,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
 
                     print("Dataset n°",i," created.")
                     # Train new model
-                    trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 3, 2, "VGG", nbIt_current, cfg["batch_size_second_model"], current_model_file, current_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats)
+                    trainCNN(cfg["size1D"], cfg["size1D"], 3, 2, "VGG", nbIt_current, cfg["batch_size_second_model"], current_model_file, current_model_checkpoint_weights, built_data_train, built_Y_train, built_data_test, built_Y_test, current_model_train_pred, current_model_test_pred, current_model_stats)
                     print("Dataset n°",i," trained.")
 
                 # Create test and train predictions

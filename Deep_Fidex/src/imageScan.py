@@ -19,7 +19,7 @@ import os
 
 # GPU arguments
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import sys
 import time
@@ -41,7 +41,7 @@ from train import train_model
 from stats import compute_stats
 from second_train import train_second_model
 from generate_rules import generate_rules
-from images import generate_explaining_images
+from images import generate_explaining_images, generate_explaining_images_img_version
 from heatmap import generate_heatmaps
 
 # GPUS
@@ -97,6 +97,7 @@ def parse_arguments():
     parser.add_argument("--rules", action="store_true", help="Compute global rules")
     parser.add_argument("--images", type=check_positive, metavar="N", help="Generate N explaining images", default=None)
     parser.add_argument("--each_class", action="store_true", help="Generate N images per class")
+    parser.add_argument("--image_version", action="store_true", help="Generate explanation for one image among activated rules")
     parser.add_argument("--heatmap", action="store_true", help="Generate a heatmap") # Only evaluation on patches
 
     return parser.parse_args()
@@ -115,7 +116,7 @@ if __name__ == "__main__":
         if any((args.train, args.stats, args.second_train, args.images is not None)):
             raise ValueError("Global rules have to be computed alone because we don't want to use a GPU during global rules generation.")
         else:
-            os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+            os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     # Get Parameter configuration
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -199,10 +200,17 @@ if __name__ == "__main__":
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images is not None:
-        if args.train_with_patches and args.statistic == "histogram":
-            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions)
+        data_in_rules = np.loadtxt(cfg["train_stats_file"]).astype('float32')
+        if args.image_version:
+            if args.train_with_patches and args.statistic == "histogram":
+                generate_explaining_images_img_version(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions, data_in_rules=data_in_rules)
+            else:
+                generate_explaining_images_img_version(cfg, X_train, Y_train, firstModel, intermediate_model, args, data_in_rules=data_in_rules)
         else:
-            generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args)
+            if args.train_with_patches and args.statistic == "histogram":
+                generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions, data_in_rules=data_in_rules)
+            else:
+                generate_explaining_images(cfg, X_train, Y_train, firstModel, intermediate_model, args, data_in_rules=data_in_rules)
 
     # HEATMAP
     if args.heatmap:
