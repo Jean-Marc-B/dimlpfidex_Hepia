@@ -5,6 +5,7 @@ from enum import Enum
 import pandas as pd
 import argparse
 import json
+import copy
 import os
 
 class FileType(Enum):
@@ -51,7 +52,6 @@ class BatchedFidexGloRules:
             else:
                 self.__write_into(subfilename, data.iloc[i*chunk_size : (i+1) * chunk_size, :], file_type)
 
-
     def __write_into(self, filename: str, data: pd.DataFrame, file_type: FileType) -> None:
         dst_path = ""
 
@@ -63,6 +63,14 @@ class BatchedFidexGloRules:
             dst_path = os.path.join(self.pred_dir_path, filename)
 
         data.to_csv(dst_path, sep=',', header=None, index=None)
+
+    def __write_config_files(self) -> None:
+        args_cpy = copy.deepcopy(self.args)
+
+        for i in range(self.nb_processes):
+            # args_cpy.
+            ...
+
 
     def __call__(self, *args, **kwds):
         processes = []
@@ -87,16 +95,22 @@ def today_str() -> str:
     return datetime.today().strftime('%Y%m%d-%H%M')
 
 def init_args() -> argparse.Namespace:
+    def __is_valid_file(parser: argparse.ArgumentParser, arg: str) -> str:
+        if not os.path.exists(arg):
+            parser.error(f"The path '{arg}' given is not leading to a existing file.")
+        else:
+            return arg
+
     parser = argparse.ArgumentParser(
         description="FidexGlo Rule Extraction Tool",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     
     # Required arguments
-    parser.add_argument('--train_data_file', type=lambda x: is_valid_file(parser, x), help="Path to training data file")
-    parser.add_argument('--train_class_file', type=lambda x: is_valid_file(parser, x), help="Path to the file containing the train true classes of the dataset, not mandatory if classes are specified in train data file")
-    parser.add_argument('--train_pred_file', type=lambda x: is_valid_file(parser, x), help="Path to predictions on training data")
-    parser.add_argument('--weights_file', type=lambda x: is_valid_file(parser, x), help="Path to the file containing the trained weights of the model (not mandatory if a rules file is given with --rules_file)")
+    parser.add_argument('--train_data_file', type=lambda x: __is_valid_file(parser, x), help="Path to training data file")
+    parser.add_argument('--train_class_file', type=lambda x: __is_valid_file(parser, x), help="Path to the file containing the train true classes of the dataset, not mandatory if classes are specified in train data file")
+    parser.add_argument('--train_pred_file', type=lambda x: __is_valid_file(parser, x), help="Path to predictions on training data")
+    parser.add_argument('--weights_file', type=lambda x: __is_valid_file(parser, x), help="Path to the file containing the trained weights of the model (not mandatory if a rules file is given with --rules_file)")
     parser.add_argument('--rules_file', type=str, help="Path to the file containing the trained rules to be converted to hyperlocus (not mandatory if a weights file is given with --weights_file)")
     parser.add_argument('--global_rules_outfile', type=str, help="Path to the file where the output rule(s) will be stored. If a .json extension is given, rules are saved in JSON format")
     parser.add_argument('--heuristic', type=int, choices=[1, 2, 3],  help="Heuristic 1: optimal fidexGlo, 2: fast fidexGlo 3: very fast fidexGlo. (Faster algorithms are less efficient)")
@@ -108,7 +122,7 @@ def init_args() -> argparse.Namespace:
     parser.add_argument('--root_folder', type=str, help="Root folder for input/output files")
     parser.add_argument("--keep_tmp_files", help="Wether temporary files should be kept or not.", action="store_true", default=False)
     parser.add_argument("--nb_processes", help="Number of processes the data will be divided into", type=int, default=1)
-    parser.add_argument('--attributes_file', type=lambda x: is_valid_file(parser, x), help="Path to attributes file")
+    parser.add_argument('--attributes_file', type=lambda x: __is_valid_file(parser, x), help="Path to attributes file")
     parser.add_argument('--console_file', type=str, help="Redirect terminal output to this file")
     parser.add_argument('--max_iterations', type=int, default=10, help="Max rule antecedents/iterations")
     parser.add_argument('--min_covering', type=int, default=2, help="Minimum number of samples covered by rule")
@@ -130,7 +144,7 @@ def init_args() -> argparse.Namespace:
     
     args = parser.parse_args()
 
-    #If JSON config is given, insert values
+    #If JSON config is given, insert values from config file instead
     if args.json_config_file:
         with open(args.json_config_file, 'r') as f:
             config = json.load(f)
@@ -142,17 +156,9 @@ def init_args() -> argparse.Namespace:
 
     return args
 
-def is_valid_file(parser: argparse.ArgumentParser, arg: str) -> str:
-    if not os.path.exists(arg):
-        parser.error(f"The path '{arg}' given is not leading to a existing file.")
-    else:
-        return arg
 
 
 if __name__ == "__main__":
     args = init_args()
     bfgr = BatchedFidexGloRules(args)
-
-    for arg in dir(args):
-        print(arg)
     # bfgr()
