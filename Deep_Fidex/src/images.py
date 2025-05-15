@@ -906,7 +906,6 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
             continue
         else:
             counters[img_class_id] += 1
-            print(counters)
 
 
 
