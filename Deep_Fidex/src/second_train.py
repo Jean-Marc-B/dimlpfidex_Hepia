@@ -15,7 +15,7 @@ from utils.utils import (
 )
 from utils.config import *
 
-def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model, args):
+def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model, args, X_train_patches = None, X_test_patches = None):
     """
     Train a second model (For ex. RandomForest, dimlpTrn, or a second CNN)
     with respect to cfg["second_model"].
@@ -37,13 +37,29 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
 
         if cfg["second_model"] == "cnn" and args.statistic == "probability":
             train_probas = train_probas.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
-            X_train_reshaped = tf.image.resize(X_train, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
-            train_probas_img = np.concatenate((train_probas, X_train_reshaped[:nb_train_samples]), axis=-1) # Concatenate the probas and the original image resized
+            if args.mean_version:
+                print("mean version")
+                train_mean_patches = X_train_patches.mean(axis=(1,2))
+                train_mean_patches = train_mean_patches.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_channels"])
+                train_std_patches = X_train_patches.std(axis=(1,2))
+                train_std_patches = train_std_patches.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_channels"])
+                train_probas_img = np.concatenate((train_probas, train_mean_patches, train_std_patches), axis=-1) # Concatenate the probas and the mean of patches
+            else:
+                X_train_reshaped = tf.image.resize(X_train, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
+                train_probas_img = np.concatenate((train_probas, X_train_reshaped[:nb_train_samples]), axis=-1) # Concatenate the probas and the original image resized
             train_probas_img = train_probas_img.reshape(nb_train_samples, -1) # flatten for export
 
             test_probas = test_probas.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
-            X_test_reshaped = tf.image.resize(X_test, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
-            test_probas_img = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1) # Concatenate the probas and the original image resized
+            if args.mean_version:
+                print("mean version")
+                test_mean_patches = X_test_patches.mean(axis=(1,2))
+                test_mean_patches = test_mean_patches.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_channels"])
+                test_std_patches = X_test_patches.std(axis=(1,2))
+                test_std_patches = test_std_patches.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_channels"])
+                test_probas_img = np.concatenate((test_probas, test_mean_patches,test_std_patches), axis=-1) # Concatenate the probas and the mean of patches
+            else:
+                X_test_reshaped = tf.image.resize(X_test, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
+                test_probas_img = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1) # Concatenate the probas and the original image resized
             test_probas_img = test_probas_img.reshape(nb_test_samples, -1) # flatten for export
         else:
             X_train_flatten = X_train.reshape(nb_train_samples, -1)
@@ -87,9 +103,13 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                 test_img_part = test_img_part.reshape(nb_test_samples, cfg["size1D"], cfg["size1D"], cfg["nb_channels"]) #(100, 32, 32, 3)
 
             if args.statistic == "probability": # Train with a CNN now
-                train_probas_img_h1 = train_probas_img_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
-                test_probas_img_h1 = test_probas_img_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
-                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_img_h1, Y_train, test_probas_img_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+                if args.mean_version:
+                    add_channels = cfg["nb_channels"]
+                else:
+                    add_channels = 0
+                train_probas_img_h1 = train_probas_img_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"] + add_channels) #(100, 26, 26, 13)
+                test_probas_img_h1 = test_probas_img_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"] + add_channels) #(100, 26, 26, 13)
+                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"] + add_channels, cfg["nb_classes"], "big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_img_h1, Y_train, test_probas_img_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
             elif args.statistic == "probability_and_image": #Train with VGG for image and CNN for probas
                 trainCNN((cfg["size1D"], cfg["size_Height_proba_stat"]), (cfg["size1D"], cfg["size_Width_proba_stat"]), (cfg["nb_channels"], cfg["nb_classes"]), cfg["nb_classes"], "VGG_and_big", 80, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (train_img_part, train_proba_part), Y_train, (test_img_part, test_proba_part), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
             else: # Probability_multi_nets Create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
