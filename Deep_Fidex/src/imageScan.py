@@ -99,7 +99,6 @@ def parse_arguments():
     parser.add_argument("--each_class", action="store_true", help="Generate N images per class")
     parser.add_argument("--image_version", action="store_true", help="Generate explanation for one image among activated rules")
     parser.add_argument("--heatmap", action="store_true", help="Generate a heatmap") # Only evaluation on patches
-    parser.add_argument("--mean_version", action="store_true", help="Add the mean of the patch to the matrix for second training (only for probability statistic)")
 
     return parser.parse_args()
 
@@ -141,7 +140,7 @@ if __name__ == "__main__":
     ##############################################################################
 
     # Create patch dataset if training with patches or computing stats after training with patches
-    if args.train_with_patches and (args.train or args.stats or args.second_train or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
+    if args.train_with_patches and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
         X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
 
@@ -180,10 +179,7 @@ if __name__ == "__main__":
 
     # TRAIN SECOND MODEL
     if args.second_train:
-        if not args.train_with_patches:
-            X_train_patches = None
-            X_test_patches = None
-        train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model, args, X_train_patches, X_test_patches)
+        train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model, args)
 
     # Define attributes file for histograms
     if args.statistic == "histogram":
