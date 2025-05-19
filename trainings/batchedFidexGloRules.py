@@ -1,4 +1,4 @@
-from multiprocessing import Process
+from multiprocessing import Process, Barrier
 from datetime import datetime
 from dimlpfidex import fidex 
 from enum import Enum
@@ -23,15 +23,20 @@ class BatchedFidexGloRules:
         self.data_dir_path = os.path.join(self.absolute_path, "datas")
         self.class_dir_path = os.path.join(self.absolute_path, "classes")
         self.pred_dir_path = os.path.join(self.absolute_path, "preds")
+        self.rules_dir_path = os.path.join(self.absolute_path, "rules")
+        self.config_file_paths = []
+        self.rules_file_paths = []
 
         os.makedirs(self.absolute_path, exist_ok=True)
         os.makedirs(self.data_dir_path, exist_ok=True)
         os.makedirs(self.class_dir_path, exist_ok=True)
         os.makedirs(self.pred_dir_path, exist_ok=True)
+        os.makedirs(self.rules_dir_path, exist_ok=True)
 
         self.__split_file_into(self.args.train_data_file, FileType.TRAIN)
         self.__split_file_into(self.args.train_class_file, FileType.CLASS)
         self.__split_file_into(self.args.train_pred_file, FileType.PRED)
+        self.__write_config_files()
     
 
     def __split_file_into(self, src_path: str, file_type: FileType) -> None:
@@ -65,31 +70,74 @@ class BatchedFidexGloRules:
         data.to_csv(dst_path, sep=',', header=None, index=None)
 
     def __write_config_files(self) -> None:
-        args_cpy = copy.deepcopy(self.args)
+        def __add_suffix(file_path: str, suffix: str) -> str:
+            res = os.path.basename(file_path).split(".")
+            res.insert(1, f"_{suffix}.")
+            return "".join(res)
 
-        for i in range(self.nb_processes):
-            # args_cpy.
-            ...
+        args_cpy = copy.deepcopy(self.args)
+        args_cpy = {k: v for k, v in vars(args_cpy).items() if v != None}
+        args_cpy.pop("json_config_file")
+        args_cpy.pop("keep_tmp_files")
+        args_cpy.pop("nb_processes")
+
+        for i in range(1, self.nb_processes+1):
+            args_cpy["train_data_file"]      = os.path.join(self.data_dir_path, __add_suffix(args.train_data_file, str(i)))
+            args_cpy["train_class_file"]     = os.path.join(self.class_dir_path, __add_suffix(args.train_class_file, str(i)))
+            args_cpy["train_pred_file"]      = os.path.join(self.pred_dir_path, __add_suffix(args.train_pred_file, str(i))) 
+            args_cpy["console_file"]         = os.path.join(self.absolute_path, __add_suffix(args.console_file, str(i))) 
+            args_cpy["global_rules_outfile"] = os.path.join(self.rules_dir_path, __add_suffix(args.global_rules_outfile, str(i))) 
+            self.rules_file_paths.append(args_cpy["global_rules_outfile"])
+
+            new_json_filename = os.path.join(self.absolute_path, f"bfgr_config_{i}.json")
+            self.config_file_paths.append(new_json_filename)
+
+            with open(new_json_filename, "w") as fp:
+                json.dump(args_cpy, fp, indent=4)
 
 
     def __call__(self, *args, **kwds):
         processes = []
+        barrier = Barrier(self.nb_processes-1, action=self.__merge_results)
 
-        for _ in range(self.nb_processes):
-            processes.append(Process(target=fidex.fidexGloRules))
+
+        for i in range(self.nb_processes):
+            args = [f"--json_config_file {self.config_file_paths[i]}"]
+            processes.append(Process(target=fidex.fidexGloRules, args=args))
+            print(f"Process #{i} created")
 
         for process in processes:
             process.start()
 
         for process in processes:
+            print(f"Process joined")
             process.join()
+
+        barrier.wait()
+        print("multiprocessing ended")
         
     def __repr__(self):
         fmt_paths = "{!r},{!r},{!r}".format(self.data_dir_path,self.class_dir_path,self.pred_dir_path)
         return f"{self.__class__.__name__}({fmt_paths})"
     
     def __merge_results(self):
-        ...
+        def __read_json_file(path: str) -> dict:
+            with open(path) as fp:
+                return  json.load(fp)
+            
+        output_file_path = os.path.join(self.absolute_path, "bfgr_global_rules.json")
+
+        # read first rules sub-file
+        res = __read_json_file(self.rules_file_paths[0])
+
+        # merge all rules sub-files into one
+        with open(output_file_path, "w") as fp:
+            for rule_subfile in self.rules_file_paths[1:]:
+                data = __read_json_file(rule_subfile) 
+                res["rules"] += data["rules"]
+
+            json.dump(res, fp, indent=4)
+
 
 def today_str() -> str:
     return datetime.today().strftime('%Y%m%d-%H%M')
@@ -161,4 +209,4 @@ def init_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = init_args()
     bfgr = BatchedFidexGloRules(args)
-    # bfgr()
+    bfgr()
