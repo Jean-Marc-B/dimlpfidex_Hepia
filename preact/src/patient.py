@@ -93,7 +93,7 @@ class Patient:
         to_write = to_write.assign(Lymphodema_YES=lambda x: 0)
         to_write.to_csv(input_filepath, sep=" ", header=False, index=False)
 
-        normalized_file_path = f"{self.reldir}/input_data_normalized.csv"
+        normalized_file_path = os.path.join(self.absdir, "input_data_normalized.csv")
         self.exec_normalization()
 
         # one hotting classes (useless but must be done in order to work with densCls)
@@ -277,7 +277,7 @@ class Patient:
         return global_rules
 
     def __rewrite_extracted_rules_file(self) -> None:
-        rules_file_path = os.path.join(self.reldir, "extracted_rules.json")
+        rules_file_path = os.path.join(self.absdir, "extracted_rules.json")
         selected_rules = read_json_file(rules_file_path)["samples"][0]["rules"]
 
         with open(rules_file_path, "w") as fp:
