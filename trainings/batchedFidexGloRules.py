@@ -16,6 +16,17 @@ class FileType(Enum):
 class BatchedFidexGloRules:
 
     def __init__(self, args: argparse.Namespace):
+        def today_str() -> str:
+            return datetime.today().strftime('%Y%m%d-%H%M')
+        
+        def __are_inputs_valid(args: argparse.Namespace) -> bool:
+            return hasattr(args, "train_data_file") and hasattr(args, "train_pred_file") \
+                                                    and hasattr(args, "nb_processes")
+        
+        if not __are_inputs_valid(args):
+            print("Missing arguments")
+            exit(1)
+        
         self.args = args
         self.nb_processes = self.args.nb_processes
         script_absolute_path = os.path.abspath(os.path.dirname(__file__))
@@ -37,7 +48,7 @@ class BatchedFidexGloRules:
         self.__split_file_into(self.args.train_class_file, FileType.CLASS)
         self.__split_file_into(self.args.train_pred_file, FileType.PRED)
         self.__write_config_files()
-    
+            
 
     def __split_file_into(self, src_path: str, file_type: FileType) -> None:
         data = pd.read_csv(src_path, sep=',', header=None,index_col=None)
@@ -97,13 +108,19 @@ class BatchedFidexGloRules:
 
 
     def __call__(self, *args, **kwds):
+        def __batchedFidexGloRules(cmd_args: str, id: int, barrier: Barrier) -> None:
+            fidex.fidexGloRules(cmd_args)
+            print(f"process #{id} waiting...")
+            barrier.wait()
+            print(f"process #{id} freed by barrier")
+
         processes = []
-        barrier = Barrier(self.nb_processes-1, action=self.__merge_results)
+        barrier = Barrier(self.nb_processes, action=self.__merge_results)
 
 
         for i in range(self.nb_processes):
-            args = [f"--json_config_file {self.config_file_paths[i]}"]
-            processes.append(Process(target=fidex.fidexGloRules, args=args))
+            args = [f"--json_config_file {self.config_file_paths[i]}", i, barrier]
+            processes.append(Process(target=__batchedFidexGloRules, args=args))
             print(f"Process #{i} created")
 
         for process in processes:
@@ -112,9 +129,9 @@ class BatchedFidexGloRules:
         for process in processes:
             print(f"Process joined")
             process.join()
+            
 
-        barrier.wait()
-        print("multiprocessing ended")
+        print("multiprocessing ended, merging results...")
         
     def __repr__(self):
         fmt_paths = "{!r},{!r},{!r}".format(self.data_dir_path,self.class_dir_path,self.pred_dir_path)
@@ -139,8 +156,6 @@ class BatchedFidexGloRules:
             json.dump(res, fp, indent=4)
 
 
-def today_str() -> str:
-    return datetime.today().strftime('%Y%m%d-%H%M')
 
 def init_args() -> argparse.Namespace:
     def __is_valid_file(parser: argparse.ArgumentParser, arg: str) -> str:
