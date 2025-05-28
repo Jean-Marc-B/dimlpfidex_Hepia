@@ -48,6 +48,7 @@ class BatchedFidexGloRules:
         script_absolute_path = os.path.abspath(os.path.dirname(__file__))
         self.absolute_path = os.path.join(script_absolute_path, f"batched_tmp_{today_str()}")
         self.data_dir_path = os.path.join(self.absolute_path, "datas")
+        # TODO: handle if class file is merged with datas instead of being in a dedicated file 
         self.class_dir_path = os.path.join(self.absolute_path, "classes")
         self.pred_dir_path = os.path.join(self.absolute_path, "preds")
         self.rules_dir_path = os.path.join(self.absolute_path, "rules")
@@ -194,7 +195,7 @@ class BatchedFidexGloRules:
             with open(path) as fp:
                 return  json.load(fp)
             
-        output_file_path = os.path.join(self.absolute_path, "bfgr_global_rules.json")
+        output_file_path = os.path.join(self.absolute_path, self)
 
         # read first rules sub-file
         res = __read_json_file(self.rules_file_paths[0])
@@ -237,7 +238,7 @@ def init_args() -> argparse.Namespace:
     parser.add_argument('--train_pred_file', type=lambda x: __is_valid_file(parser, x), help="Path to predictions on training data")
     parser.add_argument('--weights_file', type=lambda x: __is_valid_file(parser, x), help="Path to the file containing the trained weights of the model (not mandatory if a rules file is given with --rules_file)")
     parser.add_argument('--rules_file', type=str, help="Path to the file containing the trained rules to be converted to hyperlocus (not mandatory if a weights file is given with --weights_file)")
-    parser.add_argument('--global_rules_outfile', type=str, help="Path to the file where the output rule(s) will be stored. If a .json extension is given, rules are saved in JSON format")
+    parser.add_argument('--global_rules_outfile', type=str, help="Path to the file where the output rule(s) will be written in JSON format")
     parser.add_argument('--heuristic', type=int, choices=[1, 2, 3],  help="Heuristic 1: optimal fidexGlo, 2: fast fidexGlo 3: very fast fidexGlo. (Faster algorithms are less efficient)")
     parser.add_argument('--nb_attributes', type=int, help="Number of attributes")
     parser.add_argument('--nb_classes', type=int, help="Number of classes")
@@ -273,6 +274,7 @@ def init_args() -> argparse.Namespace:
     if args.json_config_file:
         with open(args.json_config_file, 'r') as f:
             config = json.load(f)
+            
         for key, value in config.items():
             if hasattr(args, key):
                 setattr(args, key, value)
