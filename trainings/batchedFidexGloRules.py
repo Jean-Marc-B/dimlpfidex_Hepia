@@ -1,5 +1,6 @@
 from multiprocessing import Process, Barrier
 from datetime import datetime
+import shutil
 from dimlpfidex import fidex 
 from enum import Enum
 import pandas as pd
@@ -29,9 +30,15 @@ class BatchedFidexGloRules:
             return datetime.today().strftime('%Y%m%d-%H%M')
         
         def __are_inputs_valid(args: argparse.Namespace) -> bool:
-            return hasattr(args, "train_data_file") and hasattr(args, "train_pred_file") \
-                                                    and hasattr(args, "nb_processes")
-        
+            attrs_to_check = ["train_data_file", "train_pred_file", "nb_processes"]
+
+            for attr in attrs_to_check:
+                if getattr(args, attr, None) is None:
+                    return False
+                
+            return True
+
+
         if not __are_inputs_valid(args):
             print("Missing arguments")
             exit(1)
@@ -66,8 +73,13 @@ class BatchedFidexGloRules:
             src_path (str): Path to the source file.
             file_type (FileType): Type of the file to determine the destination directory.
         """
-        data = pd.read_csv(src_path, sep=',', header=None,index_col=None)
         filename = os.path.basename(src_path)
+        try:
+            data = pd.read_csv(src_path, sep=',', header=None,index_col=None, on_bad_lines="warn")
+        except Exception as e:
+            print(f"Failed to read {src_path}: {e}")
+            exit(1)
+
 
         chunk_size = data.shape[0] // self.nb_processes
 
@@ -75,8 +87,8 @@ class BatchedFidexGloRules:
             print(f"The number of splits is not optimal, {rem} datas are added to the last file.") 
 
         for i in range(self.nb_processes):
-            subfilename = filename.split('.')
-            subfilename = f"{subfilename[0]}_{i+1}.{subfilename[1]}"
+            base, ext = os.path.splitext(filename)
+            subfilename = f"{base}_{i+1}{ext}"
 
             if i == (self.nb_processes - 1):
                 self.__write_into(subfilename, data.iloc[i*chunk_size : (i+1) * chunk_size + rem, :], file_type)
@@ -154,8 +166,8 @@ class BatchedFidexGloRules:
 
 
         for i in range(self.nb_processes):
-            args = [f"--json_config_file {self.config_file_paths[i]}", i, barrier]
-            processes.append(Process(target=__batchedFidexGloRules, args=args))
+            proc_args = [f"--json_config_file {self.config_file_paths[i]}", i, barrier]
+            processes.append(Process(target=__batchedFidexGloRules, args=proc_args))
             print(f"Process #{i} created")
 
         for process in processes:
@@ -165,8 +177,11 @@ class BatchedFidexGloRules:
             process.join()
             print(f"Process joined")
             
-
         print("multiprocessing ended, merging results...")
+
+        if not self.args.keep_tmp_files:
+            print("removing temporary files...")
+            shutil.rmtree(self.absolute_path)
         
     def __repr__(self):
         fmt_paths = "{!r},{!r},{!r}".format(self.data_dir_path,self.class_dir_path,self.pred_dir_path)
@@ -188,7 +203,10 @@ class BatchedFidexGloRules:
         with open(output_file_path, "w") as fp:
             for rule_subfile in self.rules_file_paths[1:]:
                 data = __read_json_file(rule_subfile) 
-                res["rules"] += data["rules"]
+                if "rules" in data:
+                    res["rules"] += data["rules"]
+                else:
+                    print(f"Warning: 'rules' missing in {rule_subfile}")
 
             json.dump(res, fp, indent=4)
 
@@ -201,7 +219,7 @@ def init_args() -> argparse.Namespace:
     - Supports loading arguments from a JSON configuration file.
     - Returns a namespace containing all arguments.
     """
-    
+
     def __is_valid_file(parser: argparse.ArgumentParser, arg: str) -> str:
         if not os.path.exists(arg):
             parser.error(f"The path '{arg}' given is not leading to a existing file.")
@@ -227,13 +245,13 @@ def init_args() -> argparse.Namespace:
     # Optional arguments
     parser.add_argument('--json_config_file', type=str, help="Path to a JSON file containing configuration parameters")
     parser.add_argument('--root_folder', type=str, help="Root folder for input/output files")
-    parser.add_argument("--keep_tmp_files", help="Wether temporary files should be kept or not.", action="store_true", default=False)
+    parser.add_argument("--keep_tmp_files", help="Wether temporary files should be kept or not.", action="store_true", default=True)
     parser.add_argument("--nb_processes", help="Number of processes the data will be divided into", type=int, default=1)
     parser.add_argument('--attributes_file', type=lambda x: __is_valid_file(parser, x), help="Path to attributes file")
     parser.add_argument('--console_file', type=str, help="Redirect terminal output to this file")
     parser.add_argument('--max_iterations', type=int, default=10, help="Max rule antecedents/iterations")
     parser.add_argument('--min_covering', type=int, default=2, help="Minimum number of samples covered by rule")
-    parser.add_argument('--covering_strategy', type=bool, default=True, help="Use covering strategy")
+    parser.add_argument('--covering_strategy', help="Use covering strategy", action="store_true")
     parser.add_argument('--max_failed_attempts', type=int, default=30, help="Max failed attempts for covering=1")
     parser.add_argument('--min_fidelity', type=float, default=1.0, help="Minimum rule fidelity")
     parser.add_argument('--lowest_min_fidelity', type=float, default=0.75, help="Lowest accepted min fidelity")
