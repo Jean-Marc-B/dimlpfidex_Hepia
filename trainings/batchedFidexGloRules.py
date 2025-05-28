@@ -14,8 +14,17 @@ class FileType(Enum):
         PRED=2
 
 class BatchedFidexGloRules:
+    """Class for running FidexGlo rule extraction in a batched, parallelized manner."""
 
     def __init__(self, args: argparse.Namespace):
+        """Initializes the BatchedFidexGloRules instance.
+
+        - Validates input arguments.
+        - Sets up temporary directories for batched processing.
+        - Splits training data, classes, and predictions across multiple processes.
+        - Writes configuration files for each process.
+        """
+
         def today_str() -> str:
             return datetime.today().strftime('%Y%m%d-%H%M')
         
@@ -51,6 +60,12 @@ class BatchedFidexGloRules:
             
 
     def __split_file_into(self, src_path: str, file_type: FileType) -> None:
+        """Splits the source CSV file into multiple parts based on the number of processes.
+
+        Args:
+            src_path (str): Path to the source file.
+            file_type (FileType): Type of the file to determine the destination directory.
+        """
         data = pd.read_csv(src_path, sep=',', header=None,index_col=None)
         filename = os.path.basename(src_path)
 
@@ -69,6 +84,14 @@ class BatchedFidexGloRules:
                 self.__write_into(subfilename, data.iloc[i*chunk_size : (i+1) * chunk_size, :], file_type)
 
     def __write_into(self, filename: str, data: pd.DataFrame, file_type: FileType) -> None:
+        """Writes a DataFrame to a CSV file in the appropriate directory based on file type.
+
+        Args:
+            filename (str): Name of the file to be written.
+            data (pd.DataFrame): Data to write.
+            file_type (FileType): Type indicating which directory to use.
+        """
+
         dst_path = ""
 
         if file_type == FileType.TRAIN:
@@ -81,6 +104,11 @@ class BatchedFidexGloRules:
         data.to_csv(dst_path, sep=',', header=None, index=None)
 
     def __write_config_files(self) -> None:
+        """Generates and writes JSON configuration files for each process.
+
+        - Modifies argument paths for each split.
+        - Saves per-process configuration to disk.
+        """
         def __add_suffix(file_path: str, suffix: str) -> str:
             res = os.path.basename(file_path).split(".")
             res.insert(1, f"_{suffix}.")
@@ -108,6 +136,13 @@ class BatchedFidexGloRules:
 
 
     def __call__(self, *args, **kwds):
+        """Executes the rule extraction in parallel using multiple processes.
+
+        - Launches a separate process for each data split.
+        - Synchronizes processes using a barrier.
+        - Merges results after all processes complete.
+        """
+
         def __batchedFidexGloRules(cmd_args: str, id: int, barrier: Barrier) -> None:
             fidex.fidexGloRules(cmd_args)
             print(f"process #{id} waiting...")
@@ -127,8 +162,8 @@ class BatchedFidexGloRules:
             process.start()
 
         for process in processes:
-            print(f"Process joined")
             process.join()
+            print(f"Process joined")
             
 
         print("multiprocessing ended, merging results...")
@@ -138,6 +173,8 @@ class BatchedFidexGloRules:
         return f"{self.__class__.__name__}({fmt_paths})"
     
     def __merge_results(self):
+        """Merges individual rules files from each process into a single final JSON rules file."""
+
         def __read_json_file(path: str) -> dict:
             with open(path) as fp:
                 return  json.load(fp)
@@ -158,6 +195,13 @@ class BatchedFidexGloRules:
 
 
 def init_args() -> argparse.Namespace:
+    """Initializes and parses command-line arguments.
+
+    - Validates file paths for required inputs.
+    - Supports loading arguments from a JSON configuration file.
+    - Returns a namespace containing all arguments.
+    """
+    
     def __is_valid_file(parser: argparse.ArgumentParser, arg: str) -> str:
         if not os.path.exists(arg):
             parser.error(f"The path '{arg}' given is not leading to a existing file.")
