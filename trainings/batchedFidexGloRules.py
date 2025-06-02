@@ -27,7 +27,7 @@ class BatchedFidexGloRules:
         """
 
         def today_str() -> str:
-            return datetime.today().strftime('%Y%m%d-%H%M')
+            return datetime.today().strftime('%Y%m%d-%H%M%s')
         
         def __are_inputs_valid(args: argparse.Namespace) -> bool:
             attrs_to_check = ["train_data_file", "train_pred_file", "nb_processes"]
@@ -47,7 +47,12 @@ class BatchedFidexGloRules:
         self.nb_processes = self.args.nb_processes
 
         # get root path or program path if root not specified in args
-        self.script_absolute_path = getattr(self.args, "root_folder", os.path.abspath(os.path.dirname(__file__)))
+        self.script_absolute_path = getattr(self.args, "root_folder", None)
+
+        if self.script_absolute_path is None:
+            self.script_absolute_path = os.path.abspath(os.path.dirname(__file__))
+
+        print(self.script_absolute_path)
 
         self.absolute_path = os.path.join(self.script_absolute_path, f"batched_tmp_{today_str()}")
         self.data_dir_path = os.path.join(self.absolute_path, "datas")
@@ -140,7 +145,7 @@ class BatchedFidexGloRules:
         args_cpy.pop("json_config_file")
         args_cpy.pop("keep_tmp_files")
         args_cpy.pop("nb_processes")
-        args_cpy.pop("root_folder")
+        args_cpy.pop("root_folder", None)
 
         for i in range(1, self.nb_processes+1):
             args_cpy["train_data_file"]      = os.path.join(self.data_dir_path, __add_suffix(self.args.train_data_file, str(i)))
@@ -172,9 +177,9 @@ class BatchedFidexGloRules:
 
         def __batchedFidexGloRules(cmd_args: str, id: int, barrier: Barrier) -> None:
             fidex.fidexGloRules(cmd_args)
-            print(f"process #{id} waiting...")
+            print(f"process {id} waiting...")
             barrier.wait()
-            print(f"process #{id} freed by barrier")
+            print(f"process {id} freed by barrier")
 
         processes = []
         barrier = Barrier(self.nb_processes, action=self.__merge_results)
@@ -183,11 +188,11 @@ class BatchedFidexGloRules:
         for i in range(self.nb_processes):
             proc_args = [f"--json_config_file {self.config_file_paths[i]}", i, barrier]
             processes.append(Process(target=__batchedFidexGloRules, args=proc_args))
-            print(f"Process #{i} created")
 
         try:
             for process in processes:
                 process.start()
+                print(f"Process with pid={process.pid} started")
 
             for process in processes:   
                 process.join()
@@ -230,7 +235,7 @@ class BatchedFidexGloRules:
             with open(path) as fp:
                 return  json.load(fp)
             
-        output_file_path = os.path.join(self.absolute_path, self)
+        output_file_path = os.path.join(self.absolute_path, self.args.global_rules_outfile)
 
         # read first rules sub-file
         res = __read_json_file(self.rules_file_paths[0])
