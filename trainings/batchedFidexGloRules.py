@@ -45,11 +45,12 @@ class BatchedFidexGloRules:
         
         self.args = args
         self.nb_processes = self.args.nb_processes
-        script_absolute_path = os.path.abspath(os.path.dirname(__file__))
-        self.absolute_path = os.path.join(script_absolute_path, f"batched_tmp_{today_str()}")
+
+        # get root path or program path if root not specified in args
+        self.script_absolute_path = getattr(self.args, "root_folder", os.path.abspath(os.path.dirname(__file__)))
+
+        self.absolute_path = os.path.join(self.script_absolute_path, f"batched_tmp_{today_str()}")
         self.data_dir_path = os.path.join(self.absolute_path, "datas")
-        # TODO: handle if class file is merged with datas instead of being in a dedicated file 
-        self.class_dir_path = os.path.join(self.absolute_path, "classes")
         self.pred_dir_path = os.path.join(self.absolute_path, "preds")
         self.rules_dir_path = os.path.join(self.absolute_path, "rules")
         self.config_file_paths = []
@@ -57,15 +58,21 @@ class BatchedFidexGloRules:
 
         os.makedirs(self.absolute_path, exist_ok=True)
         os.makedirs(self.data_dir_path, exist_ok=True)
-        os.makedirs(self.class_dir_path, exist_ok=True)
         os.makedirs(self.pred_dir_path, exist_ok=True)
         os.makedirs(self.rules_dir_path, exist_ok=True)
 
+        # TODO: handle if class file is merged with datas instead of being in a dedicated file 
+        if getattr(args, "train_class_file", None) is not None:
+            self.class_dir_path = os.path.join(self.absolute_path, "classes")  
+            os.makedirs(self.class_dir_path, exist_ok=True)
+            self.__split_file_into(self.args.train_class_file, FileType.CLASS)
+
+
         self.__split_file_into(self.args.train_data_file, FileType.TRAIN)
-        self.__split_file_into(self.args.train_class_file, FileType.CLASS)
         self.__split_file_into(self.args.train_pred_file, FileType.PRED)
         self.__write_config_files()
-            
+    
+
 
     def __split_file_into(self, src_path: str, file_type: FileType) -> None:
         """Splits the source CSV file into multiple parts based on the number of processes.
@@ -74,14 +81,15 @@ class BatchedFidexGloRules:
             src_path (str): Path to the source file.
             file_type (FileType): Type of the file to determine the destination directory.
         """
-        filename = os.path.basename(src_path)
         try:
-            data = pd.read_csv(src_path, sep=',', header=None,index_col=None, on_bad_lines="warn")
+            src_abspath = os.path.join(self.script_absolute_path, src_path)
+            data = pd.read_csv(src_abspath, sep=',', header=None,index_col=None, on_bad_lines="warn")
         except Exception as e:
-            print(f"Failed to read {src_path}: {e}")
+            print(f"Failed to read {src_abspath}: {e}")
             exit(1)
 
 
+        filename = os.path.basename(src_abspath)
         chunk_size = data.shape[0] // self.nb_processes
 
         if (rem := data.shape[0] % self.nb_processes) != 0:
@@ -132,13 +140,19 @@ class BatchedFidexGloRules:
         args_cpy.pop("json_config_file")
         args_cpy.pop("keep_tmp_files")
         args_cpy.pop("nb_processes")
+        args_cpy.pop("root_folder")
 
         for i in range(1, self.nb_processes+1):
-            args_cpy["train_data_file"]      = os.path.join(self.data_dir_path, __add_suffix(args.train_data_file, str(i)))
-            args_cpy["train_class_file"]     = os.path.join(self.class_dir_path, __add_suffix(args.train_class_file, str(i)))
-            args_cpy["train_pred_file"]      = os.path.join(self.pred_dir_path, __add_suffix(args.train_pred_file, str(i))) 
-            args_cpy["console_file"]         = os.path.join(self.absolute_path, __add_suffix(args.console_file, str(i))) 
-            args_cpy["global_rules_outfile"] = os.path.join(self.rules_dir_path, __add_suffix(args.global_rules_outfile, str(i))) 
+            args_cpy["train_data_file"]      = os.path.join(self.data_dir_path, __add_suffix(self.args.train_data_file, str(i)))
+
+            if getattr(self.args, "train_class_file", None) is not None:
+                args_cpy["train_class_file"]     = os.path.join(self.class_dir_path, __add_suffix(self.args.train_class_file, str(i)))
+
+            args_cpy["train_pred_file"]      = os.path.join(self.pred_dir_path, __add_suffix(self.args.train_pred_file, str(i))) 
+            args_cpy["console_file"]         = os.path.join(self.absolute_path, __add_suffix(self.args.console_file, str(i))) 
+            args_cpy["global_rules_outfile"] = os.path.join(self.absolute_path, __add_suffix(self.args.global_rules_outfile, str(i))) 
+            args_cpy["attributes_file"]      = os.path.join(self.script_absolute_path, self.args.attributes_file) 
+            args_cpy["weights_file"]         = os.path.join(self.script_absolute_path, self.args.weights_file) 
             self.rules_file_paths.append(args_cpy["global_rules_outfile"])
 
             new_json_filename = os.path.join(self.absolute_path, f"bfgr_config_{i}.json")
@@ -171,12 +185,33 @@ class BatchedFidexGloRules:
             processes.append(Process(target=__batchedFidexGloRules, args=proc_args))
             print(f"Process #{i} created")
 
-        for process in processes:
-            process.start()
+        try:
+            for process in processes:
+                process.start()
 
-        for process in processes:
-            process.join()
-            print(f"Process joined")
+            for process in processes:   
+                process.join()
+                print(f"Process joined")
+        
+        except KeyboardInterrupt:
+            print("Interruped batchedFidexGloRules")
+            barrier.abort()
+
+            for process in processes:
+                process.terminate()
+                print(f"Terminated process {process}")
+            
+            import time
+            time.sleep(1)
+
+            for process in processes:
+                if process.is_alive():
+                    process.kill()
+                    print(f"Killed process {process}")
+
+
+            exit(1)
+
             
         print("multiprocessing ended, merging results...")
 
