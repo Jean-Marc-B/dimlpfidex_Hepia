@@ -53,6 +53,8 @@ void showRulesParams() {
   printOptionDescription("--sigmas <list<float ]-inf,inf[>>", "Standard deviation of each attribute index to be denormalized in the rules");
   printOptionDescription("--normalization_indices <list<int [0,nb_attributes-1]>>", "Attribute indices to be denormalized in the rules, only used when no normalization_file is given, index starts at 0 (default: [0,...,nb_attributes-1])");
   printOptionDescription("--nb_threads <int [1,nb_cores]>", "Number of threads used for computing the algorithm, 1=sequential execution (default: 1)");
+  printOptionDescription("--start_index <int [0,nb_datas[>", "Index from which samples are going to be choosed (default: 0)");
+  printOptionDescription("--end_index <int [0,nb_datas[>", "Index non inclusive until which samples are going to be choosed  (default: nb_datas)");
   printOptionDescription("--seed <int [0,inf[>", "Seed for random number generation, 0=random. Anything else than 0 is an arbitrary seed that can be reused to obtain the same randomly generated sequence and therefore getting same results (default: 0)");
 
   std::cout << std::endl
@@ -108,6 +110,11 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     int cnt = 0;
     bool ruleCreated;
     int localNbProblems = 0;
+
+    int startIndex = p.getInt(START_INDEX);
+    int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
+    std::cout << "Sample indexes [from,to]: [" << startIndex << "," << endIndex << "]" << std::endl;
+
     std::vector<Rule> localRules;
     std::vector<int>::iterator it;
     int localNbRulesNotFound = 0;
@@ -129,7 +136,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
 
     auto startTime = std::chrono::steady_clock::now();
 #pragma omp for
-    for (int idSample = 0; idSample < nbDatas; idSample++) {
+    for (int idSample = startIndex; idSample < endIndex; idSample++) {
       std::vector<int> &trainPreds = trainDataset.getPredictions();
       std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
       std::vector<double> &mainSampleValues = trainData[idSample];
@@ -453,6 +460,9 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultDecisionThreshold();
   p.setDefaultFidex();
   p.setDefaultInt(NB_THREADS, 1);
+  p.setDefaultInt(START_INDEX, 0);
+  p.setDefaultInt(END_INDEX, -1);
+  p.setDefaultInt(NB_THREADS, 1);
 
   // this sections check if values comply with program logic
 
@@ -569,7 +579,7 @@ int fidexGloRules(const std::string &command) {
                                               HEURISTIC, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE, CONSOLE_FILE,
                                               MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                               DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
-                                              NB_THREADS, COVERING_STRATEGY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED};
+                                              NB_THREADS, COVERING_STRATEGY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
