@@ -82,6 +82,8 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
   HIDDEN_LAYERS_OUTFILE,
   HIDDEN_LAYERS_FILE,
   METRICS_FILE,
+  START_INDEX,
+  END_INDEX,
   _NB_PARAMETERS // internal use only, do not consider it as a usable parameter
 };
 
