@@ -99,10 +99,15 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
   int nbDatas = trainDataset.getNbSamples();
   int minCovering = p.getInt(MIN_COVERING);
   int nbThreadsUsed = p.getInt(NB_THREADS);
+  int startIndex = p.getInt(START_INDEX);
+  int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
+  int step = (endIndex - startIndex) / nbThreadsUsed; 
+  int stepCounter = startIndex;
+  std::cout << "Selected indexes: [" << startIndex << "," << endIndex << "] (" << (endIndex - startIndex) << " samples)" << std::endl;
 
   std::vector<int> threadProgress(nbThreadsUsed, 0);
 
-#pragma omp parallel num_threads(nbThreadsUsed)
+  #pragma omp parallel num_threads(nbThreadsUsed)
   {
     Rule rule;
     double t1;
@@ -110,11 +115,8 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     int cnt = 0;
     bool ruleCreated;
     int localNbProblems = 0;
-
-    int startIndex = p.getInt(START_INDEX);
-    int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
-    std::cout << "Sample indexes [from,to]: [" << startIndex << "," << endIndex << "]" << std::endl;
-
+    
+    
     std::vector<Rule> localRules;
     std::vector<int>::iterator it;
     int localNbRulesNotFound = 0;
@@ -126,8 +128,8 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     if (p.isStringSet(CONSOLE_FILE)) {
       consoleFile = p.getString(CONSOLE_FILE);
     }
-
-#pragma omp critical
+    
+    #pragma omp critical
     {
       std::cout << "Thread #" << threadId << " initialized, please wait for it to be done." << std::endl;
     }
@@ -164,12 +166,12 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
       }
 
       // Estimate execution time
-
-      if (idSample == 0 || idSample == 9 || idSample == 99 || idSample == 999 || idSample == 9999) {
+      if (idSample == stepCounter) {
+        stepCounter += step;
         auto now = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed = now - startTime;
         double avgTimePerSample = elapsed.count() / (idSample + 1);
-        double estimatedTotalTime = (avgTimePerSample * nbDatas) / nbThreadsUsed;
+        double estimatedTotalTime = (avgTimePerSample * (endIndex - startIndex)) / nbThreadsUsed;
 
         int hours = static_cast<int>(estimatedTotalTime) / 3600;
         int minutes = (static_cast<int>(estimatedTotalTime) % 3600) / 60;
@@ -179,19 +181,6 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
         {
           std::cout << "Estimated total execution time after " << idSample + 1 << " sample(s): "
                     << hours << " hours, " << minutes << " minutes, " << seconds << " seconds." << std::endl;
-        }
-      }
-
-      // Update thread progress
-      if ((cnt % (std::max(1, (nbDatas / nbThreadsUsed) / 100))) == 0 && !p.isStringSet(CONSOLE_FILE)) {
-#pragma omp atomic write
-        threadProgress[threadId] = (cnt * 100) / (nbDatas / nbThreadsUsed);
-
-#pragma omp critical
-        {
-          int minProgress = *std::min_element(threadProgress.begin(), threadProgress.end());
-          std::cout << "Overall progress: " << minProgress << "%\r";
-          std::cout.flush();
         }
       }
     }
@@ -243,9 +232,15 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
   std::vector<Rule> rules;
   std::vector<Rule> chosenRules;
   int nbDatas = trainDataset.getNbSamples();
-  std::vector<int> notCoveredSamples(nbDatas);
-  iota(begin(notCoveredSamples), end(notCoveredSamples), 0); // Vector from 0 to nbDatas-1
+  int start_index = p.getInt(START_INDEX);
+  int end_index = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
+  std::vector<int> notCoveredSamples(end_index - start_index);
+  iota(begin(notCoveredSamples), end(notCoveredSamples), start_index); // Vector from 0 to nbDatas-1
   generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
+
+  for (int i; i < notCoveredSamples.size(); i++) {
+    std::cout << notCoveredSamples[i] << ", ";
+  }
 
   std::cout << "Computing global ruleset..." << std::endl;
 

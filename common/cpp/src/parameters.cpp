@@ -384,6 +384,14 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setString(METRICS_FILE, arg);
     break;
 
+  case START_INDEX:
+    setInt(START_INDEX, arg);
+    break;
+
+  case END_INDEX:
+    setInt(END_INDEX, arg);
+    break;
+
   default: // If we put another -X option
     throw CommandArgumentException("Illegal option : " + param);
   }
