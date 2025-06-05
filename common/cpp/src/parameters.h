@@ -154,6 +154,8 @@ static const std::unordered_map<std::string, ParameterCode> parameterNames = {
     {"hidden_layers_outfile", HIDDEN_LAYERS_OUTFILE},
     {"hidden_layers_file", HIDDEN_LAYERS_FILE},
     {"metrics_file", METRICS_FILE},
+    {"start_index", START_INDEX},
+    {"end_index", END_INDEX,}
     };
 
 /**
