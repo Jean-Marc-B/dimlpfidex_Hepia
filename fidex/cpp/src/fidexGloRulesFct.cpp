@@ -209,6 +209,31 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
             << "Fidex rules computed" << std::endl;
 }
 
+
+/*
+* @brief ...
+*/
+void readRules(std::vector<Rule> &emptyRuleSet, Parameters &p) {
+    std::string dirPath = p.getString(AGGREGATE_FOLDER);
+    DIR*  rulesFilesDir = opendir(dirPath.c_str());
+    struct dirent *entry;
+    struct stat info;
+
+    if (rulesFilesDir == NULL) {
+         throw FileNotFoundError("Folder " + dirPath + " could not be red.");
+    }
+
+    while ((entry = readdir(rulesFilesDir)) != NULL) {
+      std::string abspath = dirPath + getOSSeparator() + entry->d_name;
+      if (info.st_mode & S_IFDIR) continue;
+
+      std::cout << "is a file" << std::endl;
+      //TODO read files and concat rules      
+    }
+    closedir(rulesFilesDir);
+}
+
+
 /**
  * @brief Generates a list of rules covering all training samples using the best and slowest heuristic.
  *
@@ -232,14 +257,16 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
   std::vector<Rule> rules;
   std::vector<Rule> chosenRules;
   int nbDatas = trainDataset.getNbSamples();
-  int start_index = p.getInt(START_INDEX);
-  int end_index = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
-  std::vector<int> notCoveredSamples(end_index - start_index);
-  iota(begin(notCoveredSamples), end(notCoveredSamples), start_index); // Vector from 0 to nbDatas-1
-  generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
+  int startIndex = p.getInt(START_INDEX);
+  int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
+  int nbSamples = endIndex - startIndex;
+  std::vector<int> notCoveredSamples(nbSamples);
+  iota(begin(notCoveredSamples), end(notCoveredSamples), startIndex);
 
-  for (int i; i < notCoveredSamples.size(); i++) {
-    std::cout << notCoveredSamples[i] << ", ";
+  if (p.getBool(AGGREGATE_RULES)) {
+    readRules(rules, p);
+  } else {
+    generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
   }
 
   std::cout << "Computing global ruleset..." << std::endl;
@@ -458,6 +485,7 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultInt(START_INDEX, 0);
   p.setDefaultInt(END_INDEX, -1);
   p.setDefaultInt(NB_THREADS, 1);
+  p.setDefaultBool(AGGREGATE_RULES, false);
 
   // this sections check if values comply with program logic
 
@@ -468,6 +496,10 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.assertStringExists(TRAIN_PRED_FILE);
   p.assertStringExists(GLOBAL_RULES_OUTFILE);
   p.assertIntExists(HEURISTIC);
+
+  if (p.getBool(AGGREGATE_RULES)) {
+    p.assertStringExists(AGGREGATE_FOLDER);
+  }
 
   // verifying logic between parameters, values range and so on...
   p.checkParametersCommon();
@@ -574,7 +606,7 @@ int fidexGloRules(const std::string &command) {
                                               HEURISTIC, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE, CONSOLE_FILE,
                                               MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                               DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
-                                              NB_THREADS, COVERING_STRATEGY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX};
+                                              NB_THREADS, COVERING_STRATEGY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX, AGGREGATE_RULES, AGGREGATE_FOLDER};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");

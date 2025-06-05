@@ -96,6 +96,7 @@ void Parameters::checkFilesIntegrity() {
   sanitizePath(EXPLANATION_FILE, false);
   sanitizePath(HIDDEN_LAYERS_OUTFILE, false);
   sanitizePath(METRICS_FILE, false);
+  sanitizePath(AGGREGATE_FOLDER, false); // TODO: fix error when path ends with separator
 }
 
 /**
@@ -390,6 +391,14 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
 
   case END_INDEX:
     setInt(END_INDEX, arg);
+    break;
+
+  case AGGREGATE_RULES:
+    setBool(AGGREGATE_RULES, arg);
+    break;
+
+  case AGGREGATE_FOLDER:
+    setString(AGGREGATE_FOLDER, arg);
     break;
 
   default: // If we put another -X option
