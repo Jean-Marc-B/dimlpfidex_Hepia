@@ -84,6 +84,8 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
   METRICS_FILE,
   START_INDEX,
   END_INDEX,
+  AGGREGATE_RULES,
+  AGGREGATE_FOLDER,
   _NB_PARAMETERS // internal use only, do not consider it as a usable parameter
 };
 
@@ -155,6 +157,8 @@ static const std::unordered_map<std::string, ParameterCode> parameterNames = {
     {"hidden_layers_file", HIDDEN_LAYERS_FILE},
     {"metrics_file", METRICS_FILE},
     {"start_index", START_INDEX},
+    {"aggregate_rules", AGGREGATE_RULES},
+    {"aggregate_folder", AGGREGATE_FOLDER},
     {"end_index", END_INDEX,}
     };
 

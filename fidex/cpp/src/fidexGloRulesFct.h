@@ -17,6 +17,8 @@
 #include <sstream>
 #include <string>
 #include <time.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 /**
  * @brief Displays the parameters for fidexGloRules.
