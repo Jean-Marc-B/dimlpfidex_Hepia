@@ -191,22 +191,23 @@ compile_commands.json
 docs/api
 docs/modules
 
-# Deep Fidex data
-Deep_Fidex/Cifar/
-Deep_Fidex/Mnist/
-Deep_Fidex/Cifar80/
-Deep_Fidex/CifarLeakyReluResnet/
-
+# preact
 preact/model*/
 preact/dataset/
 preact/input/
 preact/output/
 preact/patients_data/
+
+
+# Deep Fidex data
+Deep_Fidex/Cifar/
+Deep_Fidex/Mnist/
+Deep_Fidex/Cifar80/
+Deep_Fidex/CifarLeakyReluResnet/
 Deep_Fidex/MnistLeakyReluResnet/
 Deep_Fidex/CifarProba/
 Deep_Fidex/MnistProba/
 Deep_Fidex/MnistVGG/
 Deep_Fidex/CifarVGG/
 Deep_Fidex/CifarProbaRF/
-
 Deep_Fidex/CifarVGG_resized_trainable_with_image/
