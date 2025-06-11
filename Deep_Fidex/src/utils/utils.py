@@ -12,6 +12,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.backend import clear_session
+from tensorflow.keras import mixed_precision
 from .rule import Rule
 from .antecedent import Antecedent
 import json
@@ -754,6 +755,7 @@ def gathering_predictions(file_list, output_file):
         np.savetxt(output, final_data, fmt='%.6f')
         print(f"{output_file} written.")
 
+
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
@@ -766,7 +768,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     - width: The size of the second dimension of the input image (image is height x width).
     - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - nb_classes: The number of classes for classification.
-    - model: Can be resnet, VGG, VGG_metadatas, VGG_and_big, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
+    - model: Can be resnet, VGG, VGG_metadatas, VGG_and_big, VGG_and_VGG, VGG_and_nClass_VGGs, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
     - nbIt: The number of epochs to train the model.
     - model_file: File path to save the trained model.
     - model_checkpoint_weights: File path for saving the best model weights during training.
@@ -789,8 +791,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     gc.collect()
     tf.keras.backend.clear_session()
 
-    if model not in ["resnet", "VGG", "VGG_metadatas", "VGG_and_big", "small", "big", "MLP", "MLP_Patch"]:
-        raise ValueError("The model needs to be one of resnet, VGG, VGG_metadatas, VGG_and_big, small, big, MLP or MLP_Patch")
+    if model not in ["resnet", "VGG", "VGG_metadatas", "VGG_and_big", "VGG_and_VGG", "VGG_and_nClass_VGGs", "small", "big", "MLP", "MLP_Patch"]:
+        raise ValueError("The model needs to be one of resnet, VGG, VGG_metadatas, VGG_and_big, VGG_and_VGG, VGG_and_nClass_VGGs, small, big, MLP or MLP_Patch")
 
     if model == "MLP_Patch":
         if len(X_train) != 2 or len(X_test) != 2 or len(X_train[1][0]) != 2 or len(X_test[1][0]) != 2:
@@ -806,52 +808,104 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
     if model == "VGG_and_big":
         if len(X_train) != 2 or len(X_test) != 2 or len(height) != 2 or len(width) != 2 or len(nbChannels) != 2:
-            raise ValueError("Wrong shape of data when training VGG with metadatas.")
-        if not isinstance(X_train, tuple) or not isinstance(X_test, tuple) or not isinstance(nbChannels, tuple):
+            raise ValueError("Wrong shape of data when training VGG and big.")
+        if not isinstance(X_train, tuple) or not isinstance(X_test, tuple) or not isinstance(height, tuple) or not isinstance(width, tuple) or not isinstance(nbChannels, tuple):
             raise ValueError("X_train, X_test, height, width and nb_channels must be tuples (image, probas).")
 
-    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]: # meta = probas for VGG_and_big
-        X_train, meta_train = X_train
-        X_test, meta_test = X_test
-        meta_train = np.array(meta_train)
-        meta_test = np.array(meta_test)
-        X_test = np.array(X_test)
+    if model == "VGG_and_VGG":
+        if len(X_train) != 2 or len(X_test) != 2 or len(height) != 2 or len(width) != 2 or len(nbChannels) != 2:
+            raise ValueError("Wrong shape of data when training VGG and VGG.")
+        if not isinstance(X_train, tuple) or not isinstance(X_test, tuple) or not isinstance(height, tuple) or not isinstance(width, tuple) or not isinstance(nbChannels, tuple):
+            raise ValueError("X_train, X_test, height, width and nb_channels must be tuples (image, probas).")
 
-    split_index = int(0.8 * len(X_train))
-    x_train = X_train[0:split_index]
-    x_val   = X_train[split_index:]
-    y_train = Y_train[0:split_index]
-    y_val   = Y_train[split_index:]
+    if model == "VGG_and_nClass_VGGs":
+        if len(X_train) != nb_classes+1 or len(X_test) != nb_classes+1 or len(height) != 2 or len(width) != 2 or len(nbChannels) != 2:
+            raise ValueError("Wrong shape of data when training nb_class VGGs and VGG.")
+        if not isinstance(X_train, list) or not isinstance(X_test, list) or not isinstance(height, tuple) or not isinstance(width, tuple) or not isinstance(nbChannels, tuple):
+            raise ValueError("X_train, X_test, height, width and nb_channels must be tuples (image, probas).")
 
-    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]:
-        meta_train, meta_val = meta_train[:split_index], meta_train[split_index:]
+    # PREPARE DATA
 
-    print(f"Training set: {x_train.shape}, {y_train.shape}")
-    print(f"Validation set: {x_val.shape}, {y_val.shape}")
-    print(f"Test set: {X_test.shape}, {Y_test.shape}")
+    if model == "VGG_and_nClass_VGGs":
+        image_train = X_train[0]
+        class_inputs_train = list(X_train[1:])  # list of nb_classes arrays
 
-    if model in ["VGG_metadatas", "VGG_and_big"]:
-        print(f"Training set meta: {meta_train.shape}")
-        print(f"Validation set meta: {meta_val.shape}")
-        print(f"Test set meta: {meta_test.shape}")
-    if model == "VGG_and_big":
-        nbChannel_img = nbChannels[0]
-    else:
-        nbChannel_img = nbChannels
-    if (nbChannel_img == 1 and model in ["resnet", "VGG", "VGG_and_big", "VGG_metadatas"]):
-        # B&W to RGB
-        x_train = np.repeat(x_train, 3, axis=-1)
-        X_test = np.repeat(X_test, 3, axis=-1)
-        x_val = np.repeat(x_val, 3, axis=-1)
-        if model == "VGG_and_big":
+        image_test = X_test[0]
+        class_inputs_test = list(X_test[1:])
+
+        # Convert to np.array (if not already done)
+        image_train = np.array(image_train)
+        class_inputs_train = [np.array(inp) for inp in class_inputs_train]
+        image_test = np.array(image_test)
+        class_inputs_test = [np.array(inp) for inp in class_inputs_test]
+
+
+        if nbChannels[0] == 1:
+            # B&W to RGB
+            image_train = np.repeat(image_train, 3, axis=-1)
+            image_test = np.repeat(image_test, 3, axis=-1)
             nbChannels = (3, nbChannels[1])
-        else:
-            nbChannels=3
 
-    if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big"]:
-        x_train = [x_train, meta_train]
-        x_val = [x_val,meta_val]
-        X_test = [X_test,meta_test]
+        # Split train into train/val
+        split_index = int(0.8 * len(image_train))
+
+        x_train = [image_train[:split_index]] + [inp[:split_index] for inp in class_inputs_train]
+        x_val   = [image_train[split_index:]] + [inp[split_index:] for inp in class_inputs_train]
+
+        y_train = Y_train[:split_index]
+        y_val   = Y_train[split_index:]
+
+        X_test = [image_test] + class_inputs_test
+
+
+        print(f"Training set: {[x.shape for x in x_train]}, {y_train.shape}")
+        print(f"Validation set: {[x.shape for x in x_val]}, {y_val.shape}")
+        print(f"Test set: {[x.shape for x in X_test]}, {Y_test.shape}")
+
+    else:
+
+        if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_VGG", "VGG_and_big"]: # meta = probas for VGG_and_big and VGG_and_VGG
+            X_train, meta_train = X_train
+            X_test, meta_test = X_test
+            meta_train = np.array(meta_train)
+            meta_test = np.array(meta_test)
+            X_test = np.array(X_test)
+
+        split_index = int(0.8 * len(X_train))
+        x_train = X_train[0:split_index]
+        x_val   = X_train[split_index:]
+        y_train = Y_train[0:split_index]
+        y_val   = Y_train[split_index:]
+
+        if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_VGG", "VGG_and_big"]:
+            meta_train, meta_val = meta_train[:split_index], meta_train[split_index:]
+
+        print(f"Training set: {x_train.shape}, {y_train.shape}")
+        print(f"Validation set: {x_val.shape}, {y_val.shape}")
+        print(f"Test set: {X_test.shape}, {Y_test.shape}")
+
+        if model in ["VGG_metadatas", "VGG_and_VGG", "VGG_and_big"]:
+            print(f"Training set meta: {meta_train.shape}")
+            print(f"Validation set meta: {meta_val.shape}")
+            print(f"Test set meta: {meta_test.shape}")
+        if model in ["VGG_and_big", "VGG_and_VGG"]:
+            nbChannel_img = nbChannels[0]
+        else:
+            nbChannel_img = nbChannels
+        if (nbChannel_img == 1 and model in ["resnet", "VGG", "VGG_and_big", "VGG_and_VGG", "VGG_metadatas"]):
+            # B&W to RGB
+            x_train = np.repeat(x_train, 3, axis=-1)
+            X_test = np.repeat(X_test, 3, axis=-1)
+            x_val = np.repeat(x_val, 3, axis=-1)
+            if model in ["VGG_and_big", "VGG_and_VGG"]:
+                nbChannels = (3, nbChannels[1])
+            else:
+                nbChannels=3
+
+        if model in ["MLP_Patch", "VGG_metadatas", "VGG_and_big", "VGG_and_VGG"]:
+            x_train = [x_train, meta_train]
+            x_val = [x_val,meta_val]
+            X_test = [X_test,meta_test]
 
     ##############################################################################
     if model == "resnet":
@@ -922,6 +976,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     #     model.summary()
 
     elif model == "VGG":
+
         if with_leaky_relu:
             raise ValueError("VGG with leakyRelu is not yet implemented.")
 
@@ -1054,6 +1109,203 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.00001), metrics=['accuracy'])
         model.summary()
 
+    elif model == "VGG_and_VGG": # A VGG for images and another for probabilities, reuniting at the end
+        if with_leaky_relu:
+            raise ValueError("VGG with leakyRelu is not yet implemented.")
+
+        # IMAGE BRANCH
+        image_input = Input(shape=(height[0], width[0], nbChannels[0]))
+
+        resized_image_input = Resizing(224, 224, name='resizing_layer')(image_input)
+
+        # charge pre-trained model vgg with imageNet weights
+        model_base_img = VGG16(include_top=False, weights="imagenet", input_tensor=resized_image_input)
+
+        x = model_base_img.output
+        x = Flatten()(x)
+        x = Dense(256, activation='relu')(x)
+        x = Dropout(0.3)(x)
+        x = BatchNormalization()(x)
+
+        # PROBABILITY BRANCH
+
+        probability_input = Input(shape=(height[1], width[1], nbChannels[1]))
+        resized_probability_input = Resizing(224, 224, name='resizing_layer_probas')(probability_input)
+
+        # charge pre-trained model vgg with imageNet weights
+        model_base_proba = VGG16(include_top=False, weights="imagenet", input_tensor=resized_probability_input)
+
+        for layer in model_base_proba.layers:
+            layer.name = f"{layer.name}_probas"
+
+        y = model_base_proba.output
+        y = Flatten()(y)
+        y = Dense(256, activation='relu')(y)
+        y = Dropout(0.3)(y)
+        y = BatchNormalization()(y)
+
+        # MERGING BRANCHES
+        merged = Concatenate()([x, y])
+        merged = Dense(256, activation='relu')(merged)
+        merged = Dense(128, activation='relu')(merged)
+        merged = Dense(64, activation='relu')(merged)
+        output = Dense(nb_classes, activation='softmax')(merged)
+
+        # FINAL MODEL
+        model = Model(inputs=[image_input, probability_input], outputs=output)
+
+        # COMPILATION
+        model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.00001), metrics=['accuracy'])
+        model.summary()
+
+    elif model == "VGG_and_nClass_VGGs": # A VGG for images and 10 VGGs for probabilities, reuniting at the end
+
+
+        SHUFFLE_BUF = 10_000
+
+        img_train, *probas_train = x_train
+        img_val, *probas_val = x_val
+
+        # def make_dataset(images, proba_grids, labels, shuffle=False):
+        #     def gen():
+        #         for img, proba_set, y in zip(images, proba_grids, labels):
+        #             inputs = [tf.convert_to_tensor(img, dtype=tf.float32)] + [
+        #                 tf.convert_to_tensor(p, dtype=tf.float32) for p in proba_set
+        #             ]
+        #             label = tf.convert_to_tensor(y, dtype=tf.float32)
+        #             yield tuple(inputs), label
+
+        #     # Signature de sortie dynamique en fonction du nb_classes
+        #     input_signature = tuple([
+        #         tf.TensorSpec((height[0], width[0], nbChannels[0]), tf.float32)
+        #     ] + [
+        #         tf.TensorSpec((height[1], width[1], nbChannels[1]), tf.float32)
+        #         for _ in range(nb_classes)
+        #     ])
+
+        #     output_signature = (
+        #         input_signature,
+        #         tf.TensorSpec((nb_classes,), tf.float32)  # one-hot label
+        #     )
+
+        def make_dataset(images, proba_grids, labels, shuffle=False):
+            def gen():
+                for img, *probas, y in zip(images, *proba_grids, labels):
+                    yield (img, *probas), y
+
+            image_sig = tf.TensorSpec(
+                    (height[0], width[0], nbChannels[0]), tf.float32
+                )
+
+            # tous les probas ont la même shape ;
+            proba_sig = tf.TensorSpec(
+                    (height[1], width[1], nbChannels[1]), tf.float32
+                )
+
+            input_sig = (image_sig,) + tuple(proba_sig for _ in range(nb_classes))
+
+            output_sig = (
+                input_sig,
+                tf.TensorSpec((nb_classes,), tf.float32)   # y
+            )
+
+            ds = tf.data.Dataset.from_generator(gen, output_signature=output_sig)
+            if shuffle:
+                ds = ds.shuffle(SHUFFLE_BUF)
+            ds = ds.repeat()
+            ds = ds.batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
+            return ds
+
+        class ClearMemoryCallback(tf.keras.callbacks.Callback):
+            def on_epoch_end(self, epoch, logs=None):
+                tf.keras.backend.clear_session()
+                gc.collect()
+
+
+        with tf.device("/cpu:0"):            # évite toute copie géante vers le GPU
+            train_ds = make_dataset(img_train, probas_train, y_train, shuffle=True)
+            val_ds   = make_dataset(img_val,   probas_val,   y_val,   shuffle=False)
+
+        if with_leaky_relu:
+            raise ValueError("VGG with leakyRelu is not yet implemented.")
+
+
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            # IMAGE BRANCH
+            image_input = Input(shape=(height[0], width[0], nbChannels[0]), name="image_input")
+
+            resized_image_input = Resizing(224, 224, name='resizing_layer')(image_input)
+
+            # charge pre-trained model vgg with imageNet weights
+            vgg_image = VGG16(include_top=False, weights="imagenet", input_tensor=resized_image_input)
+
+            x = vgg_image.output
+            x = Flatten()(x)
+            x = Dense(256, activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = Dropout(0.3)(x)
+
+            # PROBABILITY BRANCH (nb_class branches with VGG)
+            probability_inputs = []
+            vgg_branches = []
+            for i in range(nb_classes):
+                proba_input = Input(shape=(height[1], width[1], nbChannels[1]), name=f"proba_input_{i}")
+                probability_inputs.append(proba_input)
+                resized_proba_input = Resizing(224, 224)(proba_input)
+                vgg_model = VGG16(include_top=False, weights="imagenet", input_tensor=resized_proba_input)
+                for layer in vgg_model.layers:
+                    layer.name = f"{layer.name}_{i}"
+                vgg_out = vgg_model.output
+                flat = Flatten()(vgg_out)
+                dense = Dense(256, activation='relu')(flat)
+                norm = BatchNormalization()(dense)
+                drop = Dropout(0.3)(norm)
+                vgg_branches.append(drop)
+
+
+            # CONCATENATE ALL CLASS BRANCHES
+            y = Concatenate()(vgg_branches)
+            y = Dense(512, activation='relu')(y)
+            y = BatchNormalization()(y)
+            y = Dropout(0.4)(y)
+
+            y = Dense(256, activation='relu')(y)
+            y = BatchNormalization()(y)
+            y = Dropout(0.3)(y)
+
+            # MERGING BRANCHES
+            merged = Concatenate()([x, y])
+            merged = Dense(256, activation='relu')(merged)
+            merged = Dense(128, activation='relu')(merged)
+            merged = Dense(64, activation='relu')(merged)
+            output = Dense(nb_classes, activation='softmax', dtype='float32')(merged)
+
+            # FINAL MODEL
+            model = Model(inputs=[image_input] + probability_inputs, outputs=output)
+
+            # COMPILATION
+            model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.00001), metrics=['accuracy'])
+            model.summary()
+
+        checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights,
+                            verbose=1,
+                            save_best_only=True,
+                            save_weights_only=True)
+
+        steps_per_epoch = len(y_train) // batch_size
+        validation_steps = len(y_val) // batch_size
+
+        model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=nbIt,
+            steps_per_epoch=steps_per_epoch,
+            validation_steps=validation_steps,
+            callbacks=[checkpointer, ClearMemoryCallback()],
+            verbose=1
+        )
+
     elif model == "small":
         model = Sequential()
         model.add(Input(shape=(height, width, nbChannels)))
@@ -1138,6 +1390,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.summary()
 
     elif model == "MLP_Patch":
+
         patch_input = Input(shape=(height, width, nbChannels))
 
         x = Flatten()(patch_input)
@@ -1149,15 +1402,21 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
         merged = Concatenate()([x, y])
         merged = Dense(64, activation='relu')(merged)
-        output = Dense(nb_classes, activation='softmax')(merged)
+        output = Dense(nb_classes, activation='softmax',
+                dtype='float32')(merged)
 
         model = Model(inputs=[patch_input, coord_input], outputs=output)
 
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         model.summary()
 
-    checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True, save_weights_only=True)
-    model.fit(x_train, y_train, batch_size=batch_size, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], shuffle=True, verbose=2)
+        checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights,
+                               verbose=1, save_best_only=True,
+                               save_weights_only=True)
+
+    if model != "VGG_and_nClass_VGGs":
+        checkpointer = ModelCheckpoint(filepath=model_checkpoint_weights, verbose=1, save_best_only=True, save_weights_only=True)
+        model.fit(x_train, y_train, batch_size=batch_size, epochs=nbIt, validation_data=(x_val, y_val), callbacks=[checkpointer], shuffle=True, verbose=2)
 
     print("\nCNN trained\n")
 
