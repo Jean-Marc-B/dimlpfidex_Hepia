@@ -198,7 +198,6 @@ preact/input/
 preact/output/
 preact/patients_data/
 
-
 # Deep Fidex data
 Deep_Fidex/Cifar/
 Deep_Fidex/Mnist/
