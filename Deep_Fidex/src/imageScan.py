@@ -18,15 +18,29 @@ respect to this rule.
 import os
 
 # GPU arguments
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+import tensorflow as tf
+from tensorflow.keras.mixed_precision import set_global_policy
+# set_global_policy('mixed_float16')  # To use less memory space
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except RuntimeError as e:
+        print("Erreur lors de la configuration de memory growth :", e)
+
+# tf.config.threading.set_intra_op_parallelism_threads(64)
+# tf.config.threading.set_inter_op_parallelism_threads(4)
 
 import sys
 import time
 import argparse
 import numpy as np
 import keras
-import tensorflow as tf
 import joblib
 
 # Import intern modules
@@ -116,7 +130,7 @@ if __name__ == "__main__":
         if any((args.train, args.stats, args.second_train, args.images is not None)):
             raise ValueError("Global rules have to be computed alone because we don't want to use a GPU during global rules generation.")
         else:
-            os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+            os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     # Get Parameter configuration
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -189,7 +203,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
     # Update stats file
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets"]:
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 

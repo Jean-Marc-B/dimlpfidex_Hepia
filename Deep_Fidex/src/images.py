@@ -330,7 +330,7 @@ def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, tru
 
 def highlight_area_probability_image(image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels, statistic):
 
-    if statistic in ["probability_and_image", "probability_multi_nets"]:
+    if statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
         prob_and_img_in_one_matrix = False
     else:
         prob_and_img_in_one_matrix = True
@@ -757,7 +757,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             rule.include_X = False
             for ant in rule.antecedents:
                 ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
-        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "convDimlpFilter"]:
+        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter"]:
                 rule.include_X = False
         # Create folder for this rule
         rule_folder = os.path.join(cfg["rules_folder"], f"rule_{rule_id}_class_{cfg['classes'][rule.target_class]}")
@@ -798,7 +798,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     height_original = round(area_Height * scale_h)
                     width_original = round(area_Width * scale_w)
                     antecedent.attribute = f"Pixel_{height_original}x{width_original}x{channel}"
-        elif args.statistic in ["probability_and_image", "probability_multi_nets"]:
+        elif args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
             split_id = cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"] * cfg["nb_classes"]
             for antecedent in rule_to_print.antecedents:
                 if antecedent.attribute < split_id: # proba part
@@ -842,7 +842,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                 highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
-            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets"]:
+            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
                 highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
@@ -929,7 +929,7 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
                 rule.include_X = False
                 for ant in rule.antecedents:
                     ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
-            elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "convDimlpFilter"]:
+            elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter"]:
                     rule.include_X = False
 
             if args.statistic == "histogram":
@@ -945,7 +945,7 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
                 highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
-            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets"]:
+            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
                 highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
