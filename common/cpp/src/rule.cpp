@@ -527,7 +527,7 @@ void getRules(std::vector<Rule> &rules, const std::string &rulesFile, DataSetFid
     while (getline(rulesData, line)) {
       Rule rule;
       bool isRule = stringToRule(rule, line, attributePattern, classPattern, !attributeIdsInFile, !classeIdsInFile, dataset);
-
+      
       if (isRule) {
         getline(rulesData, line); // Cov size
         rule.setCoveringSize(stoi(splitString(line, " ")[4]));

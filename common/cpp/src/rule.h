@@ -223,11 +223,11 @@ inline std::ostream &operator<<(std::ostream &stream, const Rule &rule) {
   for (Antecedent a : rule.getAntecedents())
     stream << a;
   stream << std::endl;
-  stream << "   #Antecedents: " << std::to_string(rule.getAntecedents().size()) << std::endl
-         << "   #Covered samples: " << std::to_string(rule.getCoveredSamples().size()) << std::endl
-         << "   Confidence: " << std::to_string(rule.getConfidence()) << std::endl
-         << "   Accuracy:   " << std::to_string(rule.getAccuracy()) << std::endl
-         << "   Covering:   " << std::to_string(rule.getCoveredSamples().size()) << std::endl;
+  stream << "   #Antecedents:     " << std::to_string(rule.getAntecedents().size()) << std::endl
+         << "   #Covered samples: " << std::to_string(rule.getCoveringSize()) << std::endl
+         << "   Fidelity:         " << std::to_string(rule.getFidelity()) << std::endl
+         << "   Accuracy:         " << std::to_string(rule.getAccuracy()) << std::endl
+         << "   Confidence:       " << std::to_string(rule.getConfidence()) << std::endl;
 
   return stream;
 }

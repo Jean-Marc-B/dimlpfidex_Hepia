@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22.2)
+cmake_minimum_required(VERSION 4.0.2)
 project(dimlpfidex)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -10,11 +10,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "-O3")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+    set(CMAKE_CXX_FLAGS "-O3 -g -fsanitize=address -fsanitize=undefined")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -fsanitize=address -fsanitize=undefined")
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-    # Warning, these flags slows down the execution
-    # set(CMAKE_CXX_FLAGS "-O3 -fsanitize=address -fsanitize=leak -fsanitize=undefined")
 endif()
 
 # Enable AddressSanitizer
