@@ -213,9 +213,11 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
 /*
 * @brief ...
 */
-void readRules(std::vector<Rule> &emptyRuleSet, Parameters &p) {
+void readRules(std::vector<Rule> &rulesSet, Parameters &p, DataSetFid &dataset) {
     std::string dirPath = p.getString(AGGREGATE_FOLDER);
     DIR*  rulesFilesDir = opendir(dirPath.c_str());
+    float decisionThreshold = 0.0f;
+    int positiveClassIndex = 0;
     struct dirent *entry;
     struct stat info;
 
@@ -223,14 +225,37 @@ void readRules(std::vector<Rule> &emptyRuleSet, Parameters &p) {
          throw FileNotFoundError("Folder " + dirPath + " could not be red.");
     }
 
+    std::cout << "Trying to merge subets of rules..." << std::endl;
+    std::cout << "Reading the content of " << dirPath << std::endl;
     while ((entry = readdir(rulesFilesDir)) != NULL) {
-      std::string abspath = dirPath + getOSSeparator() + entry->d_name;
-      if (info.st_mode & S_IFDIR) continue;
+      std::vector<Rule> subset;
+      std::string rulesFileAbspath = dirPath + getOSSeparator() + entry->d_name;
 
-      std::cout << "is a file" << std::endl;
-      //TODO read files and concat rules      
+      stat(rulesFileAbspath.c_str(), &info);
+
+      if (S_ISREG(info.st_mode)) {
+        std::cout << "  -> Reading " << rulesFileAbspath << std::endl;
+        getRules(subset, rulesFileAbspath, dataset, decisionThreshold, positiveClassIndex);
+        std::cout << "subset size: " << subset.size() << std::endl;
+        rulesSet.insert(rulesSet.end(), subset.begin(), subset.end());
+        std::cout << "ruleset size: " << rulesSet.size() << std::endl;
+      }
     }
+    
     closedir(rulesFilesDir);
+}
+
+
+std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples, DataSetFid &trainDataset, const std::vector<std::vector<double>> &hyperlocus) {
+  std::vector<Rule> rules;
+
+  if (p.getBool(AGGREGATE_RULES)) {
+    readRules(rules, p, trainDataset);
+  } else {
+    generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
+  }
+
+  return rules;
 }
 
 
@@ -254,7 +279,6 @@ void readRules(std::vector<Rule> &emptyRuleSet, Parameters &p) {
  * @return A vector containing the computed rules.
  */
 std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std::vector<std::vector<double>> &hyperlocus) {
-  std::vector<Rule> rules;
   std::vector<Rule> chosenRules;
   int nbDatas = trainDataset.getNbSamples();
   int startIndex = p.getInt(START_INDEX);
@@ -262,12 +286,7 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
   int nbSamples = endIndex - startIndex;
   std::vector<int> notCoveredSamples(nbSamples);
   iota(begin(notCoveredSamples), end(notCoveredSamples), startIndex);
-
-  if (p.getBool(AGGREGATE_RULES)) {
-    readRules(rules, p);
-  } else {
-    generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
-  }
+  std::vector<Rule> rules = extractRules(p, notCoveredSamples, trainDataset, hyperlocus);
 
   std::cout << "Computing global ruleset..." << std::endl;
 
@@ -286,6 +305,7 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
     std::vector<int> difference(notCoveredSamples.size());
 
     for (int i = 0; i < rules.size(); i++) {
+      // TODO rethink this algo
       currentRuleSamples = rules[i].getCoveredSamples();
 
       ite = set_difference(notCoveredSamples.begin(),
@@ -306,7 +326,9 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
 
     chosenRules.push_back(bestRule); // add best rule with maximum covering
     notCoveredSamples = remainingSamples;
-    rules.erase(rules.begin() + bestRuleIndex); // Remove this rule
+    if (!rules.empty()) {
+      rules.erase(rules.begin() + bestRuleIndex); // Remove this rule
+    }
   }
 
   std::cout << chosenRules.size() << " rules selected." << std::endl;
@@ -487,6 +509,10 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultInt(NB_THREADS, 1);
   p.setDefaultBool(AGGREGATE_RULES, false);
 
+  if (p.getInt(END_INDEX) != -1 && p.getInt(START_INDEX) > p.getInt(END_INDEX)) {
+    throw CommandArgumentException("start_index cannot be greater than end_index.");
+  }
+
   // this sections check if values comply with program logic
 
   // asserting mandatory parameters
@@ -606,7 +632,8 @@ int fidexGloRules(const std::string &command) {
                                               HEURISTIC, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE, CONSOLE_FILE,
                                               MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                               DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
-                                              NB_THREADS, COVERING_STRATEGY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX, AGGREGATE_RULES, AGGREGATE_FOLDER};
+                                              NB_THREADS, COVERING_STRATEGY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX, 
+                                              AGGREGATE_RULES, AGGREGATE_FOLDER};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -763,6 +790,7 @@ int fidexGloRules(const std::string &command) {
     switch (heuristic) {
     case 1:
       generatedRules = heuristic_1(trainDataset, parameters, matHypLocus);
+      std::cout << "AAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHH" << std::endl; 
       break;
 
     case 2:
@@ -790,6 +818,8 @@ int fidexGloRules(const std::string &command) {
 
     std::cout << "Rules extraction..."
               << std::endl;
+
+
 
     sort(generatedRules.begin(), generatedRules.end(), [](const Rule &r1, const Rule &r2) {
       return r1.getCoveredSamples().size() > r2.getCoveredSamples().size();
