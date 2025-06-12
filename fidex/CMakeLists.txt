@@ -1,8 +1,8 @@
 project(fidexProject)
 
 if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "-O3 -fopenmp")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fopenmp")
+    set(CMAKE_CXX_FLAGS "-O3 -fopenmp -g -fsanitize=address -fsanitize=undefined")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fopenmp -g -fsanitize=address -fsanitize=undefined")
 endif()
 
 add_subdirectory("cpp")
