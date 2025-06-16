@@ -236,12 +236,11 @@ void readRules(std::vector<Rule> &rulesSet, Parameters &p, DataSetFid &dataset) 
       if (S_ISREG(info.st_mode)) {
         std::cout << "  -> Reading " << rulesFileAbspath << std::endl;
         getRules(subset, rulesFileAbspath, dataset, decisionThreshold, positiveClassIndex);
-        std::cout << "subset size: " << subset.size() << std::endl;
         rulesSet.insert(rulesSet.end(), subset.begin(), subset.end());
-        std::cout << "ruleset size: " << rulesSet.size() << std::endl;
       }
     }
     
+    std::cout << rulesSet.size() <<" rules successfully loaded" << std::endl;
     closedir(rulesFilesDir);
 }
 
@@ -297,7 +296,7 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
   std::vector<int>::iterator ite;
   std::vector<int> currentRuleSamples;
 
-  while (!notCoveredSamples.empty()) {
+  while (!notCoveredSamples.empty() && !rules.empty()) {
     Rule bestRule;
     int bestRuleIndex = 0;
     int bestCovering = INT_MAX;
@@ -305,9 +304,8 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
     std::vector<int> difference(notCoveredSamples.size());
 
     for (int i = 0; i < rules.size(); i++) {
-      // TODO rethink this algo
       currentRuleSamples = rules[i].getCoveredSamples();
-
+      
       ite = set_difference(notCoveredSamples.begin(),
                            notCoveredSamples.end(),
                            currentRuleSamples.begin(),
@@ -326,9 +324,7 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
 
     chosenRules.push_back(bestRule); // add best rule with maximum covering
     notCoveredSamples = remainingSamples;
-    if (!rules.empty()) {
-      rules.erase(rules.begin() + bestRuleIndex); // Remove this rule
-    }
+    rules.erase(rules.begin() + bestRuleIndex); // Remove this rule
   }
 
   std::cout << chosenRules.size() << " rules selected." << std::endl;
@@ -790,7 +786,6 @@ int fidexGloRules(const std::string &command) {
     switch (heuristic) {
     case 1:
       generatedRules = heuristic_1(trainDataset, parameters, matHypLocus);
-      std::cout << "AAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHH" << std::endl; 
       break;
 
     case 2:
