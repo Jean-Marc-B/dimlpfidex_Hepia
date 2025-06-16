@@ -579,7 +579,7 @@ std::tuple<double, double> writeRulesFile(const std::string &filename, const std
     auto nbRules = static_cast<int>(rules.size());
 
     for (Rule r : rules) { // each rule
-      meanCovSize += static_cast<double>(r.getCoveredSamples().size());
+      meanCovSize += static_cast<double>(r.getCoveringSize());
       meanNbAntecedents += static_cast<double>(r.getAntecedents().size());
       counter++;
       stream << "Rule " << counter << ": " << r.toString(attributeNames, classNames);
