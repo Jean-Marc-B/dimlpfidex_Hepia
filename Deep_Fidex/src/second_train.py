@@ -64,7 +64,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
 
         print("original image added.")
 
-        # The we train the second model depending on the type (RF, CNN, etc.)
+        # Then we train the second model depending on the type (RF, CNN, etc.)
         if cfg["second_model"] == "cnn":
 
             # Pass on the DIMLP layer
