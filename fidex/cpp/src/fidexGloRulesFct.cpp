@@ -841,7 +841,7 @@ int fidexGloRules(const std::string &command) {
 
 
     sort(generatedRules.begin(), generatedRules.end(), [](const Rule &r1, const Rule &r2) {
-      return r1.getCoveredSamples().size() > r2.getCoveredSamples().size();
+      return r1.getCoveringSize() > r2.getCoveringSize();
     });
 
     std::tuple<double, double> stats = writeRulesFile(params->getString(GLOBAL_RULES_OUTFILE),

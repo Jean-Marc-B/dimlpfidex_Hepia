@@ -10,8 +10,11 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "-O3 -g -fsanitize=address -fsanitize=undefined")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -fsanitize=address -fsanitize=undefined")
+    set(CMAKE_CXX_FLAGS "-O3")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+    # for debug purposes only
+    # set(CMAKE_CXX_FLAGS "-O3 -g -fsanitize=address -fsanitize=undefined")
+    # set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -fsanitize=address -fsanitize=undefined")
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 

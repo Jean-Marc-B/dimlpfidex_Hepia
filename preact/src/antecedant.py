@@ -46,7 +46,7 @@ class Antecedant:
         }
 
     def pretty_repr(self) -> str:
-        return f"{self.attribute_name} {self.inequality_str} {self.value:.4f}"
+        return f"{self.attribute_name}{self.inequality_str}{self.value:.6f}"
 
     def to_string(self) -> str:
         """Returns the UNICANCER format for a antecedant.

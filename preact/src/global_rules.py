@@ -105,14 +105,15 @@ Rules:"""
         return res
 
     def pretty_repr(self, attributes: list[str]) -> str:
-        string = f"""Global rule set:
-Positive index class: {self.positive_index_class}
-Threshold: {self.threshold}
-Rule set size: {len(self.rules)}
-Rules:"""
+        mean_covering = sum([rule.covering for rule in self.rules]) / len(self.rules)
+        mean_antecedants = sum([len(rule.antecedants) for rule in self.rules]) / len(self.rules)
+
+
+        string = f"""Number of rules : {len(self.rules)}, mean sample covering number per rule : {mean_covering:.1f}, mean number of antecedents per rule : {mean_antecedants:.1f}
+Using a decision threshold of {self.threshold:.2f} for class {self.positive_index_class}\n\n\n"""
 
         for i, rule in enumerate(self.rules):
-            string += f"\n\nRule #{i+1}:"
+            string += f"Rule {i+1}: "
             string += rule.pretty_repr(attributes)
 
         return string
