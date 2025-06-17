@@ -211,9 +211,19 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
 
 
 /*
-* @brief ...
+* @brief Reads rule files from a specified directory, parses them into subsets,
+*        and merges all subsets into the provided rules vector.
+*
+* This function retrieves the directory path containing rule files from the Parameters object,
+* opens and reads each regular file in that directory, and extracts rules using the getRules()
+* function. Parsed rules are accumulated into the rules vector. If the directory cannot be
+* opened, a FileNotFoundError is thrown.
+*
+* @param rules            Reference to a vector where all parsed rules will be stored.
+* @param p                Reference to the Parameters object to retrieve configuration values.
+* @param dataset          Reference to the DataSetFid object used during rule parsing.
 */
-void readRules(std::vector<Rule> &rulesSet, Parameters &p, DataSetFid &dataset) {
+void readRuleFiles(std::vector<Rule> &rules, Parameters &p, DataSetFid &dataset) {
     std::string dirPath = p.getString(AGGREGATE_FOLDER);
     DIR*  rulesFilesDir = opendir(dirPath.c_str());
     float decisionThreshold = 0.0f;
@@ -236,20 +246,34 @@ void readRules(std::vector<Rule> &rulesSet, Parameters &p, DataSetFid &dataset) 
       if (S_ISREG(info.st_mode)) {
         std::cout << "  -> Reading " << rulesFileAbspath << std::endl;
         getRules(subset, rulesFileAbspath, dataset, decisionThreshold, positiveClassIndex);
-        rulesSet.insert(rulesSet.end(), subset.begin(), subset.end());
+        rules.insert(rules.end(), subset.begin(), subset.end());
       }
     }
     
-    std::cout << rulesSet.size() <<" rules successfully loaded" << std::endl;
+    std::cout << rules.size() <<" rules successfully loaded" << std::endl;
     closedir(rulesFilesDir);
 }
 
-
+/*
+* @brief Extracts a set of rules either by reading them from files or generating them using Fidex,
+*        depending on the configuration specified in Parameters.
+*
+* If the AGGREGATE_RULES flag in the Parameters object is set to true, the function reads and 
+* aggregates rule files using readRuleFiles(). Otherwise, it generates rules based on the given 
+* training dataset, uncovered sample indices, and hyperlocus using generateRules().
+*
+* @param p                   Reference to the Parameters object containing configuration options.
+* @param notCoveredSamples   Indices of samples not yet covered, used for rule generation.
+* @param trainDataset        Reference to the training dataset used for rule generation.
+* @param hyperlocus          Reference to a 2D vector representing the hyperlocus for rule generation.
+* 
+* @return A vector of extracted or generated Rule objects.
+*/
 std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples, DataSetFid &trainDataset, const std::vector<std::vector<double>> &hyperlocus) {
   std::vector<Rule> rules;
 
   if (p.getBool(AGGREGATE_RULES)) {
-    readRules(rules, p, trainDataset);
+    readRuleFiles(rules, p, trainDataset);
   } else {
     generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
   }
@@ -293,7 +317,7 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
   rules.erase(unique(rules.begin(), rules.end()), rules.end());
 
   // While there are some not covered samples
-  std::vector<int>::iterator ite;
+  std::vector<int>::iterator iterator;
   std::vector<int> currentRuleSamples;
 
   while (!notCoveredSamples.empty() && !rules.empty()) {
@@ -304,15 +328,16 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
     std::vector<int> difference(notCoveredSamples.size());
 
     for (int i = 0; i < rules.size(); i++) {
-      currentRuleSamples = rules[i].getCoveredSamples();
+      // !WARNING: in case of rules being loaded with the AGGREGATE option: this cannot work properly with txt format as it does not store covered samples
+      currentRuleSamples = rules[i].getCoveredSamples(); 
       
-      ite = set_difference(notCoveredSamples.begin(),
+      iterator = set_difference(notCoveredSamples.begin(),
                            notCoveredSamples.end(),
                            currentRuleSamples.begin(),
                            currentRuleSamples.end(),
                            difference.begin()); // vectors have to be sorted
 
-      difference.resize(ite - difference.begin());
+      difference.resize(iterator - difference.begin());
 
       if (difference.size() < bestCovering) {
         bestRuleIndex = i;
@@ -345,14 +370,13 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
  * @return A vector containing the computed rules.
  */
 std::vector<Rule> heuristic_2(DataSetFid &trainDataset, Parameters &p, const std::vector<std::vector<double>> &hyperlocus) {
-  std::vector<Rule> rules;
   std::vector<Rule> chosenRules;
   int nbDatas = trainDataset.getNbSamples();
   std::vector<int> notCoveredSamples(nbDatas);
   iota(begin(notCoveredSamples), end(notCoveredSamples), 0); // Vector from 0 to nbDatas-1
 
   // getting rules and not covered samples
-  generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
+  std::vector<Rule> rules = extractRules(p, notCoveredSamples, trainDataset, hyperlocus);
 
   // sort rules by covering
   sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
