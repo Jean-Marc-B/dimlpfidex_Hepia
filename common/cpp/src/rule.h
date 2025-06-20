@@ -24,16 +24,19 @@ using Json = nlohmann::json;
  */
 class Rule {
 private:
-  std::vector<Antecedent> antecedents; ///< Vector of antecedents in the rule.
-  std::vector<int> coveredSamples;     ///< Vector of sample IDs covered by the rule.
-  int outputClass = -1;                ///< Class targeted by the rule.
-  int coveringSize = -1;               ///< Number of samples covered by the rule.
-  double fidelity = -1;                ///< Fidelity of the rule.
-  double accuracy = -1;                ///< Accuracy of the rule.
-  double confidence = -1;              ///< Confidence of the rule.
+  std::vector<Antecedent> antecedents;             ///< Vector of antecedents in the rule.
+  std::vector<int> coveredSamples;                 ///< Vector of sample IDs covered by the rule.
+  std::vector<int> coveringSizesWithNewAntecedent; ///< Vector of the number of samples covered by the rule for each new antecedent in the rule (with 1, 2, 3, ... antecedents)
+  int outputClass = -1;                            ///< Class targeted by the rule.
+  int coveringSize = -1;                           ///< Number of samples covered by the rule.
+  double fidelity = -1;                            ///< Fidelity of the rule.
+  std::vector<double> increasedFidelity;           ///< Vector of the increased fidelity for each new antecedent.
+  double accuracy = -1;                            ///< Accuracy of the rule.
+  std::vector<double> accuracyChanges;             ///< Vector of the change of accuracy for each new antecedent.
+  double confidence = -1;                          ///< Confidence of the rule.
 
   // define to ease JSON lib use
-  NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rule, antecedents, coveredSamples, outputClass, coveringSize, fidelity, accuracy, confidence)
+  NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rule, antecedents, coveredSamples, coveringSizesWithNewAntecedent, outputClass, coveringSize, fidelity, increasedFidelity, accuracy, accuracyChanges, confidence)
 
 public:
   Rule() = default;
@@ -43,9 +46,12 @@ public:
    */
   Rule(const std::vector<Antecedent> &antecedents,
        const std::vector<int> &coveredSamples,
+       const std::vector<int> &coveringSizesWithNewAntecedent,
        int out_class,
        double fidelity,
+       const std::vector<double> &increasedFidelity,
        double accuracy,
+       const std::vector<double> &accuracyChanges,
        double confidence);
 
   // SETTERS
@@ -72,11 +78,29 @@ public:
   void setFidelity(double value) { fidelity = value; }
 
   /**
+   * @brief Sets the increased fidelity for each new antecedent.
+   *
+   * @param incrFid Vector of the increased fidelity for each new antecedent.
+   */
+  void setIncreasedFidelity(const std::vector<double> &incrFid) {
+    increasedFidelity = incrFid;
+  }
+
+  /**
    * @brief Sets the accuracy of the rule.
    *
    * @param value The new accuracy value.
    */
   void setAccuracy(double value) { accuracy = value; }
+
+  /**
+   * @brief Sets the accuracy changes for each new antecedent.
+   *
+   * @param accChanges Vector of the accuracy changes for each new antecedent.
+   */
+  void setAccuracyChanges(const std::vector<double> &accChanges) {
+    accuracyChanges = accChanges;
+  }
 
   /**
    * @brief Sets the confidence of the rule.
@@ -100,6 +124,15 @@ public:
   void setCoveredSamples(const std::vector<int> &values) {
     coveredSamples = values;
     coveringSize = static_cast<int>(values.size());
+  }
+
+  /**
+   * @brief Sets the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
+   *
+   * @param covSizes Vector of integers representing the covering sizes.
+   */
+  void setCoveringSizesWithNewAntecedent(const std::vector<int> &covSizes) {
+    coveringSizesWithNewAntecedent = covSizes;
   }
 
   // GETTERS
@@ -126,6 +159,13 @@ public:
   std::vector<int> getCoveredSamples() const { return coveredSamples; }
 
   /**
+   * @brief Gets the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
+   *
+   * @return Vector of integers representing the covering sizes.
+   */
+  std::vector<int> getCoveringSizesWithNewAntecedent() const { return coveringSizesWithNewAntecedent; }
+
+  /**
    * @brief Gets the covering size of the rule.
    *
    * @return The covering size.
@@ -147,11 +187,25 @@ public:
   double getFidelity() const { return fidelity; }
 
   /**
+   * @brief Gets the increased fidelity for each new antecedent.
+   *
+   * @return Vector of the increased fidelity for each new antecedent.
+   */
+  std::vector<double> getIncreasedFidelity() const { return increasedFidelity; }
+
+  /**
    * @brief Gets the accuracy of the rule.
    *
    * @return The accuracy.
    */
   double getAccuracy() const { return accuracy; }
+
+  /**
+   * @brief Gets the accuracy changes for each new antecedent.
+   *
+   * @return Vector of the accuracy changes for each new antecedent.
+   */
+  std::vector<double> getAccuracyChanges() const { return accuracyChanges; }
 
   /**
    * @brief Gets the confidence of the rule.

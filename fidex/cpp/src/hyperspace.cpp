@@ -87,7 +87,7 @@ Rule Hyperspace::ruleExtraction(std::vector<double> &mainSampleData, const int m
 
     antecedents.push_back(Antecedent(attribut, inequalityBool, hypValue));
   }
-  return Rule(antecedents, hyperbox->getCoveredSamples(), mainSamplePred, hyperbox->getFidelity(), ruleAccuracy, ruleConfidence);
+  return Rule(antecedents, hyperbox->getCoveredSamples(), hyperbox->getCoveringSizesWithNewAntecedent(), mainSamplePred, hyperbox->getFidelity(), hyperbox->getIncreasedFidelity(), ruleAccuracy, hyperbox->getAccuracyChanges(), ruleConfidence);
 }
 
 /**
