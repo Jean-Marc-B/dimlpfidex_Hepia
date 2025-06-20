@@ -58,6 +58,7 @@ void showStatsParams() {
  */
 void getCovering(std::vector<int> &sampleIds, const Rule &rule, std::vector<std::vector<double>> &testValues) {
   // Get covering index samples
+  sampleIds.clear();
   int attr;
   bool ineq;
   double val;
@@ -574,43 +575,79 @@ int fidexGloStats(const std::string &command) {
       if (ruleFile.substr(ruleFile.find_last_of('.') + 1) == "json") {
         std::vector<Rule> testRules;
 
-        for (int r = 0; r < rules.size(); r++) { // For each rule
-          std::vector<int> testCoveredSamples;
-          getCovering(testCoveredSamples, rules[r], testData);
+        for (int r = 0; r < rules.size(); r++) {
+          const Rule &fullRule = rules[r];
+          std::vector<Antecedent> fullAntecedents = fullRule.getAntecedents();
+          int rulePred = fullRule.getOutputClass();
 
-          size_t coverSize = testCoveredSamples.size();
-          double ruleFidelity = 0;   // porcentage of correct covered samples predictions with respect to the rule prediction
-          double ruleAccuracy = 0;   // porcentage of correct covered samples predictions with respect to the samples true class
-          double ruleConfidence = 0; // mean output prediction score of covered samples
-          int rulePred = rules[r].getOutputClass();
+          std::vector<double> fidelities; // percentage of correct covered samples predictions with respect to the rule prediction
+          std::vector<double> accuracies; // percentage of correct covered samples predictions with respect to the samples true class
+          std::vector<int> coverSizes;
+          std::vector<int> coveredSamples;
 
-          for (int sampleId : testCoveredSamples) {
-            int samplePred = testPreds[sampleId];
-            double sampleOutputPred = 0.0;
-            sampleOutputPred = testOutputValuesPredictions[sampleId][rulePred];
-            int trueClass = testTrueClasses[sampleId];
-            if (samplePred == rulePred) {
-              ruleFidelity += 1;
+          double finalConfidence = 0.0; // mean output prediction score of covered samples
+
+          for (size_t i = 1; i <= fullAntecedents.size(); ++i) {
+            Rule partialRule;
+            std::vector<Antecedent> partialAntecedents(fullAntecedents.begin(), fullAntecedents.begin() + i);
+            partialRule.setAntecedents(partialAntecedents);
+            partialRule.setOutputClass(rulePred);
+
+            getCovering(coveredSamples, partialRule, testData);
+
+            int coverSize = static_cast<int>(coveredSamples.size());
+            double fidelity = 0.0;
+            double accuracy = 0.0;
+
+            for (int sampleId : coveredSamples) {
+              int samplePred = testPreds[sampleId];
+              int trueClass = testTrueClasses[sampleId];
+              double outputScore = testOutputValuesPredictions[sampleId][rulePred];
+
+              if (samplePred == rulePred)
+                fidelity += 1;
+              if (samplePred == trueClass)
+                accuracy += 1;
+
+              // Confidence only for the final rule
+              if (i == fullAntecedents.size()) {
+                finalConfidence += outputScore;
+              }
             }
-            if (samplePred == trueClass) {
-              ruleAccuracy += 1;
+
+            if (coverSize > 0) {
+              fidelity /= static_cast<double>(coverSize);
+              accuracy /= static_cast<double>(coverSize);
+              if (i == fullAntecedents.size()) {
+                finalConfidence /= static_cast<double>(coverSize);
+              }
             }
-            ruleConfidence += sampleOutputPred;
+
+            fidelities.push_back(fidelity);
+            accuracies.push_back(accuracy);
+            coverSizes.push_back(coverSize);
           }
 
-          if (coverSize != 0) {
-            ruleFidelity /= static_cast<double>(coverSize);
-            ruleAccuracy /= static_cast<double>(coverSize);
-            ruleConfidence /= static_cast<double>(coverSize);
+          // Compute variations
+          std::vector<double> fidelityIncreases, accuracyChanges;
+          fidelityIncreases.push_back(fidelities[0]);
+          accuracyChanges.push_back(accuracies[0]);
+
+          for (size_t i = 1; i < fidelities.size(); ++i) {
+            fidelityIncreases.push_back(fidelities[i] - fidelities[i - 1]);
+            accuracyChanges.push_back(accuracies[i] - accuracies[i - 1]);
           }
+
           // if fidelity, accuracy and confidence are 0, ignore it in json writing
-          if (ruleFidelity != 0 || ruleAccuracy != 0 || ruleConfidence != 0) {
-            testRules.push_back(Rule(rules[r].getAntecedents(), testCoveredSamples, rulePred, ruleFidelity, ruleAccuracy, ruleConfidence));
+          if (fidelities.back() != 0 || accuracies.back() != 0 || finalConfidence != 0) {
+            testRules.push_back(Rule(rules[r].getAntecedents(), coveredSamples, coverSizes, rulePred, fidelities.back(), fidelityIncreases, accuracies.back(), accuracyChanges, finalConfidence));
           } else {
-            testRules.push_back(Rule(rules[r].getAntecedents(), {}, rulePred, ruleFidelity, ruleAccuracy, ruleConfidence));
+            testRules.push_back(Rule(rules[r].getAntecedents(), {}, {}, rulePred, fidelities.back(), {}, accuracies.back(), {}, finalConfidence));
           }
         }
+
         Rule::toJsonStatsFile(ruleFile, rules, testRules, decisionThreshold, positiveClassIndex);
+
       } else {
         std::ofstream outputFile(ruleFile);
         if (outputFile.is_open()) {
@@ -622,45 +659,103 @@ int fidexGloStats(const std::string &command) {
             outputFile << "Using a decision threshold of " << decisionThreshold << " for class " << positiveClassIndex << "\n";
           }
 
-          for (int r = 0; r < rules.size(); r++) { // For each rule
-            std::vector<int> sampleIds;
-            getCovering(sampleIds, rules[r], testData);
-            size_t coverSize = sampleIds.size();
-            double ruleFidelity = 0;   // porcentage of correct covered samples predictions with respect to the rule prediction
-            double ruleAccuracy = 0;   // porcentage of correct covered samples predictions with respect to the samples true class
-            double ruleConfidence = 0; // mean output prediction score of covered samples
-            for (int sampleId : sampleIds) {
-              int samplePred = testPreds[sampleId];
-              double sampleOutputPred = 0.0;
-              int rulePred = rules[r].getOutputClass();
-              sampleOutputPred = testOutputValuesPredictions[sampleId][rulePred];
-              int trueClass = testTrueClasses[sampleId];
-              if (samplePred == rulePred) {
-                ruleFidelity += 1;
+          for (int r = 0; r < rules.size(); r++) {
+            const Rule &fullRule = rules[r];
+            std::vector<Antecedent> fullAntecedents = fullRule.getAntecedents();
+            int rulePred = fullRule.getOutputClass();
+
+            std::vector<double> fidelities;
+            std::vector<double> accuracies;
+            std::vector<int> coverSizes;
+
+            double finalConfidence = 0.0;
+
+            for (size_t i = 1; i <= fullAntecedents.size(); ++i) {
+              Rule partialRule;
+              std::vector<Antecedent> partialAntecedents(fullAntecedents.begin(), fullAntecedents.begin() + i);
+              partialRule.setAntecedents(partialAntecedents);
+              partialRule.setOutputClass(rulePred);
+
+              std::vector<int> coveredSamples;
+              getCovering(coveredSamples, partialRule, testData);
+
+              int coverSize = static_cast<int>(coveredSamples.size());
+              double fidelity = 0.0;
+              double accuracy = 0.0;
+
+              for (int sampleId : coveredSamples) {
+                int samplePred = testPreds[sampleId];
+                int trueClass = testTrueClasses[sampleId];
+                double outputScore = testOutputValuesPredictions[sampleId][rulePred];
+
+                if (samplePred == rulePred)
+                  fidelity += 1;
+                if (samplePred == trueClass)
+                  accuracy += 1;
+
+                // Confidence only for the final rule
+                if (i == fullAntecedents.size()) {
+                  finalConfidence += outputScore;
+                }
               }
-              if (samplePred == trueClass) {
-                ruleAccuracy += 1;
+
+              if (coverSize > 0) {
+                fidelity /= static_cast<double>(coverSize);
+                accuracy /= static_cast<double>(coverSize);
+                if (i == fullAntecedents.size()) {
+                  finalConfidence /= static_cast<double>(coverSize);
+                }
               }
-              ruleConfidence += sampleOutputPred;
+
+              fidelities.push_back(fidelity);
+              accuracies.push_back(accuracy);
+              coverSizes.push_back(coverSize);
             }
-            if (coverSize != 0) {
-              ruleFidelity /= static_cast<double>(coverSize);
-              ruleAccuracy /= static_cast<double>(coverSize);
-              ruleConfidence /= static_cast<double>(coverSize);
+
+            // Compute variations
+            std::vector<double> fidelityIncreases, accuracyChanges;
+            fidelityIncreases.push_back(fidelities[0]);
+            accuracyChanges.push_back(accuracies[0]);
+
+            for (size_t i = 1; i < fidelities.size(); ++i) {
+              fidelityIncreases.push_back(fidelities[i] - fidelities[i - 1]);
+              accuracyChanges.push_back(accuracies[i] - accuracies[i - 1]);
             }
+
             std::vector<std::string> trainStats = splitString(rules[r].toString(attributeNames, classNames), "\n");
             outputFile << "\n"
                        << "Rule " << std::to_string(r + 1) << ": " << trainStats[0] << "" << std::endl;
-            outputFile << trainStats[1] << " --- Test Covering size : " << coverSize << "" << std::endl;
-            if (coverSize == 0) {
+            outputFile << trainStats[1] << " --- Test Covering size : " << coverSizes.back() << "" << std::endl;
+            if (coverSizes.back() == 0) {
               outputFile << trainStats[2] << "" << std::endl;
               outputFile << trainStats[3] << "" << std::endl;
               outputFile << trainStats[4] << "" << std::endl;
+              outputFile << trainStats[5] << std::endl;
+              outputFile << trainStats[6] << std::endl;
+              outputFile << trainStats[7] << std::endl;
               outputFile << "" << std::endl;
             } else {
-              outputFile << trainStats[2] << " --- Test Fidelity : " << formattingDoubleToString(ruleFidelity) << "" << std::endl;
-              outputFile << trainStats[3] << " --- Test Accuracy : " << formattingDoubleToString(ruleAccuracy) << "" << std::endl;
-              outputFile << trainStats[4] << " --- Test Confidence : " << formattingDoubleToString(ruleConfidence) << "" << std::endl;
+              outputFile << trainStats[2] << " --- Test Fidelity : " << formattingDoubleToString(fidelities.back()) << "" << std::endl;
+              outputFile << trainStats[3] << " --- Test Accuracy : " << formattingDoubleToString(accuracies.back()) << "" << std::endl;
+              outputFile << trainStats[4] << " --- Test Confidence : " << formattingDoubleToString(finalConfidence) << "" << std::endl;
+              outputFile << trainStats[5] << std::endl;
+              outputFile << "   Test Covering size evolution with antecedents : ";
+              for (int c : coverSizes) {
+                outputFile << c << " ";
+              }
+              outputFile << std::endl;
+              outputFile << trainStats[6] << std::endl;
+              outputFile << "   Test Fidelity increase with antecedents : ";
+              for (double f : fidelityIncreases) {
+                outputFile << formattingDoubleToString(f) << " ";
+              }
+              outputFile << std::endl;
+              outputFile << trainStats[7] << std::endl;
+              outputFile << "   Test Accuracy variation with antecedents : ";
+              for (double a : accuracyChanges) {
+                outputFile << formattingDoubleToString(a) << " ";
+              }
+              outputFile << std::endl;
               outputFile << "" << std::endl;
             }
           }

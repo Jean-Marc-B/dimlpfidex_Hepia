@@ -10,13 +10,16 @@
  * @param accuracy Double indicating the accuracy of the rule.
  * @param confidence Double indicating the confidence of the rule.
  */
-Rule::Rule(const std::vector<Antecedent> &antecedents, const std::vector<int> &coveredSamples, int outClass, double fidelity, double accuracy, double confidence) {
+Rule::Rule(const std::vector<Antecedent> &antecedents, const std::vector<int> &coveredSamples, const std::vector<int> &coveringSizesWithNewAntecedent, int outClass, double fidelity, const std::vector<double> &increasedFidelity, double accuracy, const std::vector<double> &accuracyChanges, double confidence) {
   setAntecedents(antecedents);
   setCoveredSamples(coveredSamples);
+  setCoveringSizesWithNewAntecedent(coveringSizesWithNewAntecedent);
   setCoveringSize(static_cast<int>(coveredSamples.size()));
   setOutputClass(outClass);
   setFidelity(fidelity);
+  setIncreasedFidelity(increasedFidelity);
   setAccuracy(accuracy);
+  setAccuracyChanges(accuracyChanges);
   setConfidence(confidence);
 }
 
@@ -34,6 +37,9 @@ std::string Rule::toString(const std::vector<std::string> &attributes, const std
   double _fidelity = getFidelity();
   double _accuracy = getAccuracy();
   double _confidence = getConfidence();
+  std::vector<int> _coveringSizesWithNewAntecedent = getCoveringSizesWithNewAntecedent();
+  std::vector<double> _increasedFidelity = getIncreasedFidelity();
+  std::vector<double> _accuracyChanges = getAccuracyChanges();
 
   for (Antecedent a : getAntecedents()) {
     if (!attributes.empty()) {
@@ -64,7 +70,21 @@ std::string Rule::toString(const std::vector<std::string> &attributes, const std
          << "   Train Accuracy : " << formattingDoubleToString(_accuracy)
          << std::endl
          << "   Train Confidence : " << formattingDoubleToString(_confidence)
-         << std::endl;
+         << std::endl
+         << "   Train Covering size evolution with antecedents : ";
+  for (int c : _coveringSizesWithNewAntecedent) {
+    result << c << " ";
+  }
+  result << std::endl
+         << "   Train Fidelity increase with antecedents : ";
+  for (double f : _increasedFidelity) {
+    result << formattingDoubleToString(f) << " ";
+  }
+  result << std::endl
+         << "   Train Accuracy variation with antecedents : ";
+  for (double a : _accuracyChanges) {
+    result << formattingDoubleToString(a) << " ";
+  }
 
   return result.str();
 }
@@ -173,9 +193,8 @@ void Rule::toJsonStatsFile(const std::string &filename, const std::vector<Rule> 
   jsonData["threshold"] = threshold;
   jsonData["positive index class"] = positiveIndex;
 
-
   for (int i = 0; i < trainRules.size(); i++) {
-    jsonData["rules"].push_back({{"train", trainRules[i]},{"test",testRules[i]}});
+    jsonData["rules"].push_back({{"train", trainRules[i]}, {"test", testRules[i]}});
   }
 
   ofs << std::setw(4) << jsonData << std::endl;
@@ -219,13 +238,22 @@ bool Rule::isEqual(const Rule &other) const {
   if (getCoveredSamples() != other.getCoveredSamples())
     return false;
 
+  if (getCoveringSizesWithNewAntecedent() != other.getCoveringSizesWithNewAntecedent())
+    return false;
+
   if (getOutputClass() != other.getOutputClass())
     return false;
 
   if (fabs(getFidelity() - other.getFidelity()) > epsilon)
     return false;
 
+  if (getIncreasedFidelity() != other.getIncreasedFidelity())
+    return false;
+
   if (fabs(getAccuracy() != other.getAccuracy()) > epsilon)
+    return false;
+
+  if (getAccuracyChanges() != other.getAccuracyChanges())
     return false;
 
   if (fabs(getConfidence() != other.getConfidence()) > epsilon)
@@ -537,6 +565,36 @@ void getRules(std::vector<Rule> &rules, const std::string &rulesFile, DataSetFid
         rule.setAccuracy(stod(splitString(line, " ")[3]));
         getline(rulesData, line); // Confidence
         rule.setConfidence(stod(splitString(line, " ")[3]));
+        getline(rulesData, line); // Cov size evolution
+        std::vector<std::string> elements = splitString(line, " ");
+        if (elements.size() <= 7) {
+          throw FileFormatError("Error : In file " + rulesFile + ", missing covering size for new antecedents in the line " + line + ".");
+        }
+        std::vector<int> covSizeAnt;
+        for (size_t i = 7; i < elements.size(); i++) {
+          covSizeAnt.push_back(std::stoi(elements[i]));
+        }
+        rule.setCoveringSizesWithNewAntecedent(covSizeAnt);
+        getline(rulesData, line); // Fidelity increase
+        elements = splitString(line, " ");
+        if (elements.size() <= 6) {
+          throw FileFormatError("Error : In file " + rulesFile + ", missing increased fidelity for new antecedents in the line " + line + ".");
+        }
+        std::vector<double> fidIncr;
+        for (size_t i = 6; i < elements.size(); i++) {
+          fidIncr.push_back(std::stod(elements[i]));
+        }
+        rule.setIncreasedFidelity(fidIncr);
+        getline(rulesData, line); // Accuracy change
+        elements = splitString(line, " ");
+        if (elements.size() <= 6) {
+          throw FileFormatError("Error : In file " + rulesFile + ", missing accuracy change for new antecedents in the line " + line + ".");
+        }
+        std::vector<double> accChange;
+        for (size_t i = 6; i < elements.size(); i++) {
+          accChange.push_back(std::stod(elements[i]));
+        }
+        rule.setAccuracyChanges(accChange);
         rules.push_back(rule);
       }
     }

@@ -92,6 +92,9 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   hyperspace->getHyperbox()->setCoveredSamples(coveredSamples);
   hyperspace->getHyperbox()->computeFidelity(mainSamplePred, trainPreds); // Compute fidelity of initial hyperbox
   hyperspace->getHyperbox()->resetDiscriminativeHyperplans();             // We reset hyperbox discriminativeHyperplans
+  hyperspace->getHyperbox()->resetIncreasedFidelity();                    // We reset the increased fidelities
+  hyperspace->getHyperbox()->resetAccuracyChanges();                      // We reset the accuracy changes
+  hyperspace->getHyperbox()->resetCoveringSizesWithNewAntecedent();       // We reset the covering sizes for each antecedent
 
   if (_usingTestSamples && showInitialFidelity) {
     std::cout << "Initial fidelity : " << hyperspace->getHyperbox()->getFidelity() << std::endl;
@@ -178,21 +181,27 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
       // antecedent is not added if fidelity and covering size did not increase
       if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity() || (bestHyperbox->getFidelity() == hyperspace->getHyperbox()->getFidelity() && bestHyperbox->getCoveredSamples().size() > hyperspace->getHyperbox()->getCoveredSamples().size())) {
         hyperspace->getHyperbox()->setFidelity(bestHyperbox->getFidelity());
+        hyperspace->getHyperbox()->addIncreasedFidelity(bestHyperbox->getFidelity());
         hyperspace->getHyperbox()->setCoveredSamples(bestHyperbox->getCoveredSamples());
+        hyperspace->getHyperbox()->addCoveringSizesWithNewAntecedent(bestHyperbox->getCoveredSamples().size());
         hyperspace->getHyperbox()->discriminateHyperplan(bestDimension, indexBestHyp);
+
+        double ruleAccuracy;
+        if (hasTrueClasses && _usingTestSamples) {
+          bool mainSampleCorrect = mainSamplePred == mainSampleClass;
+          ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses, mainSampleCorrect); // Percentage of correct model prediction on samples covered by the rule
+        } else {
+          ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses); // Percentage of correct model prediction on samples covered by the rule
+        }
+        hyperspace->getHyperbox()->addAccuracyChanges(ruleAccuracy);
       }
     }
     nbIt += 1;
   }
 
   // Compute rule accuracy and confidence
-  double ruleAccuracy;
-  if (hasTrueClasses && _usingTestSamples) {
-    bool mainSampleCorrect = mainSamplePred == mainSampleClass;
-    ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses, mainSampleCorrect); // Percentage of correct model prediction on samples covered by the rule
-  } else {
-    ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses); // Percentage of correct model prediction on samples covered by the rule
-  }
+  std::vector<double> accuracyChanges = hyperspace->getHyperbox()->getAccuracyChanges();
+  double ruleAccuracy = std::accumulate(accuracyChanges.begin(), accuracyChanges.end(), 0.0);
 
   double ruleConfidence;
   ruleConfidence = hyperspace->computeRuleConfidence(trainOutputValuesPredictions, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples

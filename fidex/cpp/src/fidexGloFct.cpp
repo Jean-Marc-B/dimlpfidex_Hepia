@@ -708,12 +708,12 @@ int fidexGlo(const std::string &command) {
         }
       } else {
         // writing JSON file
-        for (int i = 0; i < rulesPerSamples.size(); i++) {
-          std::cout << "Sample #" << i << "---------------------------------------------------------------------------------------------" << std::endl;
-          for (Rule r : rulesPerSamples[i]) {
-            std::cout << r << std::endl;
-          }
-        }
+        // for (int i = 0; i < rulesPerSamples.size(); i++) {
+        //   std::cout << "Sample #" << i << "---------------------------------------------------------------------------------------------" << std::endl;
+        //   for (Rule r : rulesPerSamples[i]) {
+        //     std::cout << r << std::endl;
+        //   }
+        // }
         Rule::toJsonGloFile(filename, rulesPerSamples);
       }
     }

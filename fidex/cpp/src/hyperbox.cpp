@@ -63,6 +63,32 @@ std::vector<int> Hyperbox::getCoveredSamples() const {
 }
 
 /**
+ * @brief Gets the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
+ *
+ * @return Vector of integers representing the covering sizes.
+ */
+std::vector<int> Hyperbox::getCoveringSizesWithNewAntecedent() const {
+  return coveringSizesWithNewAntecedent;
+}
+
+/**
+ * @brief Adds the new covering size of the rule with the new antecedant in the list.
+ *
+ * @param covSize Covering size of the rule with the new added antecedant.
+ */
+void Hyperbox::addCoveringSizesWithNewAntecedent(int covSize) {
+  coveringSizesWithNewAntecedent.push_back(covSize);
+}
+
+/**
+ * @brief Reset the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
+ */
+void Hyperbox::resetCoveringSizesWithNewAntecedent() {
+  std::vector<int> covSizeAnt;
+  coveringSizesWithNewAntecedent = covSizeAnt;
+}
+
+/**
  * @brief Computes the fidelity of the samples covered by the hyperbox with respect to the model's prediction.
  *
  * @param mainsamplePred Prediction of the sample of interest.
@@ -96,6 +122,68 @@ double Hyperbox::getFidelity() const {
  */
 void Hyperbox::setFidelity(double x) {
   fidelity = x;
+}
+
+/**
+ * @brief Gets the increased fidelity for each new antecedent.
+ *
+ * @return Vector of the increased fidelity for each new antecedent.
+ */
+std::vector<double> Hyperbox::getIncreasedFidelity() const {
+  return increasedFidelity;
+}
+
+/**
+ * @brief Adds in the list the increased fidelity with the new antecedent.
+ *
+ * @param newFidelity New fidelity with the new antecedent.
+ */
+void Hyperbox::addIncreasedFidelity(double newFidelity) {
+
+  double incrFidelity = newFidelity;
+  if (increasedFidelity.size() != 0) {
+    incrFidelity -= std::accumulate(increasedFidelity.begin(), increasedFidelity.end(), 0.0); // We remove the sum of precedents increase, which is the last fidelity obtained
+  }
+  increasedFidelity.push_back(incrFidelity);
+}
+
+/**
+ * @brief Reset the increased fidelity for each new antecedent.
+ */
+void Hyperbox::resetIncreasedFidelity() {
+  std::vector<double> incrFid;
+  increasedFidelity = incrFid;
+}
+
+/**
+ * @brief Gets the accuracy changes for each new antecedent.
+ *
+ * @return Vector of the accuracy changes for each new antecedent.
+ */
+std::vector<double> Hyperbox::getAccuracyChanges() const {
+  return accuracyChanges;
+}
+
+/**
+ * @brief Adds in the list the accuracy changes with the new antecedent.
+ *
+ * @param newAccuracy New accuracy with the new antecedent.
+ */
+void Hyperbox::addAccuracyChanges(double newAccuracy) {
+
+  double changeAcc = newAccuracy;
+  if (accuracyChanges.size() != 0) {
+    changeAcc -= std::accumulate(accuracyChanges.begin(), accuracyChanges.end(), 0.0); // We remove the sum of precedent changes, which is the last accuracy obtained
+  }
+  accuracyChanges.push_back(changeAcc);
+}
+
+/**
+ * @brief Reset the accuracy changes for each new antecedent.
+ */
+void Hyperbox::resetAccuracyChanges() {
+  std::vector<double> changeAcc;
+  accuracyChanges = changeAcc;
 }
 
 /**
