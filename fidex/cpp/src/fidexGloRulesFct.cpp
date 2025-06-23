@@ -56,6 +56,8 @@ void showRulesParams() {
   printOptionDescription("--start_index <int [0,nb_datas[>", "Index from which samples are going to be choosed (default: 0)");
   printOptionDescription("--end_index <int [0,nb_datas[>", "Index non inclusive until which samples are going to be choosed  (default: nb_datas)");
   printOptionDescription("--seed <int [0,inf[>", "Seed for random number generation, 0=random. Anything else than 0 is an arbitrary seed that can be reused to obtain the same randomly generated sequence and therefore getting same results (default: 0)");
+  printOptionDescription("--aggregate_rules <bool>", "Rules aggregation option. if set, it will load every rule file present inside the --aggregate_folder, merge them together and write them inside the --global_rules_outfile (default: false)");
+  printOptionDescription("--aggregate_folder <string>", "Path leading to the subrules folder. Useless if --aggregate_rules is not set.");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
