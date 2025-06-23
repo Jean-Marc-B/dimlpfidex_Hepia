@@ -58,6 +58,7 @@ void showRulesParams() {
   printOptionDescription("--seed <int [0,inf[>", "Seed for random number generation, 0=random. Anything else than 0 is an arbitrary seed that can be reused to obtain the same randomly generated sequence and therefore getting same results (default: 0)");
   printOptionDescription("--aggregate_rules <bool>", "Rules aggregation option. if set, it will load every rule file present inside the --aggregate_folder, merge them together and write them inside the --global_rules_outfile (default: false)");
   printOptionDescription("--aggregate_folder <string>", "Path leading to the subrules folder. Useless if --aggregate_rules is not set.");
+  printOptionDescription("--no_simplification <bool>", "If set, the generated rules will not go through the simplification process. Keeping every duplicated rule.");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -253,6 +254,7 @@ void readRuleFiles(std::vector<Rule> &rules, Parameters &p, DataSetFid &dataset)
     }
     
     std::cout << rules.size() <<" rules successfully loaded" << std::endl;
+
     closedir(rulesFilesDir);
 }
 
@@ -279,6 +281,10 @@ std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples
   } else {
     generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
   }
+
+  sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
+    return r1.getCoveringSize() > r2.getCoveringSize();
+  });
 
   return rules;
 }
@@ -315,6 +321,11 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
 
   std::cout << "Computing global ruleset..." << std::endl;
 
+  if (p.getBool(NO_SIMPLIFICATION)) {
+    std::cout << "--no_simplification is set. Using rules set as is." << std::endl;
+    return rules;
+  }
+
   // remove duplicates
   rules.erase(unique(rules.begin(), rules.end()), rules.end());
 
@@ -330,7 +341,8 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
     std::vector<int> difference(notCoveredSamples.size());
 
     for (int i = 0; i < rules.size(); i++) {
-      // !WARNING: in case of rules being loaded with the AGGREGATE option: this cannot work properly with txt format as it does not store covered samples
+      // ! WARNING: in case of rules being loaded with the AGGREGATE option: 
+      // ! this cannot work properly with txt format as it does not store covered samples
       currentRuleSamples = rules[i].getCoveredSamples(); 
       
       iterator = set_difference(notCoveredSamples.begin(),
@@ -530,6 +542,7 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultInt(END_INDEX, -1);
   p.setDefaultInt(NB_THREADS, 1);
   p.setDefaultBool(AGGREGATE_RULES, false);
+  p.setDefaultBool(NO_SIMPLIFICATION, false);
 
   if (p.getInt(END_INDEX) != -1 && p.getInt(START_INDEX) > p.getInt(END_INDEX)) {
     throw CommandArgumentException("start_index cannot be greater than end_index.");
@@ -655,7 +668,7 @@ int fidexGloRules(const std::string &command) {
                                               MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                               DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
                                               NB_THREADS, COVERING_STRATEGY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX, 
-                                              AGGREGATE_RULES, AGGREGATE_FOLDER};
+                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");

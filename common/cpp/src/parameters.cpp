@@ -401,6 +401,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setString(AGGREGATE_FOLDER, arg);
     break;
 
+  case NO_SIMPLIFICATION:
+    setBool(NO_SIMPLIFICATION, arg);
+    break;
+
   default: // If we put another -X option
     throw CommandArgumentException("Illegal option : " + param);
   }
