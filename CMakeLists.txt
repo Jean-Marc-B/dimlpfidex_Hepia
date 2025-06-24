@@ -87,10 +87,10 @@ if (Python_FOUND AND Python_Interpreter_FOUND AND pybind11_FOUND)
     message(STATUS "Pybind11 include directories: ${pybind11_INCLUDE_DIRS}")
     include_directories(
         ${pybind11_INCLUDE_DIRS}
-    )
-endif()
-
-# add dirent windows compatibility layer (https://github.com/tronkko/dirent)
+        )
+        endif()
+        
+        # add dirent windows compatibility layer (https://github.com/tronkko/dirent)
 include(FetchContent)
 FetchContent_Declare(
     dirent
@@ -98,6 +98,7 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP true
 )
 FetchContent_MakeAvailable(dirent)
+message(STATUS "Dirent Windows compatibility layer loaded")
 
 # add_subdirectory("example")
 add_subdirectory("common")
