@@ -60,8 +60,6 @@ add_dependencies(fidexGloStats common)
 target_link_libraries(fidexExe common)
 target_link_libraries(fidexGlo common)
 target_link_libraries(fidexGloRules common)
-target_link_libraries(fidexGloRules dirent) # bind dirent
-target_link_libraries(fidexGloRulesLib dirent) # bind dirent
 target_link_libraries(fidexGloStats common)
 
 target_link_libraries(fidexLib common)
