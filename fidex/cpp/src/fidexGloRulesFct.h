@@ -17,8 +17,13 @@
 #include <sstream>
 #include <string>
 #include <time.h>
-#include <dirent.h>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include "../../../dirent/include/dirent.h"
+#else
+#include <dirent.h>
+#endif
 
 /**
  * @brief Displays the parameters for fidexGloRules.
