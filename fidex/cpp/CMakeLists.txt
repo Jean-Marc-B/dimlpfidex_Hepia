@@ -50,15 +50,18 @@ add_executable(fidexExe ${FIDEX_COMMON_SRC} ${FIDEX_SRC} src/fidex.cpp)
 add_executable(fidexGlo ${FIDEX_COMMON_SRC} ${FIDEXGLO_SRC} src/fidexGlo.cpp)
 add_executable(fidexGloRules ${FIDEX_COMMON_SRC} ${FIDEXGLORULES_SRC} src/fidexGloRules.cpp)
 add_executable(fidexGloStats ${FIDEX_COMMON_SRC} ${FIDEXGLOSTATS_SRC} src/fidexGloStats.cpp)
+
 add_dependencies(fidexExe common)
 add_dependencies(fidexGlo common)
 add_dependencies(fidexGloRulesLib common)
 add_dependencies(fidexGloRules common)
 add_dependencies(fidexGloStats common)
+
 target_link_libraries(fidexExe common)
 target_link_libraries(fidexGlo common)
 target_link_libraries(fidexGloRules common)
-target_link_libraries(fidexGloRules dirent) # bind dirent to fidexGloRules
+target_link_libraries(fidexGloRules dirent) # bind dirent
+target_link_libraries(fidexGloRulesLib dirent) # bind dirent
 target_link_libraries(fidexGloStats common)
 
 target_link_libraries(fidexLib common)
