@@ -30,4 +30,4 @@ set_target_properties(
 
 target_link_libraries(fidex PUBLIC common)
 
-install(TARGETS fidex LIBRARY DESTINATION ./dimlpfidex)
+install(TARGETS fidex LIBRARY DESTINATION dimlpfidex)

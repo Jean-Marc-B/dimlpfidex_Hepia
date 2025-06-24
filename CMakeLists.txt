@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21.2)
+cmake_minimum_required(VERSION 4.0)
 project(dimlpfidex)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -89,6 +89,15 @@ if (Python_FOUND AND Python_Interpreter_FOUND AND pybind11_FOUND)
         ${pybind11_INCLUDE_DIRS}
     )
 endif()
+
+# add dirent windows compatibility layer (https://github.com/tronkko/dirent)
+include(FetchContent)
+FetchContent_Declare(
+    dirent
+    URL https://github.com/tronkko/dirent/archive/refs/tags/1.25.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP true
+)
+FetchContent_MakeAvailable(dirent)
 
 # add_subdirectory("example")
 add_subdirectory("common")
