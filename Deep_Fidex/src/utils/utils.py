@@ -295,7 +295,7 @@ def check_minimal_rule(rule):
         if antecedents['lt']:
             minimal_antecedents.append(antecedents['lt'])
 
-    minimal_rule = Rule(minimal_antecedents, rule.target_class, rule.covering_size, rule.fidelity, rule.accuracy, rule.confidence)
+    minimal_rule = Rule(minimal_antecedents, rule.target_class, rule.covering_size, rule.coveringSizesWithNewAntecedent, rule.fidelity, rule.increasedFidelity, rule.accuracy, rule.accuracyChanges, rule.confidence)
 
     return minimal_rule
 
@@ -385,7 +385,7 @@ def getRules(rules_file, with_covered_samples=False, data=None):
                     antecedents.append(Antecedent(attribute, inequality, value))
 
                 # Create a Rule object and append it to the list
-                rules.append(Rule(antecedents, rule_data['outputClass'], rule_data['coveringSize'], rule_data['fidelity'], rule_data['accuracy'], rule_data['confidence'], rule_data['coveredSamples']))
+                rules.append(Rule(antecedents, rule_data['outputClass'], rule_data['coveringSize'], rule_data['coveringSizesWithNewAntecedent'], rule_data['fidelity'], rule_data['increasedFidelity'], rule_data['accuracy'], rule_data['accuracyChanges'], rule_data['confidence'], rule_data['coveredSamples']))
 
     else:
         with open(rules_file, "r") as myFile:
@@ -417,7 +417,13 @@ def getRules(rules_file, with_covered_samples=False, data=None):
                     accuracy = float(line.split(" : ")[1])
                     line = myFile.readline()
                     confidence = float(line.split(" : ")[1])
-                    new_rule = Rule(antecedents, rule_class, cov_size, fidelity, accuracy, confidence)
+                    line = myFile.readline()
+                    covering_sizes = list(map(int, line.split(" : ")[1].strip().split()))
+                    line = myFile.readline()
+                    increased_fidelity = list(map(float, line.split(" : ")[1].strip().split()))
+                    line = myFile.readline()
+                    accuracy_changes = list(map(float, line.split(" : ")[1].strip().split()))
+                    new_rule = Rule(antecedents, rule_class, cov_size, covering_sizes, fidelity, increased_fidelity, accuracy, accuracy_changes, confidence)
                     if with_covered_samples:
                         new_rule.covered_samples = getCoveredSamples(new_rule, data)[1]
 

@@ -447,7 +447,7 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
     num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
 
     # Create the matplotlib figure with dynamic rows and columns
-    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows))
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows), constrained_layout=True)
     fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
 
     # If axes is a single AxesSubplot, convert it to a list for consistent indexing
@@ -460,7 +460,6 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
     axes[0].imshow(original_image_rgb)
     axes[0].set_title(f"Original Image of class {true_class}")
     axes[0].axis('off')
-
     # Show combined image
     axes[1].imshow(combined_image.astype(np.uint8))
     axes[1].set_title("Combined Filters")
@@ -485,7 +484,13 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
             area_Height_end = area_Height+filter_size[0][0]-1
             area_Width_end = area_Width+filter_size[0][1]-1
             class_name = classes[channel_id]
-            axes[i+2].set_title(f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}")
+            axes[i+2].set_title(
+                f"P_class_{class_name}_area_[{area_Height}-{area_Height_end}]x[{area_Width}-{area_Width_end}]{ineq}{antecedent.value:.6f}\n"
+                f"Covering size : {rule.coveringSizesWithNewAntecedent[i]}\n"
+                f"Gain of fidelity : {rule.increasedFidelity[i]:.6f}\n"
+                f"Change in accuracy : {rule.accuracyChanges[i]:.6f}"
+                )
+
 
         else: # image part
             if not prob_and_img_in_one_matrix:
@@ -494,15 +499,20 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
                 height = round(area_Height * scale_h)
                 width = round(area_Width * scale_w)
                 channel = antecedent.attribute % nb_channels
-            axes[i+2].set_title(f"Pixel_{height}x{width}x{channel}{ineq}{antecedent.value:.6f}")
+            axes[i+2].set_title(
+                f"Pixel_{height}x{width}x{channel}{ineq}{antecedent.value:.6f}\n"
+                f"Covering size : {rule.coveringSizesWithNewAntecedent[i]}\n"
+                f"Gain of fidelity : {rule.increasedFidelity[i]:.6f}\n"
+                f"Change in accuracy : {rule.accuracyChanges[i]:.6f}"
+                )
         axes[i+2].axis('off')
 
     # Hide any remaining empty subplots if total_images < num_rows * num_columns
     for j in range(total_images, len(axes)):
         axes[j].axis('off')
 
-    plt.tight_layout() # Adjust spacing
-    plt.subplots_adjust(top=0.85)  # Let space for the main title
+    # plt.tight_layout() # Adjust spacing
+    # plt.subplots_adjust(top=0.7)  # Let space for the main title
 
     plt.close(fig)
 
@@ -725,6 +735,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
 
     # 1) Load rules
     global_rules = getRules(cfg["global_rules_file"])
+
 
     # 2) Load attributes
     if args.statistic == "histogram":
