@@ -151,6 +151,7 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
 
         # Save in histograms in .npy file
         print("\nSaving histograms...")
+
         train_histograms = train_histograms.reshape(nb_train_images, cfg["nb_stats_attributes"])
         test_histograms = test_histograms.reshape(nb_test_images, cfg["nb_stats_attributes"])
         output_data(train_histograms, cfg["train_stats_file"])

@@ -145,8 +145,8 @@ def load_config(args, script_dir):
         config["batch_size_second_model"] = 32
     else:
         config["model"] = "VGG"
-        config["nbIt"] = 60
-        config["batch_size"] = 32
+        config["nbIt"] = 80
+        config["batch_size"] = 16
         config["batch_size_second_model"] = 8
 
     if getattr(args, "train_with_patches", False):

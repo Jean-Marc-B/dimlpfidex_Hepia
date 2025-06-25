@@ -17,14 +17,17 @@ class Rule:
     - __repr__: Returns a string representation (same as __str__).
     """
 
-    def __init__(self, antecedents, target_class, covering_size=None, fidelity=None, accuracy=None, confidence=None, covered_samples=None, include_X=True):
+    def __init__(self, antecedents, target_class, covering_size=None, coveringSizesWithNewAntecedent=None, fidelity=None, increasedFidelity=None, accuracy=None, accuracyChanges=None, confidence=None, covered_samples=None, include_X=True):
 
         self.antecedents = antecedents
         self.target_class = target_class
         self.covering_size = covering_size
+        self.coveringSizesWithNewAntecedent = coveringSizesWithNewAntecedent
         self.covered_samples = covered_samples
         self.fidelity = fidelity
+        self.increasedFidelity = increasedFidelity
         self.accuracy = accuracy
+        self.accuracyChanges = accuracyChanges
         self.confidence = confidence
         self.include_X = include_X
         if not self.include_X:
@@ -59,6 +62,16 @@ class Rule:
             metrics.append(f"Train Accuracy : {self.accuracy:.2f}")
         if self.confidence is not None:
             metrics.append(f"Train Confidence : {self.confidence:.2f}")
+        if self.coveringSizesWithNewAntecedent is not None:
+            formatted_covering = ' '.join(str(v) for v in self.coveringSizesWithNewAntecedent)
+            metrics.append(f"Train Covering size evolution with antecedents : {formatted_covering}")
+        if self.increasedFidelity is not None:
+            formatted_fidelity = ' '.join(f"{v:.2f}" for v in self.increasedFidelity)
+            metrics.append(f"Train Fidelity increase with antecedents : {formatted_fidelity}")
+        if self.accuracyChanges is not None:
+            formatted_accuracy = ' '.join(f"{v:.2f}" for v in self.accuracyChanges)
+            metrics.append(f"Train Accuracy variation with antecedents : {formatted_accuracy}")
+
         rule_str = f"{antecedents_str} -> class {self.target_class}"
         if metrics:
             rule_str += "\n\t" + '\n\t'.join(metrics) + "\n"
