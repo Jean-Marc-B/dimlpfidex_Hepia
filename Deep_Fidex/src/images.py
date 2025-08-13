@@ -10,6 +10,7 @@ import random
 import math
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout
+import textwrap
 
 from utils.utils import (
     getRules,
@@ -328,6 +329,18 @@ def highlight_area_activations_sum(cfg, CNNModel, intermediate_model, image, tru
 
 ###############################################################
 
+def split_title(title, max_line_length=50):
+    """Split title into two lines, regardless of length."""
+    wrapped = textwrap.wrap(title, max_line_length)
+    if len(wrapped) == 1:
+        # For short titles, artificially split in the middle
+        midpoint = len(title) // 2
+        for i in range(midpoint, 0, -1):
+            if title[i] == "_":  # Prefer splitting at underscores or spaces
+                return title[:i] + "\n" + title[i+1:]
+        return title[:midpoint] + "\n" + title[midpoint:]
+    return "\n".join(wrapped[:2])
+
 def highlight_area_probability_image(image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels, statistic):
 
     if statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
@@ -442,7 +455,7 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
     total_images = num_antecedents + 2  # Original, combined, and individual filters
 
     # We set a maximum number of columns per row for better visualization
-    max_columns = 4
+    max_columns = 2
     num_columns = min(max_columns, total_images)
     num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
 
@@ -458,11 +471,13 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
 
     # Show the original image on top left
     axes[0].imshow(original_image_rgb)
-    axes[0].set_title(f"Original Image of class {true_class}")
+    axes[0].set_title(f"Original Image of class {true_class}", fontsize=20)
+    #axes[0].set_title(f"Original Image of class {true_class}")
     axes[0].axis('off')
     # Show combined image
     axes[1].imshow(combined_image.astype(np.uint8))
-    axes[1].set_title("Combined Filters")
+    axes[1].set_title("Combined Filters", fontsize=20)
+    #axes[1].set_title("Combined Filters")
     axes[1].axis('off')
 
     # Show each antecedent image
