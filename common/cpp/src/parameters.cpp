@@ -637,9 +637,9 @@ void Parameters::setIntVector(ParameterCode id, const std::vector<int> &value) {
  * @throws CommandArgumentException if the parameter is already set.
  */
 void Parameters::setString(ParameterCode id, const std::string &value) {
-  if (isStringSet(id)) {
-    throwAlreadySetArgumentException(id, value);
-  }
+  // if (isStringSet(id)) {
+  //   throwAlreadySetArgumentException(id, value);
+  // }
   _stringParams[id] = value;
 }
 
