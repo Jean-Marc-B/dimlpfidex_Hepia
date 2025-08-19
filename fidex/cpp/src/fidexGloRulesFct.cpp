@@ -282,6 +282,7 @@ std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples
     readRuleFiles(rules, p, trainDataset);
   } else {
     generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
+    // TODO: Rule cleaning process
   }
 
   sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
@@ -608,6 +609,18 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.assertStringExists(TRAIN_PRED_FILE);
   p.assertStringExists(GLOBAL_RULES_OUTFILE);
   p.assertIntExists(HEURISTIC);
+
+  if (p.isIntSet(START_INDEX) || p.isIntSet(END_INDEX)) {
+    std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
+    std::string filenameWithoutExtension = globalRulesOutfile.substr(0,globalRulesOutfile.find_last_of("."));
+    std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
+
+    if (extension != "json") {
+      std::string updated_file = filenameWithoutExtension + ".json";
+      p.setString(GLOBAL_RULES_OUTFILE, updated_file);
+      std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
+    }
+  }
 
   if (p.getBool(AGGREGATE_RULES)) {
     p.assertStringExists(AGGREGATE_FOLDER);
