@@ -96,7 +96,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   hyperspace->getHyperbox()->resetAccuracyChanges();                      // We reset the accuracy changes
   hyperspace->getHyperbox()->resetCoveringSizesWithNewAntecedent();       // We reset the covering sizes for each antecedent
 
-  if (_usingTestSamples && showInitialFidelity) {
+  if (_usingTestSamples && showInitialFidelity) { // Test samples are not used with fidexGloRules, so we don't show the initial fidelity in this case
     std::cout << "Initial fidelity : " << hyperspace->getHyperbox()->getFidelity() << std::endl;
   }
 
@@ -149,8 +149,10 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
         currentHyperbox->computeCoveredSamples(hyperspace->getHyperbox()->getCoveredSamples(), attribut, trainData, mainSampleGreater, hypValue); // Compute new cover samples
         currentHyperbox->computeFidelity(mainSamplePred, trainPreds);                                                                             // Compute fidelity
 
-        // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover
-        if (currentHyperbox->getCoveredSamples().size() >= minNbCover && (currentHyperbox->getFidelity() > bestHyperbox->getFidelity() || (currentHyperbox->getFidelity() == bestHyperbox->getFidelity() && currentHyperbox->getCoveredSamples().size() > bestHyperbox->getCoveredSamples().size()))) {
+        // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover and not if covering size is equal or greater than the rule covering size (we accept lower covering for a same fidelity)
+        if (currentHyperbox->getCoveredSamples().size() >= minNbCover && currentHyperbox->getCoveredSamples().size() < hyperspace->getHyperbox()->getCoveredSamples().size() && (currentHyperbox->getFidelity() > bestHyperbox->getFidelity() || (currentHyperbox->getFidelity() == bestHyperbox->getFidelity() && currentHyperbox->getCoveredSamples().size() > bestHyperbox->getCoveredSamples().size()))) {
+          // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover
+          // if (currentHyperbox->getCoveredSamples().size() >= minNbCover && (currentHyperbox->getFidelity() > bestHyperbox->getFidelity() || (currentHyperbox->getFidelity() == bestHyperbox->getFidelity() && currentHyperbox->getCoveredSamples().size() > bestHyperbox->getCoveredSamples().size()))) {
 
           bestHyperbox->setFidelity(currentHyperbox->getFidelity()); // Update best hyperbox
           bestHyperbox->setCoveredSamples(currentHyperbox->getCoveredSamples());
@@ -178,8 +180,11 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
       if (maxHyp != -1) {
         indexBestHyp = (maxHyp + minHyp) / 2;
       }
-      // antecedent is not added if fidelity and covering size did not increase
-      if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity() || (bestHyperbox->getFidelity() == hyperspace->getHyperbox()->getFidelity() && bestHyperbox->getCoveredSamples().size() > hyperspace->getHyperbox()->getCoveredSamples().size())) {
+      // antecedent is not added if fidelity did not increase or is stable with lower covering (to avoid XOR problem and find a way out)
+      if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity() || (bestHyperbox->getFidelity() == hyperspace->getHyperbox()->getFidelity() && bestHyperbox->getCoveredSamples().size() < hyperspace->getHyperbox()->getCoveredSamples().size())) {
+        // antecedent is not added if fidelity did not increase
+        // if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity()) {
+
         hyperspace->getHyperbox()->setFidelity(bestHyperbox->getFidelity());
         hyperspace->getHyperbox()->addIncreasedFidelity(bestHyperbox->getFidelity());
         hyperspace->getHyperbox()->setCoveredSamples(bestHyperbox->getCoveredSamples());
@@ -187,11 +192,12 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
         hyperspace->getHyperbox()->discriminateHyperplan(bestDimension, indexBestHyp);
 
         double ruleAccuracy;
+        bestHyperbox->computeFidelity(mainSamplePred, trainPreds);
         if (hasTrueClasses && _usingTestSamples) {
           bool mainSampleCorrect = mainSamplePred == mainSampleClass;
-          ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses, mainSampleCorrect); // Percentage of correct model prediction on samples covered by the rule
+          ruleAccuracy = hyperspace->computeRuleAccuracy(mainSamplePred, trainTrueClass, hasTrueClasses, mainSampleCorrect); // Percentage of correct model prediction on samples covered by the rule
         } else {
-          ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses); // Percentage of correct model prediction on samples covered by the rule
+          ruleAccuracy = hyperspace->computeRuleAccuracy(mainSamplePred, trainTrueClass, hasTrueClasses); // Percentage of correct model prediction on samples covered by the rule
         }
         hyperspace->getHyperbox()->addAccuracyChanges(ruleAccuracy);
       }
