@@ -91,21 +91,22 @@ Rule Hyperspace::ruleExtraction(std::vector<double> &mainSampleData, const int m
 }
 
 /**
- * @brief Computes the accuracy of the rule with respect to the training predictions and true classes of the covered samples.
+ * @brief Computes the accuracy of the rule with respect to the rule prediction and true classes of the covered samples.
  *
- * @param trainPreds Predictions of the training data.
+ * @param mainsamplePred Prediction of the rule and main sample.
  * @param trainTrueClass True classes of the training data.
  * @param hasTrueClasses Boolean indicating if true classes are available.
  * @param mainSampleCorrect Boolean indicating if the main sample is correctly classified.
  * @return The accuracy of the rule.
  */
-double Hyperspace::computeRuleAccuracy(std::vector<int> &trainPreds, std::vector<int> &trainTrueClass, bool hasTrueClasses, bool mainSampleCorrect) const { // Percentage of correct model prediction on samples covered by the rule
+double Hyperspace::computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass, bool hasTrueClasses, bool mainSampleCorrect) const { // Percentage of correct rule predictions on samples covered by the rule
 
   int total = 0; // Number of indexes predicted good
+  int autretotal = 0;
   std::vector<int> coveredSamples = hyperbox->getCoveredSamples();
 
   for (int idSample : coveredSamples) {
-    if (trainPreds[idSample] == trainTrueClass[idSample]) {
+    if (mainsamplePred == trainTrueClass[idSample]) {
       total += 1;
     }
   }

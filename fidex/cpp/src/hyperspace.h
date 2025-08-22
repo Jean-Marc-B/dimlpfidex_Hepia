@@ -49,9 +49,9 @@ public:
   Rule ruleExtraction(std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus = std::vector<double>(), const std::vector<double> &sigmas = std::vector<double>(), const std::vector<int> &normalizationIndices = std::vector<int>());
 
   /**
-   * @brief Computes the accuracy of the rule with respect to the training predictions and true classes of the covered samples.
+   * @brief Computes the accuracy of the rule with respect to the rule prediction and true classes of the covered samples.
    */
-  double computeRuleAccuracy(std::vector<int> &trainPreds, std::vector<int> &trainTrueClass, bool hasTrueClasses, bool mainSampleCorrect = false) const;
+  double computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass, bool hasTrueClasses, bool mainSampleCorrect = false) const;
 
   /**
    * @brief Computes the confidence of the rule with respect to the main sample prediction and training output values of the covered samples.
