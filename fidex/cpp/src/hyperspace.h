@@ -51,7 +51,7 @@ public:
   /**
    * @brief Computes the accuracy of the rule with respect to the rule prediction and true classes of the covered samples.
    */
-  double computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass, bool hasTrueClasses, bool mainSampleCorrect = false) const;
+  double computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass) const;
 
   /**
    * @brief Computes the confidence of the rule with respect to the main sample prediction and training output values of the covered samples.

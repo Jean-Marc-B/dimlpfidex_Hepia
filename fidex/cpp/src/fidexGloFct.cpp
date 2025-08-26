@@ -60,6 +60,7 @@ void showFidexGloParams() {
   printOptionDescription("--min_covering <int [1,inf[>", "Minimum number of samples covered by the generated rules (default: 2)");
   printOptionDescription("--covering_strategy <bool>", "Whether to use the covering strategy : if no rule is found with min_covering, find best rule with best covering using dichotomic search. Decreases min_fidelity if needed (default: True)");
   printOptionDescription("--max_failed_attempts <int [0,inf[>", "Maximum number of failed attempts to find a Fidex rule when the covering is 1 and the covering strategy is used (default: 30)");
+  printOptionDescription("--allow_no_fid_change <bool>", "Whether to allow to add a new attribute with the same fidelity and less covering. It can be usefull when not finding a fidel rule (default: False)");
   printOptionDescription("--min_fidelity <float [0,1]>", "Minimal rule fidelity accepted when generating a rule (default: 1.0)");
   printOptionDescription("--lowest_min_fidelity <float [0,1]>", "Minimal min_fidelity to which we agree to go down during the covering_strategy (default: 0.75)");
   printOptionDescription("--nb_fidex_rules <int [1,inf[>", "Number of Fidex rules to compute per sample when launching the Fidex algorithm (default: 1)");
@@ -288,7 +289,7 @@ int fidexGlo(const std::string &command) {
                                               TEST_PRED_FILE, EXPLANATION_FILE, CONSOLE_FILE,
                                               WITH_FIDEX, WITH_MINIMAL_VERSION, TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, WEIGHTS_FILE,
                                               RULES_FILE, TEST_CLASS_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
-                                              MAX_FAILED_ATTEMPTS, MIN_FIDELITY, NB_FIDEX_RULES, LOWEST_MIN_FIDELITY, DROPOUT_DIM, DROPOUT_HYP, NB_QUANT_LEVELS,
+                                              MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, NB_FIDEX_RULES, LOWEST_MIN_FIDELITY, DROPOUT_DIM, DROPOUT_HYP, NB_QUANT_LEVELS,
                                               NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {

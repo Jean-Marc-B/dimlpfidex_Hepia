@@ -301,6 +301,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setBool(COVERING_STRATEGY, arg);
     break;
 
+  case ALLOW_NO_FID_CHANGE:
+    setBool(ALLOW_NO_FID_CHANGE, arg);
+    break;
+
   case NB_THREADS:
     setInt(NB_THREADS, arg);
     break;
@@ -487,7 +491,7 @@ void Parameters::setFloat(ParameterCode id, float value) {
  */
 void Parameters::checkPath(ParameterCode id, const std::string &path) const {
   std::string toCheck = path.empty() ? "." : path;
-    
+
   if (!exists(toCheck)) {
     throwInvalidFileOrDirectory(id, path);
   }
@@ -1294,6 +1298,7 @@ void Parameters::setDefaultFidex() {
   setDefaultFloat(MIN_FIDELITY, 1.0);
   setDefaultFloat(LOWEST_MIN_FIDELITY, 0.75);
   setDefaultBool(COVERING_STRATEGY, true);
+  setDefaultBool(ALLOW_NO_FID_CHANGE, false);
   setDefaultFloat(DROPOUT_DIM, 0.0f);
   setDefaultFloat(DROPOUT_HYP, 0.0f);
   setDefaultFloat(HI_KNOT, 5.0f);
