@@ -193,9 +193,67 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     nbIt += 1;
   }
 
-  // Compute rule accuracy and confidence
-  std::vector<double> accuracyChanges = hyperspace->getHyperbox()->getAccuracyChanges();
-  double ruleAccuracy = std::accumulate(accuracyChanges.begin(), accuracyChanges.end(), 0.0);
+  // TODO: simplification rule process (antecedants are in disciminativeHyperplans in hyperbox)
+  /* compute for each antecedant in original hyperbox's dicriminativeHyperplan:
+  - copy hyperbox
+  - skip one antecedant (skip)
+  - for each antecedant left
+    - computeCoveredSamples by giving the current antecedant and the current coveredSamples
+      -> param currentCoveredSamples = CoveredSamples
+      -> param mainSampleValue = mainSampleValues[attribut];
+      -> param mainSampleGreater = hypValue <= mainSampleValue;
+    - coveredSamples = hyperBoxCopy->getCoveredSamples
+  - compute fidelity
+  - if fidelity of copy is greater or equal than original: save missing antecedant (and hyperbox copy) and the increase value
+  update the original hyperbox by overwriting it with the best hyperbox copy
+  Compute rule accuracy and confidence */
+
+  std::vector<int> coveredSamples(trainData.size());   // Samples covered by the hyperbox
+  iota(begin(coveredSamples), end(coveredSamples), 0); // Vector from 0 to len(coveredSamples)-1
+  std::shared_ptr<Hyperbox> originalHyperbox = hyperspace->getHyperbox();
+  std::vector<std::pair<int, int>> originalDiscrHyperplans = originalHyperbox->getDiscriminativeHyperplans();
+  Hyperbox bestHyperbox = Hyperbox(*originalHyperbox.get());
+  int nbAntecedants = originalHyperbox->getDiscriminativeHyperplans().size();
+
+  for (int i = 0; i < nbAntecedants; i++) {
+    std::vector<int> dimensions(nbInputs);
+    iota(begin(dimensions), end(dimensions), 0); // Vector from 0 to nbIn-1
+    shuffle(begin(dimensions), end(dimensions), _rnd);
+
+    std::vector<std::pair<int, int>> copyDiscrHyperplans(originalDiscrHyperplans); // create original's copy
+    copyDiscrHyperplans.erase(copyDiscrHyperplans.begin() + i);                    // hide an antecedant
+    Hyperbox copyHyperbox = Hyperbox(copyDiscrHyperplans);
+    copyHyperbox.setCoveredSamples(coveredSamples);
+
+    for (auto antecedant : copyDiscrHyperplans) {
+      int feature = antecedant.first;
+      int hypIndex = antecedant.second;
+
+      double hypValue = hyperspace->getHyperLocus()[feature][hypIndex];
+      double mainSampleValue = mainSampleValues[feature];
+      bool isMainSampleGreater = hypValue <= mainSampleValue; 
+
+      copyHyperbox.computeCoveredSamples(copyHyperbox.getCoveredSamples(), feature, trainData, isMainSampleGreater, hypValue);
+    }
+
+    copyHyperbox.computeFidelity(mainSamplePred, trainPreds);
+
+    if (copyHyperbox.getFidelity() >= bestHyperbox.getFidelity()) {
+      bestHyperbox = copyHyperbox;
+    }
+  }
+
+  originalHyperbox->setFidelity(bestHyperbox.getFidelity());
+  originalHyperbox->setCoveredSamples(bestHyperbox.getCoveredSamples());
+  originalHyperbox->setDiscriminativeHyperplans(bestHyperbox.getDiscriminativeHyperplans());
+
+  double ruleAccuracy;
+  if (hasTrueClasses && _usingTestSamples) {
+    bool mainSampleCorrect = mainSamplePred == mainSampleClass;
+    ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses, mainSampleCorrect); // Percentage of correct model prediction on samples covered by the rule
+  } else {
+    ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses); // Percentage of correct model prediction on samples covered by the rule
+  }
 
   double ruleConfidence;
   ruleConfidence = hyperspace->computeRuleConfidence(trainOutputValuesPredictions, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples
