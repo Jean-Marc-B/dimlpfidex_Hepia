@@ -33,6 +33,15 @@ std::vector<std::pair<int, int>> Hyperbox::getDiscriminativeHyperplans() const {
 }
 
 /**
+ * @brief Sets the discriminative hyperplanes of the hyperbox.
+ *
+ * @param newDiscriminativeHyperplan Vector of (attribute index, hyperplane value) pairs representing discriminative hyperplanes to be set.
+ */
+void Hyperbox::setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newDiscriminativeHyperplan) {
+  discriminativeHyperplans = newDiscriminativeHyperplan;
+}
+
+/**
  * @brief Computes the new covered samples with a new discriminative hyperplane.
  *
  * @param ancienCoveredSamples Vector of previously covered sample IDs.

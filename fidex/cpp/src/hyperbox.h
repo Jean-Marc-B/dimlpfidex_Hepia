@@ -45,6 +45,11 @@ public:
   std::vector<std::pair<int, int>> getDiscriminativeHyperplans() const;
 
   /**
+   * @brief Sets the discriminative hyperplanes of the hyperbox.
+   */
+  void setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newDiscriminativehyperplan);
+
+  /**
    * @brief Resets the discriminative hyperplanes of the hyperbox.
    */
   void resetDiscriminativeHyperplans();
