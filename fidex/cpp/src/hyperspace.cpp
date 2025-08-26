@@ -99,7 +99,7 @@ Rule Hyperspace::ruleExtraction(std::vector<double> &mainSampleData, const int m
  * @param mainSampleCorrect Boolean indicating if the main sample is correctly classified.
  * @return The accuracy of the rule.
  */
-double Hyperspace::computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass, bool hasTrueClasses, bool mainSampleCorrect) const { // Percentage of correct rule predictions on samples covered by the rule
+double Hyperspace::computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass) const { // Percentage of correct rule predictions on samples covered by the rule
 
   int total = 0; // Number of indexes predicted good
   int autretotal = 0;
@@ -111,15 +111,7 @@ double Hyperspace::computeRuleAccuracy(const int mainsamplePred, std::vector<int
     }
   }
 
-  if (hasTrueClasses && mainSampleCorrect) { // Add test sample value
-    total += 1;
-  }
-
   size_t nbCovered = coveredSamples.size();
-
-  if (hasTrueClasses) {
-    nbCovered += 1;
-  }
 
   return static_cast<double>(total) / static_cast<double>(nbCovered);
 }

@@ -165,6 +165,14 @@ const List<Field> fidexFields = [
         "Maximum number of failed attempts to find a Fidex rule when the covering is 1 and the covering strategy is used.",
   ),
   Field(
+    "Allow to add a new attribute with the same fidelity and less covering.",
+    "allow_no_fid_change",
+    Datatype.boolean,
+    defaultValue: "false",
+    description:
+        "Whether to allow to add a new attribute with the same fidelity and less covering.",
+  ),
+  Field(
     "Minimal rule fidelity accepted",
     "min_fidelity",
     Datatype.doublePrecision,
@@ -352,6 +360,14 @@ const List<Field> fidexGloFields = [
         "Maximum number of failed attempts to find a Fidex rule when the covering is 1 and the covering strategy is used.",
   ),
   Field(
+    "Allow to add a new attribute with the same fidelity and less covering.",
+    "allow_no_fid_change",
+    Datatype.boolean,
+    defaultValue: "false",
+    description:
+        "Whether to allow to add a new attribute with the same fidelity and less covering.",
+  ),
+  Field(
     "Minimal rule fidelity accepted",
     "min_fidelity",
     Datatype.doublePrecision,
@@ -483,6 +499,14 @@ const List<Field> fidexGloRulesFields = [
     defaultValue: "30",
     description:
         "Maximum number of failed attempts to find a Fidex rule when the covering is 1 and the covering strategy is used.",
+  ),
+  Field(
+    "Allow to add a new attribute with the same fidelity and less covering.",
+    "allow_no_fid_change",
+    Datatype.boolean,
+    defaultValue: "false",
+    description:
+        "Whether to allow to add a new attribute with the same fidelity and less covering. It can be usefull when not finding a fidel rule.",
   ),
   Field(
     "Minimal rule fidelity accepted",

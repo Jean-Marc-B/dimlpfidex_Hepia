@@ -54,12 +54,9 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   int maxIterations = _parameters->getInt(MAX_ITERATIONS);
   double dropoutDim = _parameters->getFloat(DROPOUT_DIM);
   double dropoutHyp = _parameters->getFloat(DROPOUT_HYP);
+  bool allowNoFidChange = _parameters->getBool(ALLOW_NO_FID_CHANGE);
   bool hasdd = dropoutDim > 0.001;
   bool hasdh = dropoutHyp > 0.001;
-  bool hasTrueClasses = true;
-  if (mainSampleClass == -1) {
-    hasTrueClasses = false;
-  }
 
   std::vector<int> normalizationIndices;
   std::vector<double> mus;
@@ -149,11 +146,8 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
         currentHyperbox->computeCoveredSamples(hyperspace->getHyperbox()->getCoveredSamples(), attribut, trainData, mainSampleGreater, hypValue); // Compute new cover samples
         currentHyperbox->computeFidelity(mainSamplePred, trainPreds);                                                                             // Compute fidelity
 
-        // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover and not if covering size is equal or greater than the rule covering size (we accept lower covering for a same fidelity)
-        if (currentHyperbox->getCoveredSamples().size() >= minNbCover && currentHyperbox->getCoveredSamples().size() < hyperspace->getHyperbox()->getCoveredSamples().size() && (currentHyperbox->getFidelity() > bestHyperbox->getFidelity() || (currentHyperbox->getFidelity() == bestHyperbox->getFidelity() && currentHyperbox->getCoveredSamples().size() > bestHyperbox->getCoveredSamples().size()))) {
-          // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover
-          // if (currentHyperbox->getCoveredSamples().size() >= minNbCover && (currentHyperbox->getFidelity() > bestHyperbox->getFidelity() || (currentHyperbox->getFidelity() == bestHyperbox->getFidelity() && currentHyperbox->getCoveredSamples().size() > bestHyperbox->getCoveredSamples().size()))) {
-
+        // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover and, if allowNoFidChange is set to true, not if covering size is equal or greater than the rule covering size (we accept lower covering for a same fidelity)
+        if (currentHyperbox->getCoveredSamples().size() >= minNbCover && (!allowNoFidChange || currentHyperbox->getCoveredSamples().size() < hyperspace->getHyperbox()->getCoveredSamples().size()) && (currentHyperbox->getFidelity() > bestHyperbox->getFidelity() || (currentHyperbox->getFidelity() == bestHyperbox->getFidelity() && currentHyperbox->getCoveredSamples().size() > bestHyperbox->getCoveredSamples().size()))) {
           bestHyperbox->setFidelity(currentHyperbox->getFidelity()); // Update best hyperbox
           bestHyperbox->setCoveredSamples(currentHyperbox->getCoveredSamples());
           indexBestHyp = k;
@@ -180,9 +174,8 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
       if (maxHyp != -1) {
         indexBestHyp = (maxHyp + minHyp) / 2;
       }
-      // antecedent is not added if fidelity did not increase or is stable with lower covering (to avoid XOR problem and find a way out)
-      if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity() || (bestHyperbox->getFidelity() == hyperspace->getHyperbox()->getFidelity() && bestHyperbox->getCoveredSamples().size() < hyperspace->getHyperbox()->getCoveredSamples().size())) {
-        // antecedent is not added if fidelity did not increase
+      // The antecedent is not added if fidelity did not increase or, if allowNoFidChange is set to true, if fidelity is stable with lower covering (to avoid XOR problems and find a way through)
+      if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity() || (allowNoFidChange && bestHyperbox->getFidelity() == hyperspace->getHyperbox()->getFidelity() && bestHyperbox->getCoveredSamples().size() < hyperspace->getHyperbox()->getCoveredSamples().size())) {
         // if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity()) {
 
         hyperspace->getHyperbox()->setFidelity(bestHyperbox->getFidelity());
@@ -193,12 +186,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
 
         double ruleAccuracy;
         bestHyperbox->computeFidelity(mainSamplePred, trainPreds);
-        if (hasTrueClasses && _usingTestSamples) {
-          bool mainSampleCorrect = mainSamplePred == mainSampleClass;
-          ruleAccuracy = hyperspace->computeRuleAccuracy(mainSamplePred, trainTrueClass, hasTrueClasses, mainSampleCorrect); // Percentage of correct model prediction on samples covered by the rule
-        } else {
-          ruleAccuracy = hyperspace->computeRuleAccuracy(mainSamplePred, trainTrueClass, hasTrueClasses); // Percentage of correct model prediction on samples covered by the rule
-        }
+        ruleAccuracy = hyperspace->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of correct model prediction on samples covered by the rule
         hyperspace->getHyperbox()->addAccuracyChanges(ruleAccuracy);
       }
     }
@@ -314,6 +302,8 @@ int Fidex::dichotomicSearch(Rule &bestRule, std::vector<double> &mainSampleValue
 bool Fidex::retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, int mainSampleClass, bool verbose) {
   int counterFailed = 0; // Number of times we failed to find a rule with maximal fidexlity when minNbCover is 1
   int maxFailedAttempts = _parameters->getInt(MAX_FAILED_ATTEMPTS);
+  bool allowNoFidChange = _parameters->getBool(ALLOW_NO_FID_CHANGE);
+  bool covering_strategy = _parameters->getBool(COVERING_STRATEGY);
   bool ruleCreated = false;
   bool hasDropout = _parameters->getFloat(DROPOUT_DIM) > 0.001 || _parameters->getFloat(DROPOUT_HYP) > 0.001;
   do {
@@ -322,9 +312,15 @@ bool Fidex::retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues,
       counterFailed += 1;
     }
     if (counterFailed >= maxFailedAttempts && verbose) {
-      std::cout << "\nWARNING Fidelity is too low after trying " << std::to_string(maxFailedAttempts) << " times with a minimum covering of " << minNbCover << " and a minimum accepted fidelity of " << minFidelity << "! You may want to try again." << std::endl;
+      std::cout << "\nWARNING Fidelity is too low after trying " << std::to_string(maxFailedAttempts) << " times with a minimum covering of " << minNbCover << " and a minimum accepted fidelity of " << minFidelity << "! You may want to try again with a lower min_covering or a lower min_fidelity." << std::endl;
       if (hasDropout) {
-        std::cout << "Try to not use dropout." << std::endl;
+        std::cout << "You can also try to not use dropout." << std::endl;
+      }
+      if (!covering_strategy) {
+        std::cout << "You can also try to use the min cover strategy (--covering_strategy)." << std::endl;
+      }
+      if (!allowNoFidChange) {
+        std::cout << "You could also try to allow to add a new antecedant without changing the fidelity by setting allow_no_fid_change to true." << std::endl;
       }
     }
   } while (!ruleCreated && counterFailed < maxFailedAttempts);
@@ -404,7 +400,8 @@ bool Fidex::launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int m
       std::cout << "\nWARNING Fidelity is too low! You may want to try again." << std::endl;
       std::cout << "If you can't find a rule with the wanted fidelity, try a lowest minimal covering or a lower fidelity" << std::endl;
       std::cout << "You can also try to use the min cover strategy (--covering_strategy)" << std::endl;
-      std::cout << "If this is not enough, put the min covering to 1 and do not use dropout.\n"
+      std::cout << "If this is not enough, put the min covering to 1 and do not use dropout." << std::endl;
+      std::cout << "You may also want to allow to add a new antecedant without changing the fidelity by setting allow_no_fid_change to true.\n"
                 << std::endl;
       foundRule = false;
     }
