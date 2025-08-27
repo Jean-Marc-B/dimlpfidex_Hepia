@@ -208,41 +208,40 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   update the original hyperbox by overwriting it with the best hyperbox copy
   Compute rule accuracy and confidence */
 
-  std::vector<int> coveredSamples(trainData.size());   // Samples covered by the hyperbox
-  iota(begin(coveredSamples), end(coveredSamples), 0); // Vector from 0 to len(coveredSamples)-1
   std::shared_ptr<Hyperbox> originalHyperbox = hyperspace->getHyperbox();
   std::vector<std::pair<int, int>> originalDiscrHyperplans = originalHyperbox->getDiscriminativeHyperplans();
   Hyperbox bestHyperbox = Hyperbox(*originalHyperbox.get());
   int nbAntecedants = originalHyperbox->getDiscriminativeHyperplans().size();
-
+  
   for (int i = 0; i < nbAntecedants; i++) {
     std::vector<int> dimensions(nbInputs);
     iota(begin(dimensions), end(dimensions), 0); // Vector from 0 to nbIn-1
     shuffle(begin(dimensions), end(dimensions), _rnd);
-
+    
     std::vector<std::pair<int, int>> copyDiscrHyperplans(originalDiscrHyperplans); // create original's copy
     copyDiscrHyperplans.erase(copyDiscrHyperplans.begin() + i);                    // hide an antecedant
     Hyperbox copyHyperbox = Hyperbox(copyDiscrHyperplans);
     copyHyperbox.setCoveredSamples(coveredSamples);
-
+    
     for (auto antecedant : copyDiscrHyperplans) {
       int feature = antecedant.first;
       int hypIndex = antecedant.second;
-
+      
       double hypValue = hyperspace->getHyperLocus()[feature][hypIndex];
       double mainSampleValue = mainSampleValues[feature];
-      bool isMainSampleGreater = hypValue <= mainSampleValue; 
-
+      bool isMainSampleGreater = hypValue <= mainSampleValue;
+      
       copyHyperbox.computeCoveredSamples(copyHyperbox.getCoveredSamples(), feature, trainData, isMainSampleGreater, hypValue);
     }
-
+    
     copyHyperbox.computeFidelity(mainSamplePred, trainPreds);
-
+    
     if (copyHyperbox.getFidelity() >= bestHyperbox.getFidelity()) {
+      std::cout << "Optimization found." << std::endl;
       bestHyperbox = copyHyperbox;
     }
   }
-
+  
   originalHyperbox->setFidelity(bestHyperbox.getFidelity());
   originalHyperbox->setCoveredSamples(bestHyperbox.getCoveredSamples());
   originalHyperbox->setDiscriminativeHyperplans(bestHyperbox.getDiscriminativeHyperplans());
