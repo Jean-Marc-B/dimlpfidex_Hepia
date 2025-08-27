@@ -201,8 +201,8 @@ void Hyperbox::resetAccuracyChanges() {
  * @param dimVal Index of the attribute.
  * @param hypVal Hyperplane value.
  */
-void Hyperbox::discriminateHyperplan(int dimVal, int hypVal) {
-  discriminativeHyperplans.push_back(std::make_pair(dimVal, hypVal));
+void Hyperbox::discriminateHyperplan(int dimVal, int hypValIndex) {
+  discriminativeHyperplans.push_back(std::make_pair(dimVal, hypValIndex));
 }
 
 /**

@@ -16,7 +16,7 @@
  * which include discriminative hyperplanes and the samples they cover.
  */
 class Hyperbox {
-  std::vector<std::pair<int, int>> discriminativeHyperplans; ///< Vector of discriminative hyperplanes represented by a dimension (attribute index) and a hyperplane value in this dimension.
+  std::vector<std::pair<int, int>> discriminativeHyperplans; ///< Vector of discriminative hyperplanes represented by a dimension (attribute index) and a index leading to the hyperplane value in this dimension.
   std::vector<int> coveredSamples;                           ///< Vector of sample IDs covered by the hyperbox.
   std::vector<int> coveringSizesWithNewAntecedent;           ///< Vector of the number of samples covered by the rule for each new antecedent in the rule (with 1, 2, 3, ... antecedents).
   std::vector<double> increasedFidelity;                     ///< Vector of the increased fidelity for each new antecedent.
@@ -127,7 +127,7 @@ public:
   /**
    * @brief Adds a new discriminative hyperplane to the hyperbox.
    */
-  void discriminateHyperplan(int dimVal, int hypVal);
+  void discriminateHyperplan(int dimVal, int hypValIndex);
 };
 
 #endif // HYPERBOX_H
