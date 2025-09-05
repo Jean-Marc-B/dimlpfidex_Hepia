@@ -98,6 +98,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   }
 
   int nbIt = 0;
+  std::vector<int> dimensions(nbInputs);
 
   while (hyperspace->getHyperbox()->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough
     std::unique_ptr<Hyperbox> bestHyperbox(new Hyperbox());                                // best hyperbox to choose for next step
@@ -110,7 +111,6 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     int minHyp = -1; // Index of first hyperplane without any change of the best hyperplane
     int maxHyp = -1;
     // Randomize dimensions
-    std::vector<int> dimensions(nbInputs);
     iota(begin(dimensions), end(dimensions), 0); // Vector from 0 to nbIn-1
     shuffle(begin(dimensions), end(dimensions), _rnd);
 
@@ -182,7 +182,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
         hyperspace->getHyperbox()->addIncreasedFidelity(bestHyperbox->getFidelity());
         hyperspace->getHyperbox()->setCoveredSamples(bestHyperbox->getCoveredSamples());
         hyperspace->getHyperbox()->addCoveringSizesWithNewAntecedent(bestHyperbox->getCoveredSamples().size());
-        hyperspace->getHyperbox()->discriminateHyperplan(bestDimension, indexBestHyp);
+        hyperspace->getHyperbox()->addDiscriminativeHyperplan(bestDimension, indexBestHyp);
 
         double ruleAccuracy;
         bestHyperbox->computeFidelity(mainSamplePred, trainPreds);
@@ -210,24 +210,26 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
 
   std::shared_ptr<Hyperbox> originalHyperbox = hyperspace->getHyperbox();
   std::vector<std::pair<int, int>> originalDiscrHyperplans = originalHyperbox->getDiscriminativeHyperplans();
-  Hyperbox bestHyperbox = Hyperbox(*originalHyperbox.get());
-  int nbAntecedants = originalHyperbox->getDiscriminativeHyperplans().size();
+  Hyperbox copyHyperbox = originalHyperbox->deepCopy();
+  Hyperbox bestHyperbox = originalHyperbox->deepCopy();
+  int antededantIndex = -1;
+
+  std::cout << std::endl << "Initial hyperbox: " << std::endl;
+  std::cout << *originalHyperbox.get() << std::endl << std::endl;
   
-  for (int i = 0; i < nbAntecedants; i++) {
-    std::vector<int> dimensions(nbInputs);
-    iota(begin(dimensions), end(dimensions), 0); // Vector from 0 to nbIn-1
-    shuffle(begin(dimensions), end(dimensions), _rnd);
-    
+  for (int i = 0; i < originalHyperbox->getDiscriminativeHyperplans().size(); i++) {
+  
     std::vector<std::pair<int, int>> copyDiscrHyperplans(originalDiscrHyperplans); // create original's copy
     copyDiscrHyperplans.erase(copyDiscrHyperplans.begin() + i);                    // hide an antecedant
-    Hyperbox copyHyperbox = Hyperbox(copyDiscrHyperplans);
+    copyHyperbox.setDiscriminativeHyperplans(copyDiscrHyperplans);
     copyHyperbox.setCoveredSamples(coveredSamples);
     
     for (auto antecedant : copyDiscrHyperplans) {
-      int feature = antecedant.first;
+      int dimension = antecedant.first;
       int hypIndex = antecedant.second;
+      int feature = dimension % nbAttributes;
       
-      double hypValue = hyperspace->getHyperLocus()[feature][hypIndex];
+      double hypValue = hyperspace->getHyperLocus()[dimension][hypIndex];
       double mainSampleValue = mainSampleValues[feature];
       bool isMainSampleGreater = hypValue <= mainSampleValue;
       
@@ -237,14 +239,23 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     copyHyperbox.computeFidelity(mainSamplePred, trainPreds);
     
     if (copyHyperbox.getFidelity() >= bestHyperbox.getFidelity()) {
-      std::cout << "Optimization found." << std::endl;
+      std::cout << std::endl << "New best hyperbox: " << std::endl;
+      std::cout << copyHyperbox << std::endl << std::endl;
+      antededantIndex = i;
       bestHyperbox = copyHyperbox;
     }
   }
   
+  originalHyperbox->removeAccuracyChange(antededantIndex);
+  originalHyperbox->removeCoveringSizesWithNewAntecedent(antededantIndex);
+  originalHyperbox->removeIncreasedFidelity(antededantIndex);
   originalHyperbox->setFidelity(bestHyperbox.getFidelity());
   originalHyperbox->setCoveredSamples(bestHyperbox.getCoveredSamples());
   originalHyperbox->setDiscriminativeHyperplans(bestHyperbox.getDiscriminativeHyperplans());
+  
+  std::cout << std::endl << "Final hyperbox: " << std::endl;
+  std::cout << *originalHyperbox.get() << std::endl;
+  std::cout << "-------------------------------------------------------------------------" << std::endl;
 
   double ruleAccuracy;
   if (hasTrueClasses && _usingTestSamples) {

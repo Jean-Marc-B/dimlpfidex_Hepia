@@ -50,6 +50,11 @@ public:
   void setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newDiscriminativehyperplan);
 
   /**
+   * @brief remove a discriminative hyperplan based on its array position.
+   */
+  void removeDiscriminativehyperplan(int index);
+
+  /**
    * @brief Resets the discriminative hyperplanes of the hyperbox.
    */
   void resetDiscriminativeHyperplans();
@@ -85,6 +90,16 @@ public:
   void addIncreasedFidelity(double incrFidelity);
 
   /**
+   * @brief remove a increased fidelity stat based on its array position.
+   */
+  void removeIncreasedFidelity(int index);
+
+  /**
+   * @brief Sets the increased fidelities list.
+   */
+  void setIncreasedFidelity(std::vector<double> newIncreasedFidelities);
+
+  /**
    * @brief Reset the increased fidelity for each new antecedent.
    */
   void resetIncreasedFidelity();
@@ -98,6 +113,16 @@ public:
    * @brief Adds in the list the accuracy changes with the new antecedent.
    */
   void addAccuracyChanges(double incrFidelity);
+
+  /**
+   * @brief remove an accuracy change stat based on its array position.
+   */
+  void removeAccuracyChange(int index);
+  
+  /**
+   * @brief Sets the accuracy changes list.
+   */
+  void setAccuracyChanges(std::vector<double> newAccuracyChanges);
 
   /**
    * @brief Reset the accuracy changes for each new antecedent.
@@ -120,6 +145,16 @@ public:
   void addCoveringSizesWithNewAntecedent(int covSize);
 
   /**
+   * @brief remove a covering sizes with new antecedent stat based on its array position.
+   */
+  void removeCoveringSizesWithNewAntecedent(int index);
+
+  /**
+   * @brief sets the new covering sizes.
+   */
+  void setCoveringSizesWithNewAntecedent(std::vector<int> coveringSizesWithNewAntecedents);
+
+  /**
    * @brief Reset the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
    */
   void resetCoveringSizesWithNewAntecedent();
@@ -127,7 +162,44 @@ public:
   /**
    * @brief Adds a new discriminative hyperplane to the hyperbox.
    */
-  void discriminateHyperplan(int dimVal, int hypValIndex);
+  void addDiscriminativeHyperplan(int dimVal, int hypValIndex);
+
+  Hyperbox deepCopy();
 };
+
+inline std::ostream &operator<<(std::ostream &stream, const Hyperbox &hyperbox) {
+  stream << "Discriminative hyperplans:        ";
+  for (auto discHyp : hyperbox.getDiscriminativeHyperplans()) {
+    stream << "[" << discHyp.first << "," << discHyp.second << "], ";
+  }
+  stream << std::endl;
+
+  stream << "Increased fidelity by antededant: ";
+  for (auto increasedFidelity : hyperbox.getIncreasedFidelity()) {
+    stream << increasedFidelity << ",";
+  }
+  stream << std::endl;
+
+  stream << "Covering size w/ new antecedant:  ";
+  for (auto coveringSize : hyperbox.getCoveringSizesWithNewAntecedent()) {
+    stream << coveringSize << ",";
+  }
+  stream << std::endl;
+
+  stream << "Covered samples:                  ";
+  for (int i = 0; i < 5; i++) {
+    stream << hyperbox.getCoveredSamples()[i] << ",";
+  }
+  stream << "... (size=" << hyperbox.getCoveredSamples().size() << ")" << std::endl;
+
+  stream << "Accuracy Changes:                 ";
+  for (auto accuracyChange : hyperbox.getAccuracyChanges()) {
+    stream << accuracyChange << ",";
+  }
+  stream << std::endl;
+  stream << "Fidelity:                         " << hyperbox.getFidelity() << std::endl;
+
+  return stream;
+}
 
 #endif // HYPERBOX_H

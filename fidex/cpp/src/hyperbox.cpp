@@ -33,6 +33,37 @@ std::vector<std::pair<int, int>> Hyperbox::getDiscriminativeHyperplans() const {
 }
 
 /**
+ * @brief Adds a new discriminative hyperplane to the hyperbox.
+ *
+ * @param dimVal Index of the attribute.
+ * @param hypVal Hyperplane value.
+ */
+void Hyperbox::addDiscriminativeHyperplan(int dimVal, int hypValIndex) {
+  discriminativeHyperplans.push_back(std::make_pair(dimVal, hypValIndex));
+}
+
+/**
+ * @brief remove a discriminative hyperplan based on its array position.
+ *
+ * @param index item index to remove.
+ */
+void Hyperbox::removeDiscriminativehyperplan(int index) {
+  if (index < 0 || index >= discriminativeHyperplans.size()) {
+    return;
+  }
+
+  discriminativeHyperplans.erase(discriminativeHyperplans.begin() + index);
+}
+
+/**
+ * @brief Resets the discriminative hyperplanes of the hyperbox.
+ */
+void Hyperbox::resetDiscriminativeHyperplans() {
+  std::vector<std::pair<int, int>> disc;
+  discriminativeHyperplans = disc;
+}
+
+/**
  * @brief Sets the discriminative hyperplanes of the hyperbox.
  *
  * @param newDiscriminativeHyperplan Vector of (attribute index, hyperplane value) pairs representing discriminative hyperplanes to be set.
@@ -81,12 +112,34 @@ std::vector<int> Hyperbox::getCoveringSizesWithNewAntecedent() const {
 }
 
 /**
+ * @brief sets the new covering sizes.
+ *
+ * @param newCoveringSizesWithNewAntecedents Covering sizes to set.
+ */
+void Hyperbox::setCoveringSizesWithNewAntecedent(std::vector<int> newCoveringSizesWithNewAntecedents) {
+  coveringSizesWithNewAntecedent = newCoveringSizesWithNewAntecedents;
+}
+
+/**
  * @brief Adds the new covering size of the rule with the new antecedant in the list.
  *
  * @param covSize Covering size of the rule with the new added antecedant.
  */
 void Hyperbox::addCoveringSizesWithNewAntecedent(int covSize) {
   coveringSizesWithNewAntecedent.push_back(covSize);
+}
+
+/**
+ * @brief remove a covering sizes with new antecedent stat based on its array position.
+ *
+ * @param index item index to remove.
+ */
+void Hyperbox::removeCoveringSizesWithNewAntecedent(int index) {
+  if (index < 0 || index >= coveringSizesWithNewAntecedent.size()) {
+    return;
+  }
+
+  coveringSizesWithNewAntecedent.erase(coveringSizesWithNewAntecedent.begin() + index);
 }
 
 /**
@@ -143,6 +196,15 @@ std::vector<double> Hyperbox::getIncreasedFidelity() const {
 }
 
 /**
+ * @brief Sets the increased fidelities list.
+ *
+ * @param newIncreasedFidelities New increased fidelities to set.
+ */
+void Hyperbox::setIncreasedFidelity(std::vector<double> newIncreasedFidelities) {
+  increasedFidelity = newIncreasedFidelities;
+}
+
+/**
  * @brief Adds in the list the increased fidelity with the new antecedent.
  *
  * @param newFidelity New fidelity with the new antecedent.
@@ -154,6 +216,19 @@ void Hyperbox::addIncreasedFidelity(double newFidelity) {
     incrFidelity -= std::accumulate(increasedFidelity.begin(), increasedFidelity.end(), 0.0); // We remove the sum of precedents increase, which is the last fidelity obtained
   }
   increasedFidelity.push_back(incrFidelity);
+}
+
+/**
+ * @brief remove a increased fidelity stat based on its array position.
+ *
+ * @param index item index to remove.
+ */
+void Hyperbox::removeIncreasedFidelity(int index) {
+  if (index < 0 || index >= increasedFidelity.size()) {
+    return;
+  }
+
+  increasedFidelity.erase(increasedFidelity.begin() + index);
 }
 
 /**
@@ -174,6 +249,15 @@ std::vector<double> Hyperbox::getAccuracyChanges() const {
 }
 
 /**
+ * @brief Sets the accuracy changes list.
+ *
+ * @param accuracyChanges New accuracy changes to set.
+ */
+void Hyperbox::setAccuracyChanges(std::vector<double> newAccuracyChanges) {
+  accuracyChanges = newAccuracyChanges;
+}
+
+/**
  * @brief Adds in the list the accuracy changes with the new antecedent.
  *
  * @param newAccuracy New accuracy with the new antecedent.
@@ -188,6 +272,19 @@ void Hyperbox::addAccuracyChanges(double newAccuracy) {
 }
 
 /**
+ * @brief remove an accuracy change stat based on its array position.
+ *
+ * @param index item index to remove.
+ */
+void Hyperbox::removeAccuracyChange(int index) {
+  if (index < 0 || index >= accuracyChanges.size()) {
+    return;
+  }
+
+  accuracyChanges.erase(accuracyChanges.begin() + index);
+}
+
+/**
  * @brief Reset the accuracy changes for each new antecedent.
  */
 void Hyperbox::resetAccuracyChanges() {
@@ -195,20 +292,15 @@ void Hyperbox::resetAccuracyChanges() {
   accuracyChanges = changeAcc;
 }
 
-/**
- * @brief Adds a new discriminative hyperplane to the hyperbox.
- *
- * @param dimVal Index of the attribute.
- * @param hypVal Hyperplane value.
- */
-void Hyperbox::discriminateHyperplan(int dimVal, int hypValIndex) {
-  discriminativeHyperplans.push_back(std::make_pair(dimVal, hypValIndex));
-}
+Hyperbox Hyperbox::deepCopy() {
+  Hyperbox copy = Hyperbox();
 
-/**
- * @brief Resets the discriminative hyperplanes of the hyperbox.
- */
-void Hyperbox::resetDiscriminativeHyperplans() {
-  std::vector<std::pair<int, int>> disc;
-  discriminativeHyperplans = disc;
+  copy.setDiscriminativeHyperplans(discriminativeHyperplans);
+  copy.setCoveringSizesWithNewAntecedent(coveringSizesWithNewAntecedent);
+  copy.setCoveredSamples(coveredSamples);
+  copy.setFidelity(fidelity);
+  copy.setAccuracyChanges(accuracyChanges);
+  copy.setIncreasedFidelity(increasedFidelity);
+
+  return copy;
 }
