@@ -107,7 +107,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
   int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
   int step = (endIndex - startIndex) / nbThreadsUsed; 
   int stepCounter = startIndex;
-  std::cout << "Selected indexes: [" << startIndex << "," << endIndex << "] (" << (endIndex - startIndex + 1) << " samples)" << std::endl;
+  std::cout << "Selected indexes: [" << startIndex << "," << endIndex << "[ (" << (endIndex - startIndex) << " samples)" << std::endl;
 
   std::vector<int> threadProgress(nbThreadsUsed, 0);
 
