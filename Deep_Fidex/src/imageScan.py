@@ -15,24 +15,32 @@ The histograms are the probabilities of each class on all the different filtered
 we go back to the filtered images to see where the rule is applied on the image to see the important areas of the image with
 respect to this rule.
 """
-import os
+import os, sys
+
+_MARK = "TF_ENV_CLEANED"
+if not os.environ.get(_MARK): # relaunch the script in a clean environment
+    env = os.environ.copy()
+    for v in ("LD_LIBRARY_PATH", "CUDA_HOME", "CUDA_PATH"): # avoid cuda conflicts
+        env.pop(v, None)
+    env[_MARK] = "1"
+    os.execve(sys.executable, [sys.executable] + sys.argv, env)
 
 # GPU arguments
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2" # Change this to select the GPU to use, -1 to use CPU only
 
 import tensorflow as tf
-from tensorflow.keras.mixed_precision import set_global_policy
+# from tensorflow.keras.mixed_precision import set_global_policy
 # set_global_policy('mixed_float16')  # To use less memory space
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-    except RuntimeError as e:
-        print("Erreur lors de la configuration de memory growth :", e)
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# if gpus:
+#     try:
+#         for gpu in gpus:
+#             tf.config.experimental.set_memory_growth(gpu, True)
+#     except RuntimeError as e:
+#         print("Erreur lors de la configuration de memory growth :", e)
 
 # tf.config.threading.set_intra_op_parallelism_threads(64)
 # tf.config.threading.set_inter_op_parallelism_threads(4)
@@ -53,7 +61,7 @@ from trainings import randForestsTrn, gradBoostTrn
 
 # Import step files
 from train import train_model
-from stats import compute_stats
+from stats import compute_stats, compute_HOG
 from second_train import train_second_model
 from generate_rules import generate_rules
 from images import generate_explaining_images, generate_explaining_images_img_version
@@ -155,10 +163,16 @@ if __name__ == "__main__":
     ##############################################################################
 
     # Create patch dataset if training with patches or computing stats after training with patches
-    if args.train_with_patches and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
+
+    if args.statistic == "HOG_and_image":
+        if FILTER_SIZE != [[8, 8]]:
+            raise ValueError("HOG_and_image statistic requires a patch of size 8x8 (FILTER_SIZE in config).")
+        if args.train_with_patches or args.train:
+            raise ValueError("There is no training for this statistic choice, remove --train and set --train_with_patches to False.")
+
+    if (args.statistic == "HOG_and_image" or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
         X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
-
     # TRAINING
     if args.train:
         if args.train_with_patches:
@@ -168,12 +182,15 @@ if __name__ == "__main__":
         else:
             train_model(cfg, X_train, Y_train, X_test, Y_test, args)
 
-    print("Loading model...")
-    if cfg["model"] =="RF":
-        firstModel = joblib.load(cfg["model_file"])
+    if args.statistic != "HOG_and_image":
+        print("Loading model...")
+        if cfg["model"] =="RF":
+            firstModel = joblib.load(cfg["model_file"])
+        else:
+            firstModel = keras.saving.load_model(cfg["model_file"])
+        print("Model loaded.")
     else:
-        firstModel = keras.saving.load_model(cfg["model_file"])
-    print("Model loaded.")
+        firstModel = None
 
     # Get intermediate model if with activation_layer
     intermediate_model = None
@@ -187,10 +204,13 @@ if __name__ == "__main__":
 
     # STATISTICS
     if args.stats:
-        if args.train_with_patches:
-            compute_stats(cfg, X_train_patches, X_test_patches, firstModel, intermediate_model, args)
+        if args.statistic == "HOG_and_image":
+            compute_HOG(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
         else:
-            compute_stats(cfg, X_train, X_test, firstModel, intermediate_model, args)
+            if args.train_with_patches:
+                compute_stats(cfg, X_train_patches, X_test_patches, firstModel, intermediate_model, args)
+            else:
+                compute_stats(cfg, X_train, X_test, firstModel, intermediate_model, args)
 
     # TRAIN SECOND MODEL
     if args.second_train:
@@ -204,7 +224,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
     # Update stats file
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 
@@ -215,7 +235,7 @@ if __name__ == "__main__":
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images is not None:
-        data_in_rules = np.loadtxt(cfg["train_stats_file"]).astype('float32')
+        data_in_rules = np.loadtxt(cfg["train_stats_file"]).astype('float32') # The data used for the rules (Ex: image pixels and probabilities of patches)
         if args.image_version:
             if args.train_with_patches and args.statistic == "histogram":
                 generate_explaining_images_img_version(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions, data_in_rules=data_in_rules)

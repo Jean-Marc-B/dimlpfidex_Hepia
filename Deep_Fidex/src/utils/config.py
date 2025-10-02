@@ -9,14 +9,14 @@ from .utils import getProbabilityThresholds
 AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset", "HAM10000"]
 
 # List of statistics allowed
-AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]
+AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]
 
 # List of CNN models available
 AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "VGG_and_big", "resnet", "small", "big", "MLP", "MLP_Patch"]
 
 # Filters
-FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
-STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
+FILTER_SIZE = [[8, 8]]  # Filter size applied on the image
+STRIDE = [[2, 2]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
 NB_BINS = 9  # Number of bins wanted for probabilities (ex: NProb>=0.1, NProb>=0.2, etc.)
@@ -101,7 +101,8 @@ def load_config(args, script_dir):
         "probability_and_image": "Probability_and_image" + patches_sufix + folder_suf,
         "probability_multi_nets_and_image": "Probability_Multi_Nets_and_image" + patches_sufix + folder_suf,
         "probability_multi_nets_and_image_in_one": "Probability_Multi_Nets_and_image_in_one" + patches_sufix + folder_suf,
-        "convDimlpFilter": "Conv_DIMLP_Filter" + folder_suf
+        "convDimlpFilter": "Conv_DIMLP_Filter" + folder_suf,
+        "HOG_and_image": "HOG_and_image" + patches_sufix + folder_suf
     }
     scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
 
@@ -182,11 +183,16 @@ def load_config(args, script_dir):
         config["test_feature_map_file_npy"] = os.path.join(config["files_folder"], "test_feature_map.npy")
         config["train_feature_map_file"] = os.path.join(config["files_folder"], "train_feature_map.txt")
         config["test_feature_map_file"] = os.path.join(config["files_folder"], "test_feature_map.txt")
+    elif args.statistic == "HOG_and_image":
+        config["train_stats_file"] = os.path.join(config["files_folder"], "train_HOG_descriptor.txt")
+        config["test_stats_file"] = os.path.join(config["files_folder"], "test_HOG_descriptor.txt")
+        config["train_stats_file_with_image"] = os.path.join(config["files_folder"], "train_HOG_descriptor_with_original_img.txt")
+        config["test_stats_file_with_image"] = os.path.join(config["files_folder"], "test_HOG_descriptor_with_original_img.txt")
     # Parameters for second model training
     if args.statistic in ["probability", "probability_and_image"]:
         config["second_model"] = "cnn"
         #second_model = "randomForests"
-    elif args.statistic in ["probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
+    elif args.statistic in ["probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
         config["second_model"] = "cnn"
     elif args.statistic == "convDimlpFilter":
         config["second_model"] = "small"
@@ -208,13 +214,19 @@ def load_config(args, script_dir):
     else:
         config["second_model_output_weights"] = os.path.join(config["files_folder"], "second_model_weights.wts")
 
-    config["size_Height_proba_stat"] = config["size1D"] - FILTER_SIZE[0][0] + 1
-    config["size_Width_proba_stat"] = config["size1D"] - FILTER_SIZE[0][1] + 1
+    config["size_Height_proba_stat"] = ((config["size1D"] - FILTER_SIZE[0][0]) // STRIDE[0][0] + 1)
+    config["size_Width_proba_stat"] = ((config["size1D"] - FILTER_SIZE[0][1]) // STRIDE[0][1] + 1)
     # 📊 Parameters specific to probabilities
     if args.statistic == "probability":
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
     elif args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * config["nb_classes"] + config["size1D"] * config["size1D"] * config["nb_channels"]
+    elif args.statistic == "HOG_and_image":
+        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * 32 + config["size1D"] * config["size1D"] * config["nb_channels"]
+
+    # Ensure that necessary directories exist
+    _ensure_dirs(config)
+
     # Display parameters
     print("\n--------------------------------------------------------------------------")
     print("Parameters :")
@@ -224,8 +236,7 @@ def load_config(args, script_dir):
     print(f"Data type : {config['data_type']}")
     print(f"Number of attributes : {config.get('nb_stats_attributes', 'N/A')}")
 
-    print("Statistic :")
-    print(STATISTIC_FOLDERS.get(args.statistic, "UNKNOWN"))
+    print(f"Statistic : {args.statistic}")
     if getattr(args, "train_with_patches", False):
         print("Training with patches")
 
@@ -311,3 +322,20 @@ def load_config(args, script_dir):
     print("\n--------------------------------------------------------------------------")
 
     return config
+
+# Ensure that necessary directories exist
+from pathlib import Path
+def _ensure_dirs(config):
+    # Folders you always need
+    dirs = {
+        config["scan_folder"],
+        config["plot_folder"],
+        config["files_folder"],
+        config["data_folder"],
+        config["rules_folder"],
+        config["heat_maps_folder"],
+    }
+
+    # Physically create everything
+    for d in dirs:
+        Path(d).mkdir(parents=True, exist_ok=True)

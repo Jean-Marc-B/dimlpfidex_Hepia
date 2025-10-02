@@ -217,3 +217,81 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
     end_time_stats_computation = time.time()
     full_time_stats_computation = end_time_stats_computation - start_time_stats_computation
     print(f"\nStats computation time = {full_time_stats_computation:.2f} sec")
+
+def compute_HOG(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples):
+    """
+    Compute HOG statistics for the training and testing datasets.
+
+    This function computes the Histogram of Oriented Gradients (HOG) for each image in the training
+    and testing datasets. The computed HOG features are then saved to the specified files.
+    Images must be 8x8 pixels. We use 2x2 cells of 4x4 pixels, 8 orientations, and no block overlap.
+
+    Parameters:
+    - cfg: Configuration dictionary containing parameters such as file paths and HOG settings.
+    - X_train: The training dataset containing images (each image must be 8x8).
+    - X_test: The testing dataset containing images (each image must be 8x8).
+    - nb_original_train_samples: The number of original training samples (images, not patches).
+    - nb_original_test_samples: The number of original testing samples (images, not patches).
+
+    Returns:
+    None
+    """
+    from skimage.feature import hog
+    import numpy as np
+
+    # Note : The image should be float in [0,1] for skimage hog function
+
+    # Convert images to grayscale if they are not already
+    if cfg["nb_channels"] != 1:
+        X_train = tf.image.rgb_to_grayscale(X_train).numpy()  # (62500, 8, 8, 1)
+        X_test  = tf.image.rgb_to_grayscale(X_test).numpy()
+
+    X_train = np.squeeze(X_train, axis=-1)  # becomes (N, 8, 8)
+    X_test  = np.squeeze(X_test, axis=-1)
+
+    if X_train.shape[1] != 8 or X_train.shape[2] != 8 or X_test.shape[1] != 8 or X_test.shape[2] != 8:
+        raise ValueError("Images must be 8x8 pixels to compute HOG features with the current configuration.")
+    print("Computing HOG features for training set...")
+    # --- Compute HOG descriptors for training set ---
+    hog_train = []
+    for img in X_train:
+        feat = hog(
+            image=img,                 # single 8x8 grayscale image (values in [0,1])
+            orientations=8,            # number of bins
+            pixels_per_cell=(4, 4),    # cell size: 4x4 pixels -> 2x2 cells for an 8x8 image
+            cells_per_block=(1, 1),    # no block overlap, block = single cell
+            block_norm="L2-Hys",       # normalization method (still required for (1,1))
+            transform_sqrt=False,      # optional: apply power law compression
+            feature_vector=True,       # return 1D vector
+            visualize=False            # no visualization
+        )
+        hog_train.append(feat)
+    hog_train = np.array(hog_train)
+
+    print("Computing HOG features for testing set...")
+    # --- Compute HOG descriptors for testing set ---
+    hog_test = []
+    for img in X_test:
+        feat = hog(
+            image=img,
+            orientations=8,
+            pixels_per_cell=(4, 4),
+            cells_per_block=(1, 1),
+            block_norm="L2-Hys",
+            transform_sqrt=False,
+            feature_vector=True,
+            visualize=False
+        )
+        hog_test.append(feat)
+    hog_test = np.array(hog_test)
+
+    #Modify to size nb_original_samples x (nb_patches*32) :
+    hog_train = hog_train.reshape(nb_original_train_samples, -1)
+    hog_test = hog_test.reshape(nb_original_test_samples, -1)
+
+    # --- Save features to files defined in cfg ---
+    np.savetxt(cfg["train_stats_file"], hog_train)
+    np.savetxt(cfg["test_stats_file"], hog_test)
+
+    print(f"HOG features for training set saved to {cfg['train_stats_file']} with shape {hog_train.shape}")
+    print(f"HOG features for testing set saved to {cfg['test_stats_file']} with shape {hog_test.shape}")
