@@ -185,8 +185,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
         hyperspace->getHyperbox()->addDiscriminativeHyperplan(bestDimension, indexBestHyp);
 
         double ruleAccuracy;
-        bestHyperbox->computeFidelity(mainSamplePred, trainPreds);
-        ruleAccuracy = hyperspace->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of correct model prediction on samples covered by the rule
+        ruleAccuracy = hyperspace->getHyperbox()->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of correct model prediction on samples covered by the rule
         hyperspace->getHyperbox()->addAccuracyChanges(ruleAccuracy);
       }
     }
@@ -210,7 +209,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
 
   std::shared_ptr<Hyperbox> originalHyperbox = hyperspace->getHyperbox();
   std::vector<std::pair<int, int>> originalDiscrHyperplans = originalHyperbox->getDiscriminativeHyperplans();
-  Hyperbox copyHyperbox = originalHyperbox->deepCopy();
+  Hyperbox copyHyperbox = originalHyperbox->deepCopy(); // TODO rethink this
   Hyperbox bestHyperbox = originalHyperbox->deepCopy();
   int antededantIndex = -1;
 
@@ -222,6 +221,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     std::vector<std::pair<int, int>> copyDiscrHyperplans(originalDiscrHyperplans); // create original's copy
     copyDiscrHyperplans.erase(copyDiscrHyperplans.begin() + i);                    // hide an antecedant
     copyHyperbox.setDiscriminativeHyperplans(copyDiscrHyperplans);
+    // TODO maybe empty the increased fidelity vector
     copyHyperbox.setCoveredSamples(coveredSamples);
     
     for (auto antecedant : copyDiscrHyperplans) {
@@ -234,6 +234,10 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
       bool isMainSampleGreater = hypValue <= mainSampleValue;
       
       copyHyperbox.computeCoveredSamples(copyHyperbox.getCoveredSamples(), feature, trainData, isMainSampleGreater, hypValue);
+      //TODO uncomment
+      // copyHyperbox.computeFidelity(mainSamplePred, trainPreds);
+      // copyHyperbox.addIncreasedFidelity(copyHyperbox.getFidelity());
+      // copyHyperbox.addAccuracyChanges(copyHyperbox.c);
     }
     
     copyHyperbox.computeFidelity(mainSamplePred, trainPreds);
@@ -245,7 +249,8 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
       bestHyperbox = copyHyperbox;
     }
   }
-  
+
+  // TODO remove this (maybe)
   originalHyperbox->removeAccuracyChange(antededantIndex);
   originalHyperbox->removeCoveringSizesWithNewAntecedent(antededantIndex);
   originalHyperbox->removeIncreasedFidelity(antededantIndex);
