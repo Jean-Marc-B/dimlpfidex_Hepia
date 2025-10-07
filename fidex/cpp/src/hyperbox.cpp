@@ -304,3 +304,25 @@ Hyperbox Hyperbox::deepCopy() {
 
   return copy;
 }
+
+
+/**
+ * @brief Computes the accuracy of the rule with respect to the rule prediction and true classes of the covered samples.
+ *
+ * @param mainsamplePred Prediction of the rule and main sample.
+ * @param trainTrueClass True classes of the training data.
+ * @return The accuracy of the rule.
+ */
+double Hyperbox::computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass) const { // Percentage of correct rule predictions on samples covered by the rule
+
+  int total = 0; // Number of indexes predicted good
+  int autretotal = 0;
+
+  for (int idSample : coveredSamples) {
+    if (mainsamplePred == trainTrueClass[idSample]) {
+      total += 1;
+    }
+  }
+
+  return static_cast<double>(total) / static_cast<double>(coveredSamples.size());
+}

@@ -164,6 +164,8 @@ public:
    */
   void addDiscriminativeHyperplan(int dimVal, int hypValIndex);
 
+  double computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass) const;
+
   Hyperbox deepCopy();
 };
 
