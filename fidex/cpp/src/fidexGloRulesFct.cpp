@@ -105,7 +105,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
   int nbThreadsUsed = p.getInt(NB_THREADS);
   int startIndex = p.getInt(START_INDEX);
   int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
-  int step = (endIndex - startIndex) / nbThreadsUsed; 
+  int step = (endIndex - startIndex) / nbThreadsUsed;
   int stepCounter = startIndex;
   std::cout << "Selected indexes: [" << startIndex << "," << endIndex << "[ (" << (endIndex - startIndex) << " samples)" << std::endl;
 
@@ -291,38 +291,56 @@ std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples
   return rules;
 }
 
-std::vector<Rule> ruleSelection(int nbDatas, std::vector<Rule> rules) {
+int computeGlobalRulesCoveredSamples(int nbDatas, int nbClasses, std::vector<std::vector<int>> coveredSamplesSumByClass) {
+  int notCoveredSamples = 0;
+
+  for (int i = 0; i < nbDatas; i++) {
+    bool covered = false;
+
+    for (int c = 0; c < nbClasses; c++) {
+      if (coveredSamplesSumByClass[c][i] > 0) {
+        covered = true;
+        break;
+      }
+    }
+
+    if (!covered) {
+      notCoveredSamples += 1;
+    }
+  }
+
+  return notCoveredSamples;
+}
+
+std::vector<Rule> ruleSelection(int nbDatas, int nbClasses, std::vector<Rule> rules) {
   std::vector<Rule> chosenRules;
-  std::vector<int> coveredSamplesSum(nbDatas, 0);
+  std::vector<std::vector<int>> coveredSamplesSumByClass(nbClasses, std::vector<int>(nbDatas, 0));
   int deletedRules = 0;
 
   std::cout << "Running rule selection optimization...." << std::endl;
   for (int i = rules.size() - 1; i >= 0; i--) {
     Rule currentRule = rules[i];
-    // std::cout << "Rule #" << i << " (covering=" << currentRule.getCoveringSize() << ")" << std::endl;
+    int currentRuleClass = currentRule.getOutputClass();
 
     for (int sample : currentRule.getCoveredSamples()) {
-      if (coveredSamplesSum[sample] != -1) {
-        coveredSamplesSum[sample] += 1;
-      }
+      coveredSamplesSumByClass[currentRuleClass][sample] += 1;
     }
 
     for (int ruleId = 0; ruleId < chosenRules.size(); ruleId++) {
       Rule rule = chosenRules[ruleId];
+      int ruleClass = rule.getOutputClass();
       bool usefull = false;
 
       for (int sample : rule.getCoveredSamples()) {
-        if (coveredSamplesSum[sample] == 1) {
+        if (coveredSamplesSumByClass[ruleClass][sample] == 1) {
           usefull = true;
           break;
         }
       }
 
       if (!usefull) {
-        // std::cout << "Deleting rule #" << ruleId << "..." << std::endl;
-
         for (int sample : rule.getCoveredSamples()) {
-          coveredSamplesSum[sample] -= 1;
+          coveredSamplesSumByClass[ruleClass][sample] -= 1;
         }
 
         chosenRules.erase(chosenRules.begin() + ruleId);
@@ -333,7 +351,9 @@ std::vector<Rule> ruleSelection(int nbDatas, std::vector<Rule> rules) {
     chosenRules.push_back(currentRule);
   }
 
+  int notCoveredSamples = computeGlobalRulesCoveredSamples(nbDatas, nbClasses, coveredSamplesSumByClass);
   std::cout << "Rule optimization done, " << deletedRules << " deleted. " << chosenRules.size() << " rules remaining in selection." << std::endl;
+  std::cout << notCoveredSamples << " samples remains uncovered by the global rule set." << std::endl;
 
   return chosenRules;
 }
@@ -360,6 +380,7 @@ std::vector<Rule> ruleSelection(int nbDatas, std::vector<Rule> rules) {
 std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std::vector<std::vector<double>> &hyperlocus) {
   std::vector<Rule> chosenRules;
   int nbDatas = trainDataset.getNbSamples();
+  int nbClasses = p.getInt(NB_CLASSES);
   int startIndex = p.getInt(START_INDEX);
   int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
   int nbSamples = endIndex - startIndex;
@@ -417,7 +438,7 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
   std::cout << chosenRules.size() << " rules selected." << std::endl;
 
   // rerun a rule selection to improve final global rule set.
-  chosenRules = ruleSelection(nbDatas, chosenRules);
+  chosenRules = ruleSelection(nbDatas, nbClasses, chosenRules);
 
   return chosenRules;
 }
@@ -609,18 +630,17 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.assertStringExists(GLOBAL_RULES_OUTFILE);
   p.assertIntExists(HEURISTIC);
 
-  //TODO: uncomment when tests are done
-  // if (p.isIntSet(START_INDEX) || p.isIntSet(END_INDEX)) {
-  //   std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
-  //   std::string filenameWithoutExtension = globalRulesOutfile.substr(0,globalRulesOutfile.find_last_of("."));
-  //   std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
+   if (p.isIntSet(START_INDEX) || p.isIntSet(END_INDEX)) {
+     std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
+     std::string filenameWithoutExtension = globalRulesOutfile.substr(0,globalRulesOutfile.find_last_of("."));
+     std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
 
-  //   if (extension != "json") {
-  //     std::string updated_file = filenameWithoutExtension + ".json";
-  //     p.setString(GLOBAL_RULES_OUTFILE, updated_file);
-  //     std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
-  //   }
-  // }
+    if (extension != "json") {
+      std::string updated_file = filenameWithoutExtension + ".json";
+      p.setString(GLOBAL_RULES_OUTFILE, updated_file);
+      std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
+    }
+  }
 
   if (p.getBool(AGGREGATE_RULES)) {
     p.assertStringExists(AGGREGATE_FOLDER);
