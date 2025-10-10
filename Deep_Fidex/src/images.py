@@ -343,7 +343,7 @@ def split_title(title, max_line_length=50):
 
 def highlight_area_probability_image(image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels, statistic):
 
-    if statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
+    if statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG"]:
         prob_and_img_in_one_matrix = False
     else:
         prob_and_img_in_one_matrix = True
@@ -362,7 +362,7 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
     scale_h = size1D / size_Height_proba_stat # For probabilities and image in one matrix
     scale_w = size1D / size_Width_proba_stat
 
-    if statistic == "HOG_and_image":
+    if statistic in ["HOG_and_image", "HOG"]:
         nb_chanels_stats = 32
     else:
         nb_chanels_stats = nb_classes
@@ -375,7 +375,10 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
             area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
             is_proba_part = channel_id < nb_classes
         else:
-            is_proba_part = antecedent.attribute < split_id
+            if statistic == "HOG":
+                is_proba_part = True
+            else:
+                is_proba_part = antecedent.attribute < split_id
 
         if is_proba_part:
             if not prob_and_img_in_one_matrix:
@@ -497,7 +500,10 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
             area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_chanels_stats + nb_channels))
             is_proba_part = channel_id < nb_classes
         else:
-            is_proba_part = antecedent.attribute < split_id
+            if statistic == "HOG":
+                is_proba_part = True
+            else:
+                is_proba_part = antecedent.attribute < split_id
 
         if is_proba_part: # proba part
             if not prob_and_img_in_one_matrix:
@@ -507,7 +513,7 @@ def highlight_area_probability_image(image, true_class, rule, size1D, size_Heigh
             start_w = area_Width  * STRIDE[0][1]
             end_h   = start_h + filter_size[0][0] - 1
             end_w   = start_w + filter_size[0][1] - 1
-            if statistic == "HOG_and_image":
+            if statistic in ["HOG_and_image", "HOG"]:
                 statname = f"Descriptor_vector#{channel_id}"
             else:
                 class_name = classes[channel_id]
@@ -796,7 +802,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             rule.include_X = False
             for ant in rule.antecedents:
                 ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
-        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter", "HOG_and_image"]:
+        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter", "HOG_and_image", "HOG"]:
                 rule.include_X = False
         # Create folder for this rule
         rule_folder = os.path.join(cfg["rules_folder"], f"rule_{rule_id}_class_{cfg['classes'][rule.target_class]}")
@@ -859,10 +865,10 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                 else: # image part
                     height, width, channel = np.unravel_index(antecedent.attribute - split_id, (cfg["size1D"], cfg["size1D"], cfg["nb_channels"]))
                     antecedent.attribute = f"Pixel_{height}x{width}x{channel}"
-        elif args.statistic == "HOG_and_image":
+        elif args.statistic in ["HOG_and_image", "HOG"]:
             split_id = cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"] * 32
             for antecedent in rule_to_print.antecedents:
-                if antecedent.attribute < split_id: # HOG part
+                if args.statistic == "HOG" or antecedent.attribute < split_id: # HOG part
                     area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 32))
 
                     start_h = area_Height * STRIDE[0][0]
@@ -907,7 +913,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                 highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
-            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
+            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG"]:
                 highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
@@ -994,7 +1000,7 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
                 rule.include_X = False
                 for ant in rule.antecedents:
                     ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
-            elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter", "HOG_and_image"]:
+            elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter", "HOG_and_image", "HOG"]:
                     rule.include_X = False
 
             if args.statistic == "histogram":
@@ -1010,7 +1016,7 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
                 highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
-            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
+            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG"]:
                 highlighted_image = highlight_area_probability_image(img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)

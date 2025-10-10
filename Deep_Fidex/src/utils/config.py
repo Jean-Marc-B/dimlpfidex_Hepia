@@ -9,7 +9,7 @@ from .utils import getProbabilityThresholds
 AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset", "HAM10000"]
 
 # List of statistics allowed
-AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]
+AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG"]
 
 # List of CNN models available
 AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "VGG_and_big", "resnet", "small", "big", "MLP", "MLP_Patch"]
@@ -102,7 +102,8 @@ def load_config(args, script_dir):
         "probability_multi_nets_and_image": "Probability_Multi_Nets_and_image" + patches_sufix + folder_suf,
         "probability_multi_nets_and_image_in_one": "Probability_Multi_Nets_and_image_in_one" + patches_sufix + folder_suf,
         "convDimlpFilter": "Conv_DIMLP_Filter" + folder_suf,
-        "HOG_and_image": "HOG_and_image" + patches_sufix + folder_suf
+        "HOG_and_image": "HOG_and_image" + patches_sufix + folder_suf,
+        "HOG": "HOG" + patches_sufix + folder_suf
     }
     scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
 
@@ -183,16 +184,17 @@ def load_config(args, script_dir):
         config["test_feature_map_file_npy"] = os.path.join(config["files_folder"], "test_feature_map.npy")
         config["train_feature_map_file"] = os.path.join(config["files_folder"], "train_feature_map.txt")
         config["test_feature_map_file"] = os.path.join(config["files_folder"], "test_feature_map.txt")
-    elif args.statistic == "HOG_and_image":
+    elif args.statistic in ["HOG_and_image", "HOG"]:
         config["train_stats_file"] = os.path.join(config["files_folder"], "train_HOG_descriptor.txt")
         config["test_stats_file"] = os.path.join(config["files_folder"], "test_HOG_descriptor.txt")
-        config["train_stats_file_with_image"] = os.path.join(config["files_folder"], "train_HOG_descriptor_with_original_img.txt")
-        config["test_stats_file_with_image"] = os.path.join(config["files_folder"], "test_HOG_descriptor_with_original_img.txt")
+        if args.statistic == "HOG_and_image":
+            config["train_stats_file_with_image"] = os.path.join(config["files_folder"], "train_HOG_descriptor_with_original_img.txt")
+            config["test_stats_file_with_image"] = os.path.join(config["files_folder"], "test_HOG_descriptor_with_original_img.txt")
     # Parameters for second model training
     if args.statistic in ["probability", "probability_and_image"]:
         config["second_model"] = "cnn"
         #second_model = "randomForests"
-    elif args.statistic in ["probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
+    elif args.statistic in ["probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG"]:
         config["second_model"] = "cnn"
     elif args.statistic == "convDimlpFilter":
         config["second_model"] = "small"
@@ -223,6 +225,8 @@ def load_config(args, script_dir):
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * config["nb_classes"] + config["size1D"] * config["size1D"] * config["nb_channels"]
     elif args.statistic == "HOG_and_image":
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * 32 + config["size1D"] * config["size1D"] * config["nb_channels"]
+    elif args.statistic == "HOG":
+        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * 32
 
     # Ensure that necessary directories exist
     _ensure_dirs(config)

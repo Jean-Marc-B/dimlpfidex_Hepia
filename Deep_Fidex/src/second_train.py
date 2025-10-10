@@ -24,13 +24,30 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
     nb_train_samples = len(X_train)
     nb_test_samples = len(X_test)
 
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
+    if args.statistic == "HOG": # If we don't add the original image
+        print("Loading descriptors...")
+        train_descriptors = np.loadtxt(cfg["train_stats_file"]).astype('float32')
+        test_descriptors = np.loadtxt(cfg["test_stats_file"]).astype('float32')
+        print("Descriptors loaded.")
+        train_descriptors_h1, mu, sigma = compute_first_hidden_layer("train", train_descriptors, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"], activation_fct_stairobj="identity")
+        test_descriptors_h1 = compute_first_hidden_layer("test", test_descriptors, K_VAL, NB_QUANT_LEVELS, HIKNOT, mu=mu, sigma=sigma, activation_fct_stairobj="identity")
+        if args.test:
+            nbIt_current = 2
+        else:
+            nbIt_current = 80
+        # print(train_descriptors_h1.shape) # (nb_train_samples*21*21, 32)
+        train_descriptors_h1 = train_descriptors_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"]*32,1) #(100,21,21*32,1) Idea : all 32 values should be correlated so seen together
+        test_descriptors_h1 = test_descriptors_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"]*32,1) #(100,21,21*32,1)
+        # print(train_descriptors_h1.shape) # (100, 21, 352, 1)
+        # print(test_descriptors_h1.shape) # (100, 21, 352, 1)
+        trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"]*32, 1, cfg["nb_classes"], "big_HOG", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_descriptors_h1, Y_train, test_descriptors_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+
+
+    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
         # Load probas of areas from file
         print("Loading probability stats...")
         train_probas = np.loadtxt(cfg["train_stats_file"]).astype('float32')
         test_probas = np.loadtxt(cfg["test_stats_file"]).astype('float32')
-        print(train_probas.shape)
-        print(test_probas.shape)
         print("Probability stats loaded.")
         #print(train_probas.shape) # (nb_train_samples, 4840) (22*22*10)
         #print(test_probas.shape) # (nb_test_samples, 4840)
@@ -102,8 +119,13 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                 train_probas_img_h1 = train_probas_img_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
                 test_probas_img_h1 = test_probas_img_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
                 trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_img_h1, Y_train, test_probas_img_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
-            elif args.statistic in ["probability_and_image","HOG_and_image"]: #Train with VGG for image and CNN for probas or HOG
+            elif args.statistic == "probability_and_image": #Train with VGG for image and CNN for probas
                 trainCNN((cfg["size1D"], cfg["size_Height_proba_stat"]), (cfg["size1D"], cfg["size_Width_proba_stat"]), (cfg["nb_channels"], nb_chanels_stats), cfg["nb_classes"], "VGG_and_big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (train_img_part, train_proba_part), Y_train, (test_img_part, test_proba_part), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+            elif args.statistic == "HOG_and_image": #Train with VGG for image and CNN for HOG
+                train_proba_part = train_proba_part.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"]*32,1) #(100,21,21*32,1) Idea : all 32 values should be correlated so seen together
+                test_proba_part = test_proba_part.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"]*32,1) #(100,21,21*32,1)
+                trainCNN((cfg["size1D"], cfg["size_Height_proba_stat"]), (cfg["size1D"], cfg["size_Width_proba_stat"]*32), (cfg["nb_channels"], 1), cfg["nb_classes"], "VGG_and_big_HOG", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (train_img_part, train_proba_part), Y_train, (test_img_part, test_proba_part), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+
             else:
                 # Probability_multi_nets create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
                 # probability_multi_nets_and_image and probability_multi_nets_and_image_in_one do the same but don't add the image. The image is trained apart.

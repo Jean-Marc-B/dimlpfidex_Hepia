@@ -164,13 +164,13 @@ if __name__ == "__main__":
 
     # Create patch dataset if training with patches or computing stats after training with patches
 
-    if args.statistic == "HOG_and_image":
+    if args.statistic in ["HOG_and_image", "HOG"]:
         if FILTER_SIZE != [[8, 8]]:
-            raise ValueError("HOG_and_image statistic requires a patch of size 8x8 (FILTER_SIZE in config).")
+            raise ValueError("HOG statistic requires a patch of size 8x8 (FILTER_SIZE in config).")
         if args.train_with_patches or args.train:
-            raise ValueError("There is no training for this statistic choice, remove --train and set --train_with_patches to False.")
+            raise ValueError("There is no training for HOG, remove --train and set --train_with_patches to False.")
 
-    if (args.statistic == "HOG_and_image" or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
+    if (args.statistic in ["HOG_and_image", "HOG"] or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
         X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
     # TRAINING
@@ -182,7 +182,7 @@ if __name__ == "__main__":
         else:
             train_model(cfg, X_train, Y_train, X_test, Y_test, args)
 
-    if args.statistic != "HOG_and_image":
+    if args.statistic not in ["HOG_and_image", "HOG"]:
         print("Loading model...")
         if cfg["model"] =="RF":
             firstModel = joblib.load(cfg["model_file"])
@@ -204,7 +204,7 @@ if __name__ == "__main__":
 
     # STATISTICS
     if args.stats:
-        if args.statistic == "HOG_and_image":
+        if args.statistic in ["HOG_and_image", "HOG"]:
             compute_HOG(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
         else:
             if args.train_with_patches:
