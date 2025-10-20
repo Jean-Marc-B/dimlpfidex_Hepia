@@ -192,7 +192,6 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     nbIt += 1;
   }
 
-  // TODO: simplification rule process (antecedants are in disciminativeHyperplans in hyperbox)
   /* compute for each antecedant in original hyperbox's dicriminativeHyperplan:
   - copy hyperbox
   - skip one antecedant (skip)
@@ -250,10 +249,6 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     }
   }
 
-  // TODO remove this (maybe)
-  // originalHyperbox->removeAccuracyChange(antededantIndex);
-  // originalHyperbox->removeCoveringSizesWithNewAntecedent(antededantIndex);
-  // originalHyperbox->removeIncreasedFidelity(antededantIndex);
   originalHyperbox->setAccuracyChanges(bestHyperbox.getAccuracyChanges());
   originalHyperbox->setIncreasedFidelity(bestHyperbox.getIncreasedFidelity());
   originalHyperbox->setCoveringSizesWithNewAntecedent(bestHyperbox.getCoveringSizesWithNewAntecedent());
