@@ -630,7 +630,7 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.assertStringExists(GLOBAL_RULES_OUTFILE);
   p.assertIntExists(HEURISTIC);
 
-   if (p.isIntSet(START_INDEX) || p.isIntSet(END_INDEX)) {
+  if (p.getInt(START_INDEX) != 0 || p.getInt(END_INDEX) != -1) {
      std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
      std::string filenameWithoutExtension = globalRulesOutfile.substr(0,globalRulesOutfile.find_last_of("."));
      std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
