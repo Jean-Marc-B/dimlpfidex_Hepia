@@ -62,6 +62,12 @@ private:
    */
   bool retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, int mainSampleClass, bool verbose);
 
+  /**
+   * @brief Attepts to filter unnecessary attributes in a rule.
+   * 
+   */
+  bool optimize_rule(std::vector<double> &mainSampleValues, int mainSamplePred);
+
 public:
   /**
    * @brief Default constructor for Fidex.
