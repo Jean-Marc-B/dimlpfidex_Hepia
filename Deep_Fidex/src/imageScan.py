@@ -164,13 +164,14 @@ if __name__ == "__main__":
 
     # Create patch dataset if training with patches or computing stats after training with patches
 
-    if args.statistic in ["HOG_and_image", "HOG"]:
+    if args.statistic in ["HOG_and_image", "HOG", "probability_and_HOG_and_image"]:
         if FILTER_SIZE != [[8, 8]]:
             raise ValueError("HOG statistic requires a patch of size 8x8 (FILTER_SIZE in config).")
-        if args.train_with_patches or args.train:
-            raise ValueError("There is no training for HOG, remove --train and set --train_with_patches to False.")
+        if args.statistic in ["HOG_and_image", "HOG"]:
+            if args.train_with_patches or args.train:
+                raise ValueError("There is no training for HOG, remove --train and set --train_with_patches to False.")
 
-    if (args.statistic in ["HOG_and_image", "HOG"] or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
+    if (args.statistic in ["HOG_and_image", "HOG", "probability_and_HOG_and_image"] or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
         X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
     # TRAINING
@@ -204,6 +205,10 @@ if __name__ == "__main__":
 
     # STATISTICS
     if args.stats:
+        if args.statistic == "probability_and_HOG_and_image":
+            cfg["train_stats_file"] = cfg["train_stats_file_probas"]
+            cfg["test_stats_file"] = cfg["test_stats_file_probas"]
+
         if args.statistic in ["HOG_and_image", "HOG"]:
             compute_HOG(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
         else:
@@ -212,9 +217,29 @@ if __name__ == "__main__":
             else:
                 compute_stats(cfg, X_train, X_test, firstModel, intermediate_model, args)
 
+        if args.statistic == "probability_and_HOG_and_image":
+            cfg["train_stats_file"] = cfg["train_stats_file_hog"]
+            cfg["test_stats_file"] = cfg["test_stats_file_hog"]
+            compute_HOG(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
+            train_probas = np.loadtxt(cfg["train_stats_file_probas"]).astype('float32')
+            test_probas = np.loadtxt(cfg["test_stats_file_probas"]).astype('float32')
+            train_hog = np.loadtxt(cfg["train_stats_file_hog"]).astype('float32')
+            test_hog = np.loadtxt(cfg["test_stats_file_hog"]).astype('float32')
+            train_combined = np.concatenate((train_probas, train_hog), axis=-1)
+            test_combined = np.concatenate((test_probas, test_hog), axis=-1)
+            output_data(train_combined, cfg["train_stats_file_probas_hog"])
+            output_data(test_combined, cfg["test_stats_file_probas_hog"])
+            print(train_combined.shape)
+
+    if args.statistic == "probability_and_HOG_and_image":
+        cfg["train_stats_file"] = cfg["train_stats_file_probas_hog"]
+        cfg["test_stats_file"] = cfg["test_stats_file_probas_hog"]
+
     # TRAIN SECOND MODEL
     if args.second_train:
         train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model, args)
+
+
 
     # Define attributes file for histograms
     if args.statistic == "histogram":
@@ -224,7 +249,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
     # Update stats file
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
+    if args.statistic in ["probability", "probability_and_image", "probability_and_HOG_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 
