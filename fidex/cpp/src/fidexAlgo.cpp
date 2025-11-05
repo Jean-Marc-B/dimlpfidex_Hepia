@@ -193,15 +193,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   }
 
   // trying to remove unecessary antecedants
-  int antecedantsRemoved = 0;
-
-  while (optimize_rule(mainSampleValues, mainSamplePred)) {
-    antecedantsRemoved += 1;
-  }
-
-  if (antecedantsRemoved > 0) {
-    std::cout << antecedantsRemoved << " antecedant(s) removed." << std::endl;
-  }
+  while (optimize_rule(mainSampleValues, mainSamplePred));
 
   double ruleAccuracy;
   if (hasTrueClasses && _usingTestSamples) {
