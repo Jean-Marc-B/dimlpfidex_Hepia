@@ -132,6 +132,12 @@ cmake ..
 cmake --build .
 ```
 
+With docker (from project root):
+```shell
+docker build . -t dimlpfidex-build:latest
+docker run -v ./:/app dimlpfidex-build:latest
+```
+
 > [!NOTE]
 > On Windows, you may have to use `cmake -DCMAKE_PREFIX_PATH="C:\<absolute\path\to>\.venv" ..` instead.
 
