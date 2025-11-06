@@ -295,3 +295,49 @@ def compute_HOG(cfg, X_train, X_test, nb_original_train_samples, nb_original_tes
 
     print(f"HOG features for training set saved to {cfg['train_stats_file']} with shape {hog_train.shape}")
     print(f"HOG features for testing set saved to {cfg['test_stats_file']} with shape {hog_test.shape}")
+
+def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples):
+    """
+    Compute simple statistics (min, max, mean, std) for small patches in the training and testing datasets.
+    This function computes basic statistics for each small patch in the training and testing datasets.
+    The computed statistics are then saved to the specified files.
+    Parameters:
+    - cfg: Configuration dictionary containing parameters such as file paths.
+    - X_train: The training dataset containing small patches.
+    - X_test: The testing dataset containing small patches.
+    - nb_original_train_samples: The number of original training samples (images, not patches).
+    - nb_original_test_samples: The number of original testing samples (images, not patches).
+    Returns:
+    None
+    """
+
+    print("Computing simple statistics for training set...")
+    train_stats = []
+    for patch in X_train:
+        vmin = patch.min(axis=(0, 1))
+        vmax = patch.max(axis=(0, 1))
+        mean = patch.mean(axis=(0, 1))
+        std  = patch.std(axis=(0, 1))
+        train_stats.append(np.concatenate([vmin, vmax, mean, std]))
+    train_stats = np.array(train_stats)
+
+    print("Computing simple statistics for testing set...")
+    test_stats = []
+    for patch in X_test:
+        vmin = patch.min(axis=(0, 1))
+        vmax = patch.max(axis=(0, 1))
+        mean = patch.mean(axis=(0, 1))
+        std  = patch.std(axis=(0, 1))
+        test_stats.append(np.concatenate([vmin, vmax, mean, std]))
+    test_stats = np.array(test_stats)
+
+    # Modify to size nb_original_samples x (nb_patches*4) :
+    train_stats = train_stats.reshape(nb_original_train_samples, -1)
+    test_stats = test_stats.reshape(nb_original_test_samples, -1)
+
+    # Save features to files defined in cfg
+    np.savetxt(cfg["train_stats_file"], train_stats)
+    np.savetxt(cfg["test_stats_file"], test_stats)
+
+    print(f"Simple statistics for training set saved to {cfg['train_stats_file']} with shape {train_stats.shape}")
+    print(f"Simple statistics for testing set saved to {cfg['test_stats_file']} with shape {test_stats.shape}")
