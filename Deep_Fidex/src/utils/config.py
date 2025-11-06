@@ -9,14 +9,14 @@ from .utils import getProbabilityThresholds
 AVAILABLE_DATASETS = ["Mnist", "Cifar", "Happy", "testDataset", "HAM10000"]
 
 # List of statistics allowed
-AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG"]
+AVAILABLE_STATISTICS = ["histogram", "activation_layer", "probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG", "stats_and_image"]
 
 # List of CNN models available
 AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "VGG_and_big", "resnet", "small", "big", "MLP", "MLP_Patch"]
 
 # Filters
-FILTER_SIZE = [[8, 8]]  # Filter size applied on the image
-STRIDE = [[2, 2]]  # Shift between each filter (need to specify one per filter size)
+FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
+STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
 NB_BINS = 9  # Number of bins wanted for probabilities (ex: NProb>=0.1, NProb>=0.2, etc.)
@@ -85,6 +85,12 @@ def load_config(args, script_dir):
     if getattr(args, "train_with_patches", False) and len(FILTER_SIZE) != 1:
         raise ValueError("Error : When training with patches, only one stride and one filter size can be chosen.")
 
+
+    if args.statistic in ["HOG", "HOG_and_image"]:
+        config["patch_stats_size"] = 32
+    elif args.statistic == "stats_and_image":
+        config["patch_stats_size"] = 4*config["nb_channels"]
+
     # 📊 Definition of the scan folder
     scan_folder = "evaluation/Scan" if args.test else "evaluation/ScanFull"
     patches_sufix = ""
@@ -103,6 +109,7 @@ def load_config(args, script_dir):
         "probability_multi_nets_and_image_in_one": "Probability_Multi_Nets_and_image_in_one" + patches_sufix + folder_suf,
         "convDimlpFilter": "Conv_DIMLP_Filter" + folder_suf,
         "HOG_and_image": "HOG_and_image" + patches_sufix + folder_suf,
+        "stats_and_image": "stats_and_image" + patches_sufix + folder_suf,
         "HOG": "HOG" + patches_sufix + folder_suf
     }
     scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
@@ -190,11 +197,16 @@ def load_config(args, script_dir):
         if args.statistic == "HOG_and_image":
             config["train_stats_file_with_image"] = os.path.join(config["files_folder"], "train_HOG_descriptor_with_original_img.txt")
             config["test_stats_file_with_image"] = os.path.join(config["files_folder"], "test_HOG_descriptor_with_original_img.txt")
+    elif args.statistic == "stats_and_image":
+        config["train_stats_file"] = os.path.join(config["files_folder"], "train_patch_stats.txt")
+        config["test_stats_file"] = os.path.join(config["files_folder"], "test_patch_stats.txt")
+        config["train_stats_file_with_image"] = os.path.join(config["files_folder"], "train_patch_stats_with_original_img.txt")
+        config["test_stats_file_with_image"] = os.path.join(config["files_folder"], "test_patch_stats_with_original_img.txt")
     # Parameters for second model training
     if args.statistic in ["probability", "probability_and_image"]:
         config["second_model"] = "cnn"
         #second_model = "randomForests"
-    elif args.statistic in ["probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG"]:
+    elif args.statistic in ["probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "HOG", "stats_and_image"]:
         config["second_model"] = "cnn"
     elif args.statistic == "convDimlpFilter":
         config["second_model"] = "small"
@@ -223,10 +235,10 @@ def load_config(args, script_dir):
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * (config["nb_classes"] + config["nb_channels"])
     elif args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
         config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * config["nb_classes"] + config["size1D"] * config["size1D"] * config["nb_channels"]
-    elif args.statistic == "HOG_and_image":
-        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * 32 + config["size1D"] * config["size1D"] * config["nb_channels"]
+    elif args.statistic in ["HOG_and_image", "stats_and_image"]:
+        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * config["patch_stats_size"] + config["size1D"] * config["size1D"] * config["nb_channels"]
     elif args.statistic == "HOG":
-        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * 32
+        config["nb_stats_attributes"] = config["size_Height_proba_stat"] * config["size_Width_proba_stat"] * config["patch_stats_size"]
 
     # Ensure that necessary directories exist
     _ensure_dirs(config)
@@ -283,7 +295,7 @@ def load_config(args, script_dir):
     if getattr(args, "stats", False):
         print(f"Train statistics file : {config['train_stats_file']}")
         print(f"Test statistics file : {config['test_stats_file']}")
-        if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
+        if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
             print(f"Train statistics file with image : {config['train_stats_file_with_image']}")
             print(f"Test statistics file with image : {config['test_stats_file_with_image']}")
         elif args.statistic == "histogram":

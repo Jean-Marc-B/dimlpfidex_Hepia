@@ -35,45 +35,45 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
             nbIt_current = 2
         else:
             nbIt_current = 80
-        train_descriptors_h1 = train_descriptors_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"],32) #(100,21,21,32)
-        test_descriptors_h1 = test_descriptors_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"],32) #(100,21,21,32)
-        trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], 32, cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_descriptors_h1, Y_train, test_descriptors_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+        train_descriptors_h1 = train_descriptors_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"],cfg["patch_stats_size"]) #(100,21,21,32)
+        test_descriptors_h1 = test_descriptors_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"],cfg["patch_stats_size"]) #(100,21,21,32)
+        trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["patch_stats_size"], cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_descriptors_h1, Y_train, test_descriptors_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
 
 
-    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
+    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "stats_and_image"]:   # We create an image out of the probabilities(or stats) (for each class) of cropped areas of the original image
         # Load probas of areas from file
-        print("Loading probability stats...")
-        train_probas = np.loadtxt(cfg["train_stats_file"]).astype('float32')
-        test_probas = np.loadtxt(cfg["test_stats_file"]).astype('float32')
-        print("Probability stats loaded.")
-        #print(train_probas.shape) # (nb_train_samples, 4840) (22*22*10)
-        #print(test_probas.shape) # (nb_test_samples, 4840)
+        print("Loading patch stats...")
+        train_patch_stats = np.loadtxt(cfg["train_stats_file"]).astype('float32')
+        test_patch_stats = np.loadtxt(cfg["test_stats_file"]).astype('float32')
+        print("Patch stats loaded.")
+        #print(train_patch_stats.shape) # (nb_train_samples, 4840) (22*22*10)
+        #print(test_patch_stats.shape) # (nb_test_samples, 4840)
 
         print("Adding original image...")
 
         if cfg["second_model"] == "cnn" and args.statistic == "probability":
-            train_probas = train_probas.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
+            train_patch_stats = train_patch_stats.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
             X_train_reshaped = tf.image.resize(X_train, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
-            train_probas_img = np.concatenate((train_probas, X_train_reshaped[:nb_train_samples]), axis=-1) # Concatenate the probas and the original image resized
-            train_probas_img = train_probas_img.reshape(nb_train_samples, -1) # flatten for export
+            train_patch_stats_img = np.concatenate((train_patch_stats, X_train_reshaped[:nb_train_samples]), axis=-1) # Concatenate the probas and the original image resized
+            train_patch_stats_img = train_patch_stats_img.reshape(nb_train_samples, -1) # flatten for export
 
-            test_probas = test_probas.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
+            test_patch_stats = test_patch_stats.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"])
             X_test_reshaped = tf.image.resize(X_test, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"])) # Resize original image to the proba size
-            test_probas_img = np.concatenate((test_probas, X_test_reshaped[:nb_test_samples]), axis=-1) # Concatenate the probas and the original image resized
-            test_probas_img = test_probas_img.reshape(nb_test_samples, -1) # flatten for export
-            # print(train_probas_img.shape) #(nb_train_samples, 5324) (22*22*11)
-            # print(test_probas_img.shape)  #(nb_test_samples, 5324)
+            test_patch_stats_img = np.concatenate((test_patch_stats, X_test_reshaped[:nb_test_samples]), axis=-1) # Concatenate the probas and the original image resized
+            test_patch_stats_img = test_patch_stats_img.reshape(nb_test_samples, -1) # flatten for export
+            # print(train_patch_stats_img.shape) #(nb_train_samples, 5324) (22*22*11)
+            # print(test_patch_stats_img.shape)  #(nb_test_samples, 5324)
         else:
             X_train_flatten = X_train.reshape(nb_train_samples, -1)
             X_test_flatten = X_test.reshape(nb_test_samples, -1)
-            train_probas_img = np.concatenate((train_probas, X_train_flatten), axis=-1)
-            test_probas_img = np.concatenate((test_probas, X_test_flatten), axis=-1)
+            train_patch_stats_img = np.concatenate((train_patch_stats, X_train_flatten), axis=-1)
+            test_patch_stats_img = np.concatenate((test_patch_stats, X_test_flatten), axis=-1)
 
 
 
         # Save proba stats data with original image added
-        output_data(train_probas_img, cfg["train_stats_file_with_image"])
-        output_data(test_probas_img, cfg["test_stats_file_with_image"])
+        output_data(train_patch_stats_img, cfg["train_stats_file_with_image"])
+        output_data(test_patch_stats_img, cfg["test_stats_file_with_image"])
 
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
@@ -84,24 +84,24 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
         if cfg["second_model"] == "cnn":
 
             # Pass on the DIMLP layer
-            train_probas_img_h1, mu, sigma = compute_first_hidden_layer("train", train_probas_img, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"], activation_fct_stairobj="identity")
-            test_probas_img_h1 = compute_first_hidden_layer("test", test_probas_img, K_VAL, NB_QUANT_LEVELS, HIKNOT, mu=mu, sigma=sigma, activation_fct_stairobj="identity")
+            train_patch_stats_img_h1, mu, sigma = compute_first_hidden_layer("train", train_patch_stats_img, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"], activation_fct_stairobj="identity")
+            test_patch_stats_img_h1 = compute_first_hidden_layer("test", test_patch_stats_img, K_VAL, NB_QUANT_LEVELS, HIKNOT, mu=mu, sigma=sigma, activation_fct_stairobj="identity")
 
 
-            # train_probas_img_h1 = train_probas_img_h1.reshape((nb_train_samples,)+cfg["output_size"]) #(100, 26, 26, 13)
-            # print("train_probas_img_h1 reshaped : ", train_probas_img_h1.shape)
-            # test_probas_img_h1 = test_probas_img_h1.reshape((nb_test_samples,)+cfg["output_size"])
-            #print(train_probas_img.shape)  # (nb_train_samples, 22, 22, 10)
-            #print(test_probas.shape)  # (nb_train_samples, 22, 22, 10)
-            if args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
+            # train_patch_stats_img_h1 = train_patch_stats_img_h1.reshape((nb_train_samples,)+cfg["output_size"]) #(100, 26, 26, 13)
+            # print("train_patch_stats_img_h1 reshaped : ", train_patch_stats_img_h1.shape)
+            # test_patch_stats_img_h1 = test_patch_stats_img_h1.reshape((nb_test_samples,)+cfg["output_size"])
+            #print(train_patch_stats_img.shape)  # (nb_train_samples, 22, 22, 10)
+            #print(test_patch_stats.shape)  # (nb_train_samples, 22, 22, 10)
+            if args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "stats_and_image"]:
                 nb_chanels_stats = cfg["nb_classes"]
-                if args.statistic == "HOG_and_image":
-                    nb_chanels_stats = 32
+                if args.statistic in ["HOG_and_image", "stats_and_image"]:
+                    nb_chanels_stats = cfg["patch_stats_size"]
                 split_id = cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"] * nb_chanels_stats
-                train_proba_part = train_probas_img_h1[:, :split_id]
-                test_proba_part = test_probas_img_h1[:, :split_id]
-                train_img_part = train_probas_img_h1[:, split_id:]
-                test_img_part = test_probas_img_h1[:, split_id:]
+                train_proba_part = train_patch_stats_img_h1[:, :split_id]
+                test_proba_part = test_patch_stats_img_h1[:, :split_id]
+                train_img_part = train_patch_stats_img_h1[:, split_id:]
+                test_img_part = test_patch_stats_img_h1[:, split_id:]
                 train_proba_part = train_proba_part.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], nb_chanels_stats) #(100,26,26,10)
                 test_proba_part = test_proba_part.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], nb_chanels_stats) #(100,26,26,10)
                 train_img_part = train_img_part.reshape(nb_train_samples, cfg["size1D"], cfg["size1D"], cfg["nb_channels"]) #(100, 32, 32, 3)
@@ -113,10 +113,10 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                     nbIt_current = 80
 
             if args.statistic == "probability": # Train with a CNN now
-                train_probas_img_h1 = train_probas_img_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
-                test_probas_img_h1 = test_probas_img_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
-                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_probas_img_h1, Y_train, test_probas_img_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
-            elif args.statistic in ["probability_and_image", "HOG_and_image"]: #Train with VGG for image and CNN for probas or HOG
+                train_patch_stats_img_h1 = train_patch_stats_img_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
+                test_patch_stats_img_h1 = test_patch_stats_img_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
+                trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_patch_stats_img_h1, Y_train, test_patch_stats_img_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+            elif args.statistic in ["probability_and_image", "HOG_and_image", "stats_and_image"]: #Train with VGG for image and CNN for probas, stats or HOG
                 trainCNN((cfg["size1D"], cfg["size_Height_proba_stat"]), (cfg["size1D"], cfg["size_Width_proba_stat"]), (cfg["nb_channels"], nb_chanels_stats), cfg["nb_classes"], "VGG_and_big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (train_img_part, train_proba_part), Y_train, (test_img_part, test_proba_part), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
             else:
                 # Probability_multi_nets create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)

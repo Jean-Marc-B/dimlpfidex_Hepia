@@ -29,7 +29,7 @@ if not os.environ.get(_MARK): # relaunch the script in a clean environment
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" # Change this to select the GPU to use, -1 to use CPU only
+os.environ["CUDA_VISIBLE_DEVICES"] = "2" # Change this to select the GPU to use, -1 to use CPU only
 
 import tensorflow as tf
 # from tensorflow.keras.mixed_precision import set_global_policy
@@ -61,7 +61,7 @@ from trainings import randForestsTrn, gradBoostTrn
 
 # Import step files
 from train import train_model
-from stats import compute_stats, compute_HOG
+from stats import compute_stats, compute_HOG, compute_little_patch_stats
 from second_train import train_second_model
 from generate_rules import generate_rules
 from images import generate_explaining_images, generate_explaining_images_img_version
@@ -167,10 +167,11 @@ if __name__ == "__main__":
     if args.statistic in ["HOG_and_image", "HOG"]:
         if FILTER_SIZE != [[8, 8]]:
             raise ValueError("HOG statistic requires a patch of size 8x8 (FILTER_SIZE in config).")
+    if args.statistic in ["HOG_and_image", "HOG", "stats_and_image"]:
         if args.train_with_patches or args.train:
-            raise ValueError("There is no training for HOG, remove --train and set --train_with_patches to False.")
+            raise ValueError("There is no training for HOG and for stats, remove --train and set --train_with_patches to False.")
 
-    if (args.statistic in ["HOG_and_image", "HOG"] or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
+    if (args.statistic in ["HOG_and_image", "HOG", "stats_and_image"] or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
         X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
     # TRAINING
@@ -182,7 +183,7 @@ if __name__ == "__main__":
         else:
             train_model(cfg, X_train, Y_train, X_test, Y_test, args)
 
-    if args.statistic not in ["HOG_and_image", "HOG"]:
+    if args.statistic not in ["HOG_and_image", "HOG", "stats_and_image"]:
         print("Loading model...")
         if cfg["model"] =="RF":
             firstModel = joblib.load(cfg["model_file"])
@@ -206,6 +207,8 @@ if __name__ == "__main__":
     if args.stats:
         if args.statistic in ["HOG_and_image", "HOG"]:
             compute_HOG(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
+        elif args.statistic == "stats_and_image":
+            compute_little_patch_stats(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
         else:
             if args.train_with_patches:
                 compute_stats(cfg, X_train_patches, X_test_patches, firstModel, intermediate_model, args)
@@ -224,7 +227,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
     # Update stats file
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image"]:
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "HOG_and_image", "stats_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 
