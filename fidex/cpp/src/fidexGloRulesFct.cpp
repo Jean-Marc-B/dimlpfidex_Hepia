@@ -631,17 +631,16 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.assertIntExists(HEURISTIC);
 
   // manage the bached execution
-  //TODO uncomment when tests are done
-  // if (p.getInt(START_INDEX) != 0 || p.getInt(END_INDEX) != -1) {
-  //    std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
-  //    std::string filenameWithoutExtension = globalRulesOutfile.substr(0,globalRulesOutfile.find_last_of("."));
-  //    std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
+  if (p.getInt(START_INDEX) != 0 || p.getInt(END_INDEX) != -1) {
+     std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
+     std::string filenameWithoutExtension = globalRulesOutfile.substr(0,globalRulesOutfile.find_last_of("."));
+     std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
 
-  //   if (extension != "json") {
-  //     std::string updated_file = filenameWithoutExtension + ".json";
-  //     p.setString(GLOBAL_RULES_OUTFILE, updated_file);
-  //     std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
-  //   }
+    if (extension != "json") {
+      std::string updated_file = filenameWithoutExtension + ".json";
+      p.setString(GLOBAL_RULES_OUTFILE, updated_file);
+      std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
+    }
   // }
 
   if (p.getBool(AGGREGATE_RULES)) {
