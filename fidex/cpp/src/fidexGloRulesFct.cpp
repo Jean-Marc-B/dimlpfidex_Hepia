@@ -632,33 +632,34 @@ void checkRulesParametersLogicValues(Parameters &p) {
 
   // manage the bached execution
   if (p.getInt(START_INDEX) != 0 || p.getInt(END_INDEX) != -1) {
-     std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
-     std::string filenameWithoutExtension = globalRulesOutfile.substr(0,globalRulesOutfile.find_last_of("."));
-     std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
+    std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
+    std::string filenameWithoutExtension = globalRulesOutfile.substr(0, globalRulesOutfile.find_last_of("."));
+    std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
 
     if (extension != "json") {
       std::string updated_file = filenameWithoutExtension + ".json";
       p.setString(GLOBAL_RULES_OUTFILE, updated_file);
       std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
     }
-  // }
+    // }
 
-  if (p.getBool(AGGREGATE_RULES)) {
-    p.assertStringExists(AGGREGATE_FOLDER);
-  }
+    if (p.getBool(AGGREGATE_RULES)) {
+      p.assertStringExists(AGGREGATE_FOLDER);
+    }
 
-  // verifying logic between parameters, values range and so on...
-  p.checkParametersCommon();
-  p.checkParametersFidex();
-  p.checkParametersDecisionThreshold();
-  p.checkParametersNormalization();
+    // verifying logic between parameters, values range and so on...
+    p.checkParametersCommon();
+    p.checkParametersFidex();
+    p.checkParametersDecisionThreshold();
+    p.checkParametersNormalization();
 
-  if (p.getInt(NB_THREADS) < 1 || p.getInt(NB_THREADS) > omp_get_max_threads()) {
-    throw CommandArgumentException("Error : Number of threads must be between 1 and the number of CPU cores on your machine (which is " + std::to_string(omp_get_max_threads()) + ")");
-  }
+    if (p.getInt(NB_THREADS) < 1 || p.getInt(NB_THREADS) > omp_get_max_threads()) {
+      throw CommandArgumentException("Error : Number of threads must be between 1 and the number of CPU cores on your machine (which is " + std::to_string(omp_get_max_threads()) + ")");
+    }
 
-  if (!(p.getInt(HEURISTIC) > 0 && p.getInt(HEURISTIC) < 4)) {
-    throw CommandArgumentException("Error : Heuristic must be 1, 2, or 3.");
+    if (!(p.getInt(HEURISTIC) > 0 && p.getInt(HEURISTIC) < 4)) {
+      throw CommandArgumentException("Error : Heuristic must be 1, 2, or 3.");
+    }
   }
 }
 
