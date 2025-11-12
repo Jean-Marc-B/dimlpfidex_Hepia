@@ -195,13 +195,9 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   // trying to remove unecessary antecedants
   while (optimize_rule(mainSampleValues, mainSamplePred));
 
-  double ruleAccuracy;
-  if (hasTrueClasses && _usingTestSamples) {
-    bool mainSampleCorrect = mainSamplePred == mainSampleClass;
-    ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses, mainSampleCorrect); // Percentage of correct model prediction on samples covered by the rule
-  } else {
-    ruleAccuracy = hyperspace->computeRuleAccuracy(trainPreds, trainTrueClass, hasTrueClasses); // Percentage of correct model prediction on samples covered by the rule
-  }
+  // Compute rule accuracy and confidence
+  std::vector<double> accuracyChanges = hyperspace->getHyperbox()->getAccuracyChanges();
+  double ruleAccuracy = std::accumulate(accuracyChanges.begin(), accuracyChanges.end(), 0.0);
 
   double ruleConfidence;
   ruleConfidence = hyperspace->computeRuleConfidence(trainOutputValuesPredictions, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples
