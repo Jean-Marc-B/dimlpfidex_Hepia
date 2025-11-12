@@ -8,8 +8,9 @@ from utils.utils import (
     generate_filtered_images_and_predictions,
     output_data
 )
-from tensorflow.keras import Model
 from utils.config import *
+from skimage.feature import hog, local_binary_pattern
+from scipy.fft import dctn
 
 
 def compute_histograms(nb_samples, data_or_predictions, size1D, nb_channels, CNNModel, nb_classes, filter_size, stride, nb_bins, cfg, train_with_patches=False):
@@ -236,8 +237,6 @@ def compute_HOG(cfg, X_train, X_test, nb_original_train_samples, nb_original_tes
     Returns:
     None
     """
-    from skimage.feature import hog
-    import numpy as np
 
     # Note : The image should be float in [0,1] for skimage hog function
 
@@ -285,7 +284,7 @@ def compute_HOG(cfg, X_train, X_test, nb_original_train_samples, nb_original_tes
         hog_test.append(feat)
     hog_test = np.array(hog_test)
 
-    #Modify to size nb_original_samples x (nb_patches*32) :
+    #Modify to size nb_original_samples x (nb_patches_per_image*32) :
     hog_train = hog_train.reshape(nb_original_train_samples, -1)
     hog_test = hog_test.reshape(nb_original_test_samples, -1)
 
@@ -295,6 +294,85 @@ def compute_HOG(cfg, X_train, X_test, nb_original_train_samples, nb_original_tes
 
     print(f"HOG features for training set saved to {cfg['train_stats_file']} with shape {hog_train.shape}")
     print(f"HOG features for testing set saved to {cfg['test_stats_file']} with shape {hog_test.shape}")
+
+
+def compute_LBP_center_bits(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples):
+    """
+    Compute per-patch LBP (method='default') bits at the *central pixel* only.
+    R = floor((min(H,W)-1)/2), P = 8*R. Saves 0/1 bit vectors (length P).
+
+    Parameters
+    ----------
+    cfg : dict
+        - "nb_channels": 1 for grayscale, else converted to grayscale
+        - "train_stats_file": path to save train features (txt)
+        - "test_stats_file" : path to save test  features (txt)
+    X_train, X_test : np.ndarray
+        Arrays of shape (N, H, W, C) or (N, H, W, 1). Values can be any dtype.
+    nb_original_train_samples, nb_original_test_samples : int
+        For reshaping like in your HOG function (pass-through if already one
+        LBP vector per “original sample”).
+
+    Returns
+    -------
+    None (saves features to cfg["train_stats_file"], cfg["test_stats_file"])
+    """
+
+
+    # Convert images to grayscale if they are not already
+    if cfg["nb_channels"] != 1:
+        X_train = tf.image.rgb_to_grayscale(X_train).numpy()
+        X_test  = tf.image.rgb_to_grayscale(X_test).numpy()
+
+    if cfg["data_type"] == "float":
+        X_train = (X_train * 255).astype(np.uint8)
+        X_test  = (X_test  * 255).astype(np.uint8)
+    X_train = np.squeeze(X_train, axis=-1)
+    X_test  = np.squeeze(X_test, axis=-1)
+
+    # ---- 2) Check sizes and derive R, P
+    Ht, Wt = X_train.shape[1], X_train.shape[2]
+    Hs, Ws = X_test.shape[1], X_test.shape[2]
+    if (Ht, Wt) != (Hs, Ws):
+        raise ValueError(f"Train and test images must share the same size. Got train {(Ht, Wt)} vs test {(Hs, Ws)}.")
+    H, W = Ht, Wt
+
+    R = int((min(H, W) - 1) // 2)
+    if R < 1:
+        raise ValueError(f"Patch too small for LBP (got H={H}, W={W} -> R={R}). Need min(H,W) >= 3.")
+    P = int(8 * R)
+
+    # ---- 3) Central index (works for odd or even sizes)
+    ci, cj = H // 2, W // 2  # floor(H/2), floor(W/2)
+
+    # ---- 4) Helpers
+    def lbp_center_bits(img):
+        # skimage LBP expects float64 contiguous
+        img_u8 = np.ascontiguousarray(img, dtype=np.uint8)
+        lbp_map = local_binary_pattern(img_u8, P=P, R=R, method="default")
+        code = int(lbp_map[ci, cj])
+        # Decompose code into P bits (order matches scikit-image's sampling order)
+        bits = np.fromiter(((code >> k) & 1 for k in range(P)), count=P, dtype=np.uint8)
+        return bits
+
+    # ---- 5) Compute features
+    print(f"Computing LBP(center) with method='default', R={R}, P={P} for training set...")
+    lbp_train = np.vstack([lbp_center_bits(im) for im in X_train]).astype(np.uint8)
+
+    print(f"Computing LBP(center) with method='default', R={R}, P={P} for testing set...")
+    lbp_test = np.vstack([lbp_center_bits(im) for im in X_test]).astype(np.uint8)
+
+    # ---- 6) Reshape like your HOG code (one vector per original sample)
+    lbp_train = lbp_train.reshape(nb_original_train_samples, -1)
+    lbp_test  = lbp_test.reshape(nb_original_test_samples,  -1)
+
+    # ---- 7) Save
+    np.savetxt(cfg["train_stats_file"], lbp_train, fmt="%d")
+    np.savetxt(cfg["test_stats_file"],  lbp_test,  fmt="%d")
+
+    print(f"LBP(center) bits for training saved to {cfg['train_stats_file']} with shape {lbp_train.shape}")
+    print(f"LBP(center) bits for testing  saved to {cfg['test_stats_file']} with shape {lbp_test.shape}")
+
 
 def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples):
     """
@@ -331,7 +409,7 @@ def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, 
         test_stats.append(np.concatenate([vmin, vmax, mean, std]))
     test_stats = np.array(test_stats)
 
-    # Modify to size nb_original_samples x (nb_patches*4) :
+    # Modify to size nb_original_samples x (nb_patches_per_image*4) :
     train_stats = train_stats.reshape(nb_original_train_samples, -1)
     test_stats = test_stats.reshape(nb_original_test_samples, -1)
 
@@ -341,3 +419,60 @@ def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, 
 
     print(f"Simple statistics for training set saved to {cfg['train_stats_file']} with shape {train_stats.shape}")
     print(f"Simple statistics for testing set saved to {cfg['test_stats_file']} with shape {test_stats.shape}")
+
+
+
+def compute_DCT(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples, DCT_size):
+    """
+    Compute DCT coefficients for the training and testing datasets.
+
+    This function computes the Discrete Cosine Transform (DCT) coefficients for each image in the training
+    and testing datasets. The computed DCT features are then saved to the specified files.
+
+    Parameters:
+    - cfg: Configuration dictionary containing parameters such as file paths and HOG settings.
+    - X_train: The training dataset containing images (each image must be 8x8).
+    - X_test: The testing dataset containing images (each image must be 8x8).
+    - nb_original_train_samples: The number of original training samples (images, not patches).
+    - nb_original_test_samples: The number of original testing samples (images, not patches).
+    - DCT_size: The number of DCT coefficients to retain for each patch (DCT_size x DCT_size).
+
+    Returns:
+    None
+    """
+
+    def compute_split(X, DCT_size):
+            """
+            X : (nb_samples, N, M, C)
+            return : (nb_samples, C*DCT_size*DCT_size)
+            """
+
+            nb_samples, N, M, C = X.shape
+            k = min(DCT_size, N, M) # In case DCT_size > N or M
+
+
+            # 2D DCT
+            Y = dctn(X, type=2, norm='ortho', axes=(1, 2))
+
+            # keep only low frequencies
+            Y = Y[:, :k, :k, :]   # (nb_samples, DCT_size, DCT_size, C)
+
+            # Flatten : (nb_samples, C*DCT_size*DCT_size)
+            return Y.reshape(nb_samples, -1)
+
+    print("Computing DCT coefficients for training set...")
+    dct_train = compute_split(X_train, DCT_size)
+
+    print("Computing DCT coefficients for testing set...")
+    dct_test = compute_split(X_test, DCT_size)
+
+    #Modify to size nb_original_samples x (nb_patches_per_image*C*DCT_size*DCT_size) :
+    dct_train = dct_train.reshape(nb_original_train_samples, -1)
+    dct_test = dct_test.reshape(nb_original_test_samples, -1)
+
+    # --- Save coefficients to files defined in cfg ---
+    np.savetxt(cfg["train_stats_file"], dct_train)
+    np.savetxt(cfg["test_stats_file"], dct_test)
+
+    print(f"DCT coefficients for training set saved to {cfg['train_stats_file']} with shape {dct_train.shape}")
+    print(f"DCT coefficients for testing set saved to {cfg['test_stats_file']} with shape {dct_test.shape}")
