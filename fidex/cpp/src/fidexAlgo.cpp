@@ -193,7 +193,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   }
 
   // trying to remove unecessary antecedants
-  while (optimize_rule(mainSampleValues, mainSamplePred));
+  while (optimizeRule(mainSampleValues, mainSamplePred));
 
   // Compute rule accuracy and confidence
   std::vector<double> accuracyChanges = hyperspace->getHyperbox()->getAccuracyChanges();
@@ -421,7 +421,7 @@ bool Fidex::launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int m
  * @param mainSamplePred An integer representing the predicted class of the main sample.
  * @return wether an optimisation has been done or not.
  */
-bool Fidex::optimize_rule(std::vector<double> &mainSampleValues, int mainSamplePred) {
+bool Fidex::optimizeRule(std::vector<double> &mainSampleValues, int mainSamplePred) {
   std::shared_ptr<Hyperbox> originalHyperbox = _hyperspace->getHyperbox();
   std::vector<std::pair<int, int>> originalDiscrHyperplans = originalHyperbox->getDiscriminativeHyperplans();
   std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();

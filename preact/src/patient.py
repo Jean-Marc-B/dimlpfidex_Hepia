@@ -374,12 +374,24 @@ def write_patients(abspath: str) -> list[Patient]:
         exit()
 
     ext = os.path.splitext(input_filepath)[1].lower()
+    encodings = ["utf-8", "latin1"]
+
 
     if ext in [".xls", ".xlsx", ".xlsm", ".xlsb", ".odf", ".ods", ".odt"]:
-        metadata = pd.read_excel(input_filepath, index_col=False).iloc[:, :5]
+        for enc in encodings:
+            try:
+                metadata = pd.read_excel(input_filepath, index_col=False, encoding=enc).iloc[:, :5]
+                break
+            except Exception:
+                print(f"Patient writer: Bad excel file encoding: '{enc}', trying another one.")
 
     elif ext == ".csv":
-        metadata = pd.read_csv(input_filepath, index_col=False).iloc[:, :5]
+        for enc in encodings:
+            try:
+                metadata = pd.read_csv(input_filepath, index_col=False, encoding=enc).iloc[:, :5]
+                break
+            except Exception:
+                print(f"Patient writer: Bad CSV file encoding: '{enc}', trying another one.")
     else:
         raise NotImplementedError(
             f"Support for {ext} extension in {input_filepath} file is not implemented."

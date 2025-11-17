@@ -658,35 +658,44 @@ public:
  * @return std::ostream& The output stream with the Parameters information.
  */
 inline std::ostream &operator<<(std::ostream &stream, const Parameters &p) {
-  int pad = 100;
+  auto bold = [](std::string s) { return "\033[1m" + s + "\033[0m";};
+
+  int pad = 30;
+  int padValue = 0;
   stream << "Parameters list:" << std::endl;
 
   for (auto const &x : p.getAllStrings()) {
-    stream << " - " << Parameters::getParameterName(x.first) << std::setw(pad - static_cast<int>(Parameters::getParameterName(x.first).size())) << x.second << std::endl;
+    stream << bold(Parameters::getParameterName(x.first)) << ":\n" << x.second << std::endl;
   }
 
   for (auto const &x : p.getAllInts()) {
-    stream << " - " << Parameters::getParameterName(x.first) << std::setw(pad - static_cast<int>(Parameters::getParameterName(x.first).size())) << std::to_string(x.second) << std::endl;
+    padValue = pad - static_cast<int>(Parameters::getParameterName(x.first).size());
+    stream << bold(Parameters::getParameterName(x.first))<< ":" << std::setw(padValue) << std::to_string(x.second) << std::endl;
   }
 
   for (auto const &x : p.getAllFloats()) {
-    stream << " - " << Parameters::getParameterName(x.first) << std::setw(pad - static_cast<int>(Parameters::getParameterName(x.first).size())) << std::to_string(x.second) << std::endl;
+    padValue = pad - static_cast<int>(Parameters::getParameterName(x.first).size());
+    stream  << bold(Parameters::getParameterName(x.first)) << ":" << std::setw(padValue) << std::to_string(x.second) << std::endl;
   }
 
   for (auto const &x : p.getAllDoubles()) {
-    stream << " - " << Parameters::getParameterName(x.first) << std::setw(pad - static_cast<int>(Parameters::getParameterName(x.first).size())) << std::to_string(x.second) << std::endl;
+    padValue = pad - static_cast<int>(Parameters::getParameterName(x.first).size());
+    stream  << bold(Parameters::getParameterName(x.first)) << ":" << std::setw(padValue) << std::to_string(x.second) << std::endl;
   }
 
   for (auto const &x : p.getAllBools()) {
-    stream << " - " << Parameters::getParameterName(x.first) << std::setw(pad - static_cast<int>(Parameters::getParameterName(x.first).size())) << std::to_string(x.second) << std::endl;
+    padValue = pad - static_cast<int>(Parameters::getParameterName(x.first).size());
+    stream  << bold(Parameters::getParameterName(x.first)) << ":" << std::setw(padValue) << std::to_string(x.second) << std::endl;
   }
 
   for (auto const &x : p.getAllIntVectors()) {
-    stream << " - " << Parameters::getParameterName(x.first) << std::setw(pad - static_cast<int>(Parameters::getParameterName(x.first).size())) << p.vectorToString(x.second) << std::endl;
+    padValue = pad - static_cast<int>(Parameters::getParameterName(x.first).size());
+    stream  << bold(Parameters::getParameterName(x.first)) << ":" << std::setw(padValue) << p.vectorToString(x.second) << std::endl;
   }
 
   for (auto const &x : p.getAllDoubleVectors()) {
-    stream << " - " << Parameters::getParameterName(x.first) << std::setw(pad - static_cast<int>(Parameters::getParameterName(x.first).size())) << p.vectorToString(x.second) << std::endl;
+    padValue = pad - static_cast<int>(Parameters::getParameterName(x.first).size());
+    stream  << bold(Parameters::getParameterName(x.first)) << ":" << std::setw(padValue) << p.vectorToString(x.second) << std::endl;
   }
 
   stream << "End of Parameters list." << std::endl
