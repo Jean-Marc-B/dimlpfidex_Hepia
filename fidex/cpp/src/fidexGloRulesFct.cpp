@@ -1,5 +1,8 @@
 #include "fidexGloRulesFct.h"
 
+#include <atomic>
+#include <map>
+
 /**
  * @brief Displays the parameters for fidexGloRules.
  */
@@ -60,6 +63,7 @@ void showRulesParams() {
   printOptionDescription("--aggregate_rules <bool>", "Rules aggregation option. if set, it will load every rule file present inside the --aggregate_folder, merge them together and write them inside the --global_rules_outfile (default: false)");
   printOptionDescription("--aggregate_folder <string>", "Path leading to the subrules folder. Useless if --aggregate_rules is not set.");
   printOptionDescription("--no_simplification <bool>", "If set, the generated rules will not go through the simplification process. Keeping every duplicated rule.");
+  printOptionDescription("--verbose <int [0,3]>", "Sets the verbosity. 0 for no particular verbosity, 1 for the estimation time, 2 for the percentage update and 3 for threads information (default: 0)");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -105,11 +109,66 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
   int nbThreadsUsed = p.getInt(NB_THREADS);
   int startIndex = p.getInt(START_INDEX);
   int endIndex = p.getInt(END_INDEX) == -1 ? nbDatas : p.getInt(END_INDEX);
-  int step = (endIndex - startIndex) / nbThreadsUsed;
-  int stepCounter = startIndex;
+  int verbose = p.getInt(VERBOSE);
+
+  if (verbose < 0) {
+    verbose = 0;
+  } else if (verbose > 3) {
+    verbose = 3;
+  }
+  bool showTimeEstimates = verbose >= 1;
+  bool showPercentages = verbose >= 2;
+  bool showThreadInfo = verbose >= 3;
+
   std::cout << "Selected indexes: [" << startIndex << "," << endIndex << "[ (" << (endIndex - startIndex) << " samples)" << std::endl;
 
-  std::vector<int> threadProgress(nbThreadsUsed, 0);
+  // Build the list of milestones (1 sample, ~5/10 samples per thread, and every 10%) once before spawning threads.
+  int totalSamplesRaw = std::max(0, endIndex - startIndex);
+  int totalSamplesForStats = std::max(1, totalSamplesRaw); // keep denominators valid even when slice is empty
+  bool hasSamplesToProcess = totalSamplesRaw > 0;
+  std::map<int, std::vector<std::string>> milestoneLabels;
+  if (hasSamplesToProcess && (showTimeEstimates || showPercentages)) {
+    milestoneLabels[1].push_back("first sample processed");
+
+    int fivePerThreadThreshold = nbThreadsUsed * 5;
+    if (fivePerThreadThreshold > 1 && fivePerThreadThreshold <= totalSamplesRaw) {
+      milestoneLabels[fivePerThreadThreshold].push_back(std::to_string(fivePerThreadThreshold) + " samples processed (~5 per thread on average)");
+    }
+
+    int tenPerThreadThreshold = nbThreadsUsed * 10;
+    if (tenPerThreadThreshold > 1 && tenPerThreadThreshold <= totalSamplesRaw) {
+      milestoneLabels[tenPerThreadThreshold].push_back(std::to_string(tenPerThreadThreshold) + " samples processed (~10 per thread on average)");
+    }
+
+    for (int pct = 10; pct <= 100; pct += 10) {
+      int threshold = static_cast<int>((static_cast<long long>(totalSamplesRaw) * pct + 99) / 100); // ceil division
+      threshold = std::max(1, std::min(totalSamplesRaw, threshold));
+      milestoneLabels[threshold].push_back(std::to_string(pct) + "% of selected samples processed");
+    }
+  }
+  std::vector<int> milestoneOrder;
+  milestoneOrder.reserve(milestoneLabels.size());
+  for (const auto &entry : milestoneLabels) {
+    milestoneOrder.push_back(entry.first);
+  }
+  // Shared counters and timers used to compute aggregated estimated time update and progress.
+  std::atomic<int> nextMilestoneIndex(0);
+  std::atomic<int> processedSamples(0);
+  std::atomic<int> nextPercentToReport(1);
+  const auto globalStartTime = std::chrono::steady_clock::now();
+  // Small helper to report durations in h/m/s.
+  auto formatDuration = [](double seconds) -> std::string {
+    if (seconds < 0.0) {
+      seconds = 0.0;
+    }
+    long long roundedSeconds = static_cast<long long>(seconds + 0.5);
+    int hours = static_cast<int>(roundedSeconds / 3600);
+    int minutes = static_cast<int>((roundedSeconds % 3600) / 60);
+    int secs = static_cast<int>(roundedSeconds % 60);
+    std::ostringstream oss;
+    oss << hours << " hours, " << minutes << " minutes, " << secs << " seconds";
+    return oss.str();
+  };
 
 #pragma omp parallel num_threads(nbThreadsUsed)
   {
@@ -134,13 +193,13 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
 
 #pragma omp critical
     {
-      std::cout << "Thread #" << threadId << " initialized, please wait for it to be done." << std::endl;
+      if (showThreadInfo) {
+        std::cout << "Thread #" << threadId << " initialized, please wait for it to be done." << std::endl;
+      }
     }
 
     t1 = omp_get_wtime();
-    auto startTime = std::chrono::steady_clock::now();
-
-#pragma omp for
+#pragma omp for nowait
     for (int idSample = startIndex; idSample < endIndex; idSample++) {
       std::vector<int> &trainPreds = trainDataset.getPredictions();
       std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
@@ -168,40 +227,107 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
         localNbProblems += 1;
       }
 
-      // Estimate execution time
-      if (idSample == stepCounter) {
-        stepCounter += step;
-        auto now = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed = now - startTime;
-        double avgTimePerSample = elapsed.count() / (idSample + 1);
-        double estimatedTotalTime = (avgTimePerSample * (endIndex - startIndex)) / nbThreadsUsed;
+      if (hasSamplesToProcess && (showPercentages || showTimeEstimates)) {
+        // Track one more processed sample and snapshot the current aggregated progress.
+        int processedSnapshot = processedSamples.fetch_add(1) + 1;
+        int percentComplete = static_cast<int>((static_cast<long long>(processedSnapshot) * 100) / totalSamplesForStats);
+        bool checkPercent = false;
+        bool checkMilestone = false;
 
-        int hours = static_cast<int>(estimatedTotalTime) / 3600;
-        int minutes = (static_cast<int>(estimatedTotalTime) % 3600) / 60;
-        int seconds = static_cast<int>(estimatedTotalTime) % 60;
+        if (showPercentages) {
+          int percentTarget = nextPercentToReport.load();
+          if (percentTarget <= 100 && percentComplete >= percentTarget) {
+            checkPercent = true;
+          }
+        }
 
-#pragma omp critical
-        {
-          std::cout << "Estimated total execution time after " << idSample + 1 << " sample(s): "
-                    << hours << " hours, " << minutes << " minutes, " << seconds << " seconds." << std::endl;
+        if (showTimeEstimates) {
+          int milestoneIdxValue = nextMilestoneIndex.load();
+          if (milestoneIdxValue < static_cast<int>(milestoneOrder.size()) &&
+              processedSnapshot >= milestoneOrder[milestoneIdxValue]) {
+            checkMilestone = true;
+          }
+        }
+
+        if (checkPercent || checkMilestone) {
+#pragma omp critical(progress_update)
+          {
+            // Report only the latest reached percentage (skipping intermediate ones when jumps happen).
+            if (showPercentages) {
+              while (true) {
+                int currentPercentTarget = nextPercentToReport.load();
+                if (currentPercentTarget > 100) {
+                  break;
+                }
+                int globalPercentComplete = static_cast<int>((static_cast<long long>(processedSamples.load()) * 100) / totalSamplesForStats);
+                if (globalPercentComplete < currentPercentTarget) {
+                  break;
+                }
+                int processedForPrint = processedSamples.load();
+                int percentToReport = std::min(100, globalPercentComplete);
+                if (percentToReport < currentPercentTarget) {
+                  break;
+                }
+                if (nextPercentToReport.compare_exchange_strong(currentPercentTarget, percentToReport + 1)) {
+                  std::cout << "Progress: " << percentToReport << "% (" << processedForPrint << "/" << totalSamplesRaw << " samples)." << std::endl;
+                  break;
+                }
+              }
+            }
+
+            // Then emit the milestone-specific estimated time update lines, in order, until caught up.
+            if (showTimeEstimates) {
+              while (true) {
+                int currentMilestoneIdx = nextMilestoneIndex.load();
+                if (currentMilestoneIdx >= static_cast<int>(milestoneOrder.size())) {
+                  break;
+                }
+                int milestoneTarget = milestoneOrder[currentMilestoneIdx];
+                int processedForMilestone = processedSamples.load();
+                if (processedForMilestone < milestoneTarget) {
+                  break;
+                }
+                if (nextMilestoneIndex.compare_exchange_strong(currentMilestoneIdx, currentMilestoneIdx + 1)) {
+                  auto labelsIt = milestoneLabels.find(milestoneTarget);
+                  std::string description;
+                  if (labelsIt != milestoneLabels.end() && !labelsIt->second.empty()) {
+                    description = labelsIt->second.front();
+                    for (size_t labelIdx = 1; labelIdx < labelsIt->second.size(); ++labelIdx) {
+                      description += ", " + labelsIt->second[labelIdx];
+                    }
+                  } else {
+                    description = std::to_string(milestoneTarget) + " samples processed";
+                  }
+
+                  auto now = std::chrono::steady_clock::now();
+                  double elapsedSeconds = std::chrono::duration<double>(now - globalStartTime).count();
+                  double avgTimePerSample = elapsedSeconds / std::max(1, processedForMilestone);
+                  double totalEstimated = avgTimePerSample * totalSamplesForStats;
+                  double remainingSeconds = std::max(0.0, totalEstimated - elapsedSeconds);
+                  int milestonePercent = static_cast<int>((static_cast<long long>(milestoneTarget) * 100) / totalSamplesForStats);
+
+                  std::cout << "Estimated time update (" << description << ", " << milestoneTarget << "/" << totalSamplesRaw << " samples, "
+                            << milestonePercent << "%): total " << formatDuration(totalEstimated)
+                            << " | remaining " << formatDuration(remainingSeconds) << std::endl;
+                }
+              }
+            }
+          }
         }
       }
     }
 
     t2 = omp_get_wtime();
 
-    // gathering local data to main process
-#pragma omp for ordered
-    for (int i = 0; i < nbThreadsUsed; i++) {
-#pragma omp ordered
-      {
-        if (i == threadId) {
-          std::cout << "Thread #" << threadId << " ended " << cnt << " iterations in " << (t2 - t1) << " seconds." << std::endl;
-          rules.insert(rules.end(), localRules.begin(), localRules.end());
-          nbProblems += localNbProblems;
-          nbRulesNotFound += localNbRulesNotFound;
-        }
+    // Each thread reports as soon as it is done with its chunk.
+#pragma omp critical(thread_summary)
+    {
+      if (showThreadInfo) {
+        std::cout << "Thread #" << threadId << " ended " << cnt << " iterations in " << (t2 - t1) << " seconds." << std::endl;
       }
+      rules.insert(rules.end(), localRules.begin(), localRules.end());
+      nbProblems += localNbProblems;
+      nbRulesNotFound += localNbRulesNotFound;
     }
   } // end of parallel section
 
@@ -615,6 +741,7 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultInt(NB_THREADS, 1);
   p.setDefaultBool(AGGREGATE_RULES, false);
   p.setDefaultBool(NO_SIMPLIFICATION, false);
+  p.setDefaultInt(VERBOSE, 0);
 
   if (p.getInt(END_INDEX) != -1 && p.getInt(START_INDEX) > p.getInt(END_INDEX)) {
     throw CommandArgumentException("start_index cannot be greater than end_index.");
@@ -754,7 +881,7 @@ int fidexGloRules(const std::string &command) {
                                               MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                               DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
                                               NB_THREADS, COVERING_STRATEGY, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX,
-                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION};
+                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");

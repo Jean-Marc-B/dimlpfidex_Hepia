@@ -409,6 +409,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setBool(NO_SIMPLIFICATION, arg);
     break;
 
+  case VERBOSE:
+    setInt(VERBOSE, arg);
+    break;
+
   default: // If we put another -X option
     throw CommandArgumentException("Illegal option : " + param);
   }
