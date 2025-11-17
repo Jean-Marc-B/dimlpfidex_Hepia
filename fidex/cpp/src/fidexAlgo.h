@@ -66,7 +66,7 @@ private:
    * @brief Attepts to filter unnecessary attributes in a rule.
    * 
    */
-  bool optimize_rule(std::vector<double> &mainSampleValues, int mainSamplePred);
+  bool optimizeRule(std::vector<double> &mainSampleValues, int mainSamplePred);
 
 public:
   /**
