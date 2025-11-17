@@ -110,14 +110,27 @@ def read_file(file: Union[str, Any], sep: str = ',') -> pd.DataFrame:
     """
     data = None
     ext = os.path.splitext(file)[1].lower()
+    encodings = ["utf-8", "latin1"]
 
     if ext in [".xls", ".xlsx", ".xlsm", ".xlsb", ".odf", ".ods", ".odt"]:
-        data = pd.read_excel(file)
+
+        for enc in encodings:
+            try:
+                data = pd.read_excel(file, encoding=enc)
+                break
+            except Exception:
+                print(f"Data helper: Bad excel file encoding: '{enc}', trying another one.")
 
     elif ext == ".csv":
-        data = pd.read_csv(file, sep=sep)
-        # Remove index columns from CSV
-        data = data.loc[:, ~data.columns.str.contains("^Unnamed")]
+
+        for enc in encodings:
+            try:
+                data = pd.read_csv(file, sep=sep, encoding="latin1")
+                # Remove index columns from CSV
+                data = data.loc[:, ~data.columns.str.contains("^Unnamed")]
+                break
+            except Exception:
+                print(f"Data helper: Bad CSV file encoding: '{enc}', trying another one.")
 
     else:
         raise NotImplementedError(f"Support for {ext} extension in {file} file is not implemented.")
