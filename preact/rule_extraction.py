@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     print("Loading global rules...")
     global_rules = GlobalRules.from_json_file(
-        os.path.join(constants.MODEL_DIRNAME, "global_rules_denormalized.json"),
+        os.path.join(abspath, constants.MODEL_DIRNAME, "global_rules_denormalized.json"),
         read_attributes_file(abspath),
     )
 

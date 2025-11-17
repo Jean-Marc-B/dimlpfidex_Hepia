@@ -100,16 +100,20 @@ Output: {self.output}"""
             list[str]: Rule data converted into list
         """
         labels = attributes[-2:]
-        string = f"""
-ID: {self.id}
-Covering: {self.covering}
-Fidelity: {self.fidelity:.3f}
-Accuracy: {self.accuracy:.3f}   
-Antecedants:\n\t"""
+        string = ""
+
         for antecedant in self.antecedants:
             string += antecedant.pretty_repr() + " "
-        string += f"\nOutput: {labels[self.output]}"
 
+        string += f" -> {labels[self.output]}"
+
+        string += f"""
+Train Covering Size : {self.covering}
+Train Fidelity : {self.fidelity:.6f}
+Train Accuracy : {self.accuracy:.6f}   
+Train confidence : {self.confidence:.6f}
+
+"""
         return string
 
     def postprocess(self) -> Rule:
