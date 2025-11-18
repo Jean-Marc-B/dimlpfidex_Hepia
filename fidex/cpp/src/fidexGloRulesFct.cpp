@@ -123,8 +123,9 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
   std::cout << "Selected indexes: [" << startIndex << "," << endIndex << "[ (" << (endIndex - startIndex) << " samples)" << std::endl;
 
   // Build the list of milestones (1 sample, ~5/10 samples per thread, and every 10%) once before spawning threads.
-  int totalSamplesRaw = std::max(0, endIndex - startIndex);
-  int totalSamplesForStats = std::max(1, totalSamplesRaw); // keep denominators valid even when slice is empty
+  // Use parenthesized std::max/min to avoid Windows macros interfering during MSVC builds.
+  int totalSamplesRaw = (std::max)(0, endIndex - startIndex);
+  int totalSamplesForStats = (std::max)(1, totalSamplesRaw); // keep denominators valid even when slice is empty
   bool hasSamplesToProcess = totalSamplesRaw > 0;
   std::map<int, std::vector<std::string>> milestoneLabels;
   if (hasSamplesToProcess && (showTimeEstimates || showPercentages)) {
@@ -142,7 +143,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
 
     for (int pct = 10; pct <= 100; pct += 10) {
       int threshold = static_cast<int>((static_cast<long long>(totalSamplesRaw) * pct + 99) / 100); // ceil division
-      threshold = std::max(1, std::min(totalSamplesRaw, threshold));
+      threshold = (std::max)(1, (std::min)(totalSamplesRaw, threshold));
       milestoneLabels[threshold].push_back(std::to_string(pct) + "% of selected samples processed");
     }
   }
@@ -264,7 +265,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
                   break;
                 }
                 int processedForPrint = processedSamples.load();
-                int percentToReport = std::min(100, globalPercentComplete);
+                int percentToReport = (std::min)(100, globalPercentComplete);
                 if (percentToReport < currentPercentTarget) {
                   break;
                 }
@@ -301,9 +302,9 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
 
                   auto now = std::chrono::steady_clock::now();
                   double elapsedSeconds = std::chrono::duration<double>(now - globalStartTime).count();
-                  double avgTimePerSample = elapsedSeconds / std::max(1, processedForMilestone);
+                  double avgTimePerSample = elapsedSeconds / (std::max)(1, processedForMilestone);
                   double totalEstimated = avgTimePerSample * totalSamplesForStats;
-                  double remainingSeconds = std::max(0.0, totalEstimated - elapsedSeconds);
+                  double remainingSeconds = (std::max)(0.0, totalEstimated - elapsedSeconds);
                   int milestonePercent = static_cast<int>((static_cast<long long>(milestoneTarget) * 100) / totalSamplesForStats);
 
                   std::cout << "Estimated time update (" << description << ", " << milestoneTarget << "/" << totalSamplesRaw << " samples, "
