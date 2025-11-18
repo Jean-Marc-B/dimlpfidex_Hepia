@@ -199,7 +199,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     }
 
     t1 = omp_get_wtime();
-#pragma omp for nowait
+#pragma omp for schedule(dynamic, 1) nowait
     for (int idSample = startIndex; idSample < endIndex; idSample++) {
       std::vector<int> &trainPreds = trainDataset.getPredictions();
       std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
