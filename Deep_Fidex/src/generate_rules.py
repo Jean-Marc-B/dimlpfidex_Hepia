@@ -28,7 +28,7 @@ def generate_rules(cfg, args, nb_attributes = None):
         f'--nb_quant_levels {NB_QUANT_LEVELS} '
         f'--dropout_dim {DROPOUT_DIM} '
         f'--dropout_hyp {DROPOUT_HYP} '
-        f'--verbose 2 '
+        f'--verbose 3 '
     )
     if args.statistic == "histogram":
         command += f'--attributes_file {cfg["attributes_file"]} '
