@@ -217,6 +217,13 @@ public:
    * @brief Return the number of training networks.
    */
   int getNbNets() const;
+
+  /**
+   * @brief Get the Data Min Max object
+   * 
+   * @return std::vector<std::pair<double, double>> 
+   */
+  std::vector<std::pair<double, double>> getDataMinMax();
 };
 
 #endif // DATASETFID_H
