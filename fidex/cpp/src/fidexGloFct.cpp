@@ -450,7 +450,7 @@ int fidexGlo(const std::string &command) {
       float hiKnot = params->getFloat(HI_KNOT);
 
       if (params->isStringSet(WEIGHTS_FILE)) {
-        matHypLocus = calcHypLocus(weightsFile, nbQuantLevels, hiKnot); // Get hyperlocus
+        matHypLocus = calcHypLocus(weightsFile, trainDatas->getDataMinMax(), nbQuantLevels, hiKnot); // Get hyperlocus
       } else {
         matHypLocus = calcHypLocus(inputRulesFile, *testDatas);
       }
