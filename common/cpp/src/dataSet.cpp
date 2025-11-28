@@ -953,3 +953,15 @@ bool DataSetFid::getHasAttributeNames() const {
 bool DataSetFid::getHasClassNames() const {
   return hasClassNames;
 }
+
+std::vector<std::pair<double, double>> DataSetFid::getDataMinMax() {
+  std::vector<std::pair<double, double>> dataMinMax(_nbAttributes);
+
+  for (int i = 0; i < _nbAttributes; i++) {
+    double min = *std::min_element(datas[i].begin(), datas[i].end());
+    double max = *std::max_element(datas[i].begin(), datas[i].end());
+    dataMinMax[i] = std::make_pair(min, max);
+  }
+
+  return dataMinMax;
+}

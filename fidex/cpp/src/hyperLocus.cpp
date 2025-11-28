@@ -11,7 +11,7 @@
  * @param hiKnot Upper bound of the interval.
  * @return Matrix representing the hyperlocus.
  */
-std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights, int nbQuantLevels, double hiKnot) {
+std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights, std::vector<std::pair<double, double>> dimensionsMinMax, int nbQuantLevels, double hiKnot) {
 
   double lowKnot = -hiKnot;
 
@@ -27,10 +27,13 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights
 
   int nbNets = weightDatas.getNbNets();
 
+  std::cout << "\n";
+
   std::vector<std::vector<double>> matHypLocus;
 
   for (int n = 0; n < nbNets; n++) {
-    std::vector<double> biais = weightDatas.getInBiais(n);
+    std::cout << "Net #" << n+1 << "\n";
+    std::vector<double> bias = weightDatas.getInBiais(n);
     std::vector<double> weights = weightDatas.getInWeights(n);
 
     if (nbNets == 1) {
@@ -40,13 +43,13 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights
       std::cout << "computation of hyperLocus" << std::endl;
     }
 
-    size_t nbIn = biais.size();      // Number of neurons in the first hidden layer (May be the number of input variables)
+    size_t nbIn = bias.size();      // Number of neurons in the first hidden layer (May be the number of input variables)
     int nbKnots = nbQuantLevels + 1; // Number of separations per dimension
 
     double dist = hiKnot - lowKnot;         // Size of the interval
     double binWidth = dist / nbQuantLevels; // Width of a box between 2 separations
 
-    std::vector<std::vector<double>> matHypLocusTemp(nbIn, std::vector<double>(nbKnots)); // Matrix of hyperplans (dim x hyp)
+    std::vector<std::vector<double>> matHypLocusTemp(nbIn);                               // Matrix of hyperplans (dim x hyp)
     std::vector<double> knots(nbKnots);                                                   // vector of location of the separations for one dimension (hyperplans will be placed close)
 
     for (int k = 0; k < nbKnots; k++) {
@@ -54,10 +57,18 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights
     }
 
     for (int i = 0; i < nbIn; i++) { // Loop on dimension
+      std::cout << "(" << dimensionsMinMax[i].first << "," << dimensionsMinMax[i].second << ")" << " | ";
       for (int j = 0; j < nbKnots; j++) {
-        matHypLocusTemp[i][j] = (knots[j] - biais[i]) / weights[i]; // Placement of the hyperplan
+        double threshold = (knots[j] - bias[i]) / weights[i];
+
+        if (threshold >= dimensionsMinMax[i].first && threshold <= dimensionsMinMax[i].second) {
+          matHypLocusTemp[i].push_back(threshold); // Placement of the hyperplan
+          std::cout <<  threshold << " ";
+        } 
       }
+      std::cout << "\n"; 
     }
+    std::cout << "\n"; 
     matHypLocus.insert(matHypLocus.end(), matHypLocusTemp.begin(), matHypLocusTemp.end());
   }
 
@@ -80,9 +91,9 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights
  */
 std::vector<std::vector<double>> calcHypLocus(const std::string &rulesFile, DataSetFid &dataset) {
   std::string line;
-
+  //TODO opti hyperlocus
   std::vector<std::vector<double>> matHypLocus(dataset.getNbAttributes());
-  std::vector<std::set<double>> thresholds(dataset.getNbAttributes()); // Thresholds for each attribute
+  std::vector<std::set<double>> thresholds(dataset.getNbAttributes()); // Thresholds (=knots) for each attribute
 
   // Get pattern for attributes
   std::regex attributePattern;
