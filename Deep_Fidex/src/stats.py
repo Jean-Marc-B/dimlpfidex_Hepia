@@ -1,4 +1,5 @@
 # stats.py
+import shap
 import time
 import numpy as np
 import tensorflow as tf
@@ -97,8 +98,13 @@ def compute_activation_sums(cfg, nb_samples, data, size1D, nb_channels, CNNModel
 ###############################################################
 
 def compute_proba_images(cfg, nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride):
-    my_filter_size = filter_size[0]
-    output_size = ((size1D - my_filter_size[0] + 1)*(size1D - my_filter_size[1] + 1)*nb_classes)
+
+    # Number of patches produced by the sliding window
+    nb_patches = sum(
+        ((size1D - f_sz[0]) // st[0] + 1) * ((size1D - f_sz[1]) // st[1] + 1)
+        for f_sz, st in zip(filter_size, stride)
+    )
+    output_size = nb_patches * nb_classes
     #print(output_size) # (4840)
     proba_images = np.zeros((nb_samples,output_size))
 
@@ -340,7 +346,8 @@ def compute_LBP_center_bits(cfg, X_train, X_test, nb_original_train_samples, nb_
     R = int((min(H, W) - 1) // 2)
     if R < 1:
         raise ValueError(f"Patch too small for LBP (got H={H}, W={W} -> R={R}). Need min(H,W) >= 3.")
-    P = int(8 * R)
+    #P = int(8 * R)
+    P = 24
 
     # ---- 3) Central index (works for odd or even sizes)
     ci, cj = H // 2, W // 2  # floor(H/2), floor(W/2)
@@ -420,6 +427,188 @@ def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, 
     print(f"Simple statistics for training set saved to {cfg['train_stats_file']} with shape {train_stats.shape}")
     print(f"Simple statistics for testing set saved to {cfg['test_stats_file']} with shape {test_stats.shape}")
 
+
+def compute_Shap(cfg, X_train, X_test, model, nb_original_train_samples, nb_original_test_samples):
+    """
+    Compute SHAP values with DeepExplainer for the training and testing datasets.
+
+    Keeps the original DeepExplainer workflow (for CNNs) to avoid breaking previous behaviour.
+    """
+
+    # Create a SHAP explainer with a random background subset (max 100 samples)
+    nb_background = min(X_train.shape[0], 100)
+    if nb_background < X_train.shape[0]:
+        background_idx = np.random.choice(X_train.shape[0], size=nb_background, replace=False)
+        background_data = X_train[background_idx].astype(np.float32)
+    else:
+        background_data = X_train.astype(np.float32)
+    explainer = shap.DeepExplainer(model, background_data)
+
+    def _stack_deep_shap_outputs(shap_values):
+        if isinstance(shap_values, list):
+            return np.stack(shap_values, axis=-1)  # (N, H, W, C, K)
+        return shap_values[..., np.newaxis]       # (N, H, W, C, 1) for binary
+
+    def patch_stats_from_shap(shap_values, nb_original_samples):
+        """
+        Compute min/max/mean/std per patch, per channel and per class.
+        Final shape:
+        - binary: (nb_original_samples, nb_patches_per_image * 4 * nb_channels)
+        - otherwise: (nb_original_samples, nb_patches_per_image * nb_classes * 4 * nb_channels)
+        """
+
+        shap_patch = _stack_deep_shap_outputs(shap_values)
+        print("SHAP patch shape (DeepExplainer):", shap_patch.shape)
+
+        if shap_patch.ndim != 5:
+            raise ValueError(f"Unexpected SHAP shape {shap_patch.shape}, expected 5D (N,H,W,C,K).")
+
+        nb_classes_present = shap_patch.shape[-1]
+        class_indices = [1] if nb_classes_present == 2 else list(range(nb_classes_present))
+
+        per_class_stats = []
+        for cls_idx in class_indices:
+            sv = shap_patch[..., cls_idx]  # (N, H, W, C)
+            vmin = sv.min(axis=(1, 2))
+            vmax = sv.max(axis=(1, 2))
+            mean = sv.mean(axis=(1, 2))
+            std = sv.std(axis=(1, 2))
+            per_class_stats.append(np.concatenate([vmin, vmax, mean, std], axis=1))
+
+        patch_stats = np.concatenate(per_class_stats, axis=1)
+        return patch_stats.reshape(nb_original_samples, -1)
+
+    print("Computing SHAP values for training set (DeepExplainer)...")
+    shap_values_train = explainer.shap_values(X_train, check_additivity=False)
+    shap_train_stats = patch_stats_from_shap(shap_values_train, nb_original_train_samples)
+
+    print("Computing SHAP values for testing set (DeepExplainer)...")
+    shap_values_test = explainer.shap_values(X_test, check_additivity=False)
+    shap_test_stats = patch_stats_from_shap(shap_values_test, nb_original_test_samples)
+
+    # --- Save features to files defined in cfg ---
+    np.savetxt(cfg["train_stats_file"], shap_train_stats)
+    np.savetxt(cfg["test_stats_file"], shap_test_stats)
+
+    print(f"SHAP patch stats for training set saved to {cfg['train_stats_file']} with shape {shap_train_stats.shape}")
+    print(f"SHAP patch stats for testing set saved to {cfg['test_stats_file']} with shape {shap_test_stats.shape}")
+
+
+# This function won't work with GPU if the model is too huge (out of memory). So if you have too many trees.
+def compute_Shap_RF(cfg, X_train, X_test, model, nb_original_train_samples, nb_original_test_samples):
+    """
+    Compute SHAP values with TreeExplainer for datasets built from patches and optional positions.
+
+    Parameters:
+    - cfg: Configuration dictionary containing parameters such as file paths.
+    - X_train, X_test: Either numpy arrays of patches (N, H, W, C) or tuples (patches, positions)
+                       where positions is a list/array of shape (N, 2).
+    - model: Tree-based model (e.g., RandomForest) used for making predictions.
+    - nb_original_train_samples: Number of original training images.
+    - nb_original_test_samples: Number of original testing images.
+    """
+
+    def unpack_data(data):
+        if isinstance(data, tuple) and len(data) == 2:
+            return data[0], data[1]
+        return data, None
+
+    def to_feature_matrix(patches, positions=None):
+        features = patches.reshape(patches.shape[0], -1).astype(np.float32)
+        if positions is None:
+            return features
+        pos_array = np.asarray(positions, dtype=np.float32)
+        if pos_array.shape[0] != features.shape[0]:
+            raise ValueError(f"Positions length {pos_array.shape[0]} does not match patches {features.shape[0]}.")
+        pos_array = pos_array.reshape(features.shape[0], -1)
+        return np.concatenate([features, pos_array], axis=1)
+
+    def stack_tree_shap(shap_values):
+        if isinstance(shap_values, list):
+            return np.stack(shap_values, axis=-1)  # (N, F, K)
+        return shap_values[..., np.newaxis]       # (N, F, 1)
+
+    def shap_values_with_progress(explainer, features, batch_size, label):
+        """
+        Compute SHAP values by batches to show progress and limit memory spikes.
+        Returns the same type as TreeExplainer.shap_values (list or np.ndarray).
+        """
+        nb_samples = features.shape[0]
+        shap_accum = None
+        for start in range(0, nb_samples, batch_size):
+            end = min(start + batch_size, nb_samples)
+            print(f"{label} SHAP progress: {end}/{nb_samples} ({(end/nb_samples)*100:.1f}%)")
+            shap_batch = explainer.shap_values(features[start:end], check_additivity=False)
+            if isinstance(shap_batch, list):
+                if shap_accum is None:
+                    shap_accum = [arr for arr in shap_batch]
+                else:
+                    for idx, arr in enumerate(shap_batch):
+                        shap_accum[idx] = np.concatenate([shap_accum[idx], arr], axis=0)
+            else:
+                if shap_accum is None:
+                    shap_accum = shap_batch
+                else:
+                    shap_accum = np.concatenate([shap_accum, shap_batch], axis=0)
+        return shap_accum
+
+    def patch_stats_from_tree_shap(shap_values, patch_shape, nb_original_samples, feature_count_without_pos):
+        shap_arr = stack_tree_shap(shap_values)  # (N, F, K)
+        if shap_arr.shape[1] < feature_count_without_pos:
+            raise ValueError(f"SHAP feature dimension {shap_arr.shape[1]} smaller than expected {feature_count_without_pos}.")
+
+        shap_patch = shap_arr[:, :feature_count_without_pos, :]  # drop position SHAP values
+        shap_patch = shap_patch.reshape(shap_arr.shape[0], patch_shape[0], patch_shape[1], patch_shape[2], shap_arr.shape[2])
+
+        nb_classes_present = shap_patch.shape[-1]
+        class_indices = [1] if nb_classes_present == 2 else list(range(nb_classes_present))
+
+        per_class_stats = []
+        for cls_idx in class_indices:
+            sv = shap_patch[..., cls_idx]  # (N, H, W, C)
+            vmin = sv.min(axis=(1, 2))
+            vmax = sv.max(axis=(1, 2))
+            mean = sv.mean(axis=(1, 2))
+            std = sv.std(axis=(1, 2))
+            per_class_stats.append(np.concatenate([vmin, vmax, mean, std], axis=1))
+
+        patch_stats = np.concatenate(per_class_stats, axis=1)
+        return patch_stats.reshape(nb_original_samples, -1)
+
+    # Unpack data
+    train_patches, train_positions = unpack_data(X_train)
+    test_patches, test_positions = unpack_data(X_test)
+
+    patch_shape = train_patches.shape[1:4]
+    feature_count_without_pos = patch_shape[0] * patch_shape[1] * patch_shape[2]
+
+    # Prepare feature matrices (flatten patches + positions if provided)
+    train_features = to_feature_matrix(train_patches, train_positions)
+    test_features = to_feature_matrix(test_patches, test_positions)
+
+    # Path-dependent mode is much faster than the interventional default on many samples
+    explainer = shap.GPUTreeExplainer(
+        model,
+        feature_perturbation="tree_path_dependent",
+        model_output="raw"  # path-dependent only supports raw output
+    )
+
+    batch_size = 2000
+
+    print("Computing SHAP values for training set (TreeExplainer, path-dependent)...")
+    shap_values_train = shap_values_with_progress(explainer, train_features, batch_size, "Train")
+    shap_train_stats = patch_stats_from_tree_shap(shap_values_train, patch_shape, nb_original_train_samples, feature_count_without_pos)
+
+    print("Computing SHAP values for testing set (TreeExplainer, path-dependent)...")
+    shap_values_test = shap_values_with_progress(explainer, test_features, batch_size, "Test")
+    shap_test_stats = patch_stats_from_tree_shap(shap_values_test, patch_shape, nb_original_test_samples, feature_count_without_pos)
+
+    # --- Save features to files defined in cfg ---
+    np.savetxt(cfg["train_stats_file"], shap_train_stats)
+    np.savetxt(cfg["test_stats_file"], shap_test_stats)
+
+    print(f"SHAP patch stats for training set saved to {cfg['train_stats_file']} with shape {shap_train_stats.shape}")
+    print(f"SHAP patch stats for testing set saved to {cfg['test_stats_file']} with shape {shap_test_stats.shape}")
 
 
 def compute_DCT(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples, DCT_size):
