@@ -29,7 +29,7 @@ if not os.environ.get(_MARK): # relaunch the script in a clean environment
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2" # Change this to select the GPU to use, -1 to use CPU only
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" # Change this to select the GPU to use, -1 to use CPU only
 
 import tensorflow as tf
 # from tensorflow.keras.mixed_precision import set_global_policy
@@ -59,7 +59,7 @@ from utils.utils import *
 
 # Import step files
 from train import train_model
-from stats import compute_stats, compute_HOG, compute_little_patch_stats, compute_LBP_center_bits, compute_DCT
+from stats import compute_stats, compute_HOG, compute_little_patch_stats, compute_LBP_center_bits, compute_DCT, compute_Shap
 from second_train import train_second_model
 from generate_rules import generate_rules
 from images import generate_explaining_images, generate_explaining_images_img_version
@@ -180,7 +180,10 @@ if __name__ == "__main__":
     # TRAINING
     if args.train:
         if args.train_with_patches:
-            train_model(cfg, (X_train_patches, train_positions), Y_train_patches, (X_test_patches, test_positions), Y_test_patches, args)
+            if cfg["model"] == "MLP":
+                train_model(cfg, X_train_patches, Y_train_patches, X_test_patches, Y_test_patches, args)
+            else:
+                train_model(cfg, (X_train_patches, train_positions), Y_train_patches, (X_test_patches, test_positions), Y_test_patches, args)
         elif cfg["model"] == "VGG_metadatas":
             train_model(cfg, (X_train, X_train_meta), Y_train, (X_test, X_test_meta), Y_test, args)
         else:
@@ -208,6 +211,7 @@ if __name__ == "__main__":
 
     # STATISTICS
     if args.stats:
+        start_time_stats = time.time()
         if args.statistic in ["HOG_and_image", "HOG"]:
             compute_HOG(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
         elif args.statistic == "stats_and_image":
@@ -216,11 +220,14 @@ if __name__ == "__main__":
             compute_LBP_center_bits(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
         elif args.statistic in ["DCT_and_image"]:
             compute_DCT(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test), args.dct_patch_size)
+        elif args.statistic == "SHAP_and_image":
+            compute_Shap(cfg, (X_train_patches, train_positions), (X_test_patches, test_positions), firstModel, len(X_train), len(X_test))
         else:
             if args.train_with_patches:
                 compute_stats(cfg, X_train_patches, X_test_patches, firstModel, intermediate_model, args)
             else:
                 compute_stats(cfg, X_train, X_test, firstModel, intermediate_model, args)
+        print(f"Stats computation time : {time.time() - start_time_stats:.2f} seconds")
 
     # TRAIN SECOND MODEL
     if args.second_train:
@@ -234,7 +241,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
     # Update stats file
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 
