@@ -388,10 +388,13 @@ int fidex(const std::string &command) {
     std::vector<std::vector<double>> matHypLocus;
 
     if (params->isStringSet(WEIGHTS_FILE)) {
-      matHypLocus = calcHypLocus(weightsFile, trainDatas->getDataMinMax(), nbQuantLevels, hiKnot); // Get hyperlocus
+      std::cout << "Importing weight file...\n\n";
+      trainDatas->setWeights(weightsFile);
+      matHypLocus = calcHypLocus(weightsDataset, nbQuantLevels, hiKnot);
     } else {
       matHypLocus = calcHypLocus(inputRulesFile, *testDatas);
     }
+    optimizeHypLocus(matHypLocus, *trainDatas);
 
     Hyperspace hyperspace(matHypLocus); // Initialize hyperbox and get hyperplans
 
