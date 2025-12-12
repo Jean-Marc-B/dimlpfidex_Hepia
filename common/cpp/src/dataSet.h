@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <limits>
 
 /**
  * @brief The DataSetFid class handles the loading, parsing, and storage of datasets including data, predictions, and classes.
@@ -124,6 +125,11 @@ public:
   void setDataFromFile(const std::string &dataFile, int nbAttributes, int nbClasses);
 
   /**
+   * @brief Set the Weights object by reading and parseing a file
+   */
+  void setWeights(const std::string &weightFile);
+
+  /**
    * @brief Add predictions to the dataset using a prediction file.
    */
   void setPredFromFile(const std::string &predFile, int nbClasses, double decisionThreshold = -1, int positiveClassIndex = -1);
@@ -206,12 +212,12 @@ public:
   /**
    * @brief Return the biases of the first layer.
    */
-  std::vector<double> getInBiais(int netId) const;
+  std::vector<double> getInputBias(int netId) const;
 
   /**
    * @brief Return the weights of the first layer.
    */
-  std::vector<double> getInWeights(int netId) const;
+  std::vector<double> getInputWeights(int netId) const;
 
   /**
    * @brief Return the number of training networks.
