@@ -452,7 +452,7 @@ int fidexGlo(const std::string &command) {
       if (params->isStringSet(WEIGHTS_FILE)) {
         std::cout << "Importing weight file...\n\n";
         trainDatas->setWeights(weightsFile);
-        matHypLocus = calcHypLocus(weightsDataset, nbQuantLevels, hiKnot);
+        matHypLocus = calcHypLocus(*trainDatas, nbQuantLevels, hiKnot);
       } else {
         matHypLocus = calcHypLocus(inputRulesFile, *testDatas);
       }
