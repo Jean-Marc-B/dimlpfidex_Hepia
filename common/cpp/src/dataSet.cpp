@@ -166,6 +166,16 @@ DataSetFid::DataSetFid(const std::string &name, const std::string &dataFile, int
  * @param weightFile The name of the weight file.
  */
 DataSetFid::DataSetFid(const std::string &name, const std::string &weightFile) : datasetName(name), hasWeights(true) {
+  setWeights(weightFile);
+}
+
+
+/**
+ * @brief Allows to set weights from file
+ * 
+ * @param weightFile path of file
+ */
+void DataSetFid::setWeights(const std::string &weightFile) {
   std::fstream fileWts;
   std::string line;
   bool multipleNetworks = false;
@@ -193,6 +203,7 @@ DataSetFid::DataSetFid(const std::string &name, const std::string &weightFile) :
     parseMultipleNetworks(fileWts);
   }
   nbNets = static_cast<int>(weights.size());
+  hasWeights = true;
   fileWts.close(); // close file
 }
 
@@ -758,7 +769,7 @@ std::vector<std::vector<std::vector<double>>> DataSetFid::getWeights() const {
  *
  * @return The biases of the first layer.
  */
-std::vector<double> DataSetFid::getInBiais(int netId) const {
+std::vector<double> DataSetFid::getInputBias(int netId) const {
   if (hasWeights) {
     return weights[netId][0];
   } else {
@@ -771,7 +782,7 @@ std::vector<double> DataSetFid::getInBiais(int netId) const {
  *
  * @return The weights of the first layer.
  */
-std::vector<double> DataSetFid::getInWeights(int netId) const {
+std::vector<double> DataSetFid::getInputWeights(int netId) const {
   if (hasWeights) {
     return weights[netId][1];
   } else {
@@ -957,10 +968,19 @@ bool DataSetFid::getHasClassNames() const {
 std::vector<std::pair<double, double>> DataSetFid::getDataMinMax() {
   std::vector<std::pair<double, double>> dataMinMax(_nbAttributes);
 
-  for (int i = 0; i < _nbAttributes; i++) {
-    double min = *std::min_element(datas[i].begin(), datas[i].end());
-    double max = *std::max_element(datas[i].begin(), datas[i].end());
-    dataMinMax[i] = std::make_pair(min, max);
+  for (int a = 0; a < _nbAttributes; a++) {
+    double max = std::numeric_limits<double>::lowest();
+    double min = std::numeric_limits<double>::max();
+
+    for (int d = 0; d < datas.size(); d++) {
+      if (datas[d][a] < min) {
+        min = datas[d][a];
+      } else if (datas[d][a] > max) {
+        max = datas[d][a];
+      }
+    }
+
+    dataMinMax[a] = std::make_pair(min, max);
   }
 
   return dataMinMax;
