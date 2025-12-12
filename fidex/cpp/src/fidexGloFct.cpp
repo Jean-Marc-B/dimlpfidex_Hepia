@@ -450,10 +450,13 @@ int fidexGlo(const std::string &command) {
       float hiKnot = params->getFloat(HI_KNOT);
 
       if (params->isStringSet(WEIGHTS_FILE)) {
-        matHypLocus = calcHypLocus(weightsFile, trainDatas->getDataMinMax(), nbQuantLevels, hiKnot); // Get hyperlocus
+        std::cout << "Importing weight file...\n\n";
+        trainDatas->setWeights(weightsFile);
+        matHypLocus = calcHypLocus(weightsDataset, nbQuantLevels, hiKnot);
       } else {
         matHypLocus = calcHypLocus(inputRulesFile, *testDatas);
       }
+      optimizeHypLocus(matHypLocus, *trainDatas);
 
       // Number of neurons in the first hidden layer (May be the number of input variables or a multiple)
       auto nbIn = static_cast<int>(matHypLocus.size());
