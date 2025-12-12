@@ -11,71 +11,151 @@
  * @param hiKnot Upper bound of the interval.
  * @return Matrix representing the hyperlocus.
  */
-std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights, std::vector<std::pair<double, double>> dimensionsMinMax, int nbQuantLevels, double hiKnot) {
-
+std::vector<std::vector<double>> calcHypLocus(DataSetFid &dataset, int nbQuantLevels, double hiKnot) {
   double lowKnot = -hiKnot;
+  double dist = hiKnot - lowKnot;         // Size of the interval
+  double binWidth = dist / nbQuantLevels; // Width of a box between 2 separations
+  int nbKnots = nbQuantLevels + 1;        // Number of separations per dimension
 
-  std::cout << "\nParameters of hyperLocus :\n"
-            << std::endl;
-  std::cout << "- Number of stairs " << nbQuantLevels << std::endl;
-  std::cout << "- Interval : [" << lowKnot << "," << hiKnot << "]" << std::endl
-            << std::endl;
+  std::cout << "\nHyperlocus parameters:\n";
+  std::cout << "- # stairs:\t" << nbQuantLevels << "\n";
+  std::cout << "- Interval:\t[" << lowKnot << "," << hiKnot << "]\n\n";
 
-  std::cout << "Import weight file..." << std::endl;
-
-  DataSetFid weightDatas("weight datas", dataFileWeights);
-
-  int nbNets = weightDatas.getNbNets();
-
-  std::cout << "\n";
-
+  int nbNets = dataset.getNbNets();
   std::vector<std::vector<double>> matHypLocus;
 
   for (int n = 0; n < nbNets; n++) {
-    std::cout << "Net #" << n+1 << "\n";
-    std::vector<double> bias = weightDatas.getInBiais(n);
-    std::vector<double> weights = weightDatas.getInWeights(n);
+    std::vector<double> bias = dataset.getInputBias(n);
+    std::vector<double> weights = dataset.getInputWeights(n);
+    size_t nbInputs = bias.size();                              // Number of neurons in the first hidden layer (May be the number of input variables)
+    std::vector<std::vector<double>> matHypLocusTemp(nbInputs); // Matrix of hyperplans (dim x hyp)
 
-    if (nbNets == 1) {
-      std::cout << "Weight file imported" << std::endl
-                << std::endl;
-
-      std::cout << "computation of hyperLocus" << std::endl;
-    }
-
-    size_t nbIn = bias.size();      // Number of neurons in the first hidden layer (May be the number of input variables)
-    int nbKnots = nbQuantLevels + 1; // Number of separations per dimension
-
-    double dist = hiKnot - lowKnot;         // Size of the interval
-    double binWidth = dist / nbQuantLevels; // Width of a box between 2 separations
-
-    std::vector<std::vector<double>> matHypLocusTemp(nbIn);                               // Matrix of hyperplans (dim x hyp)
-    std::vector<double> knots(nbKnots);                                                   // vector of location of the separations for one dimension (hyperplans will be placed close)
-
-    for (int k = 0; k < nbKnots; k++) {
-      knots[k] = lowKnot + (binWidth * k); // location of each separation within a dimension (hyperplans will be placed close)
-    }
-
-    for (int i = 0; i < nbIn; i++) { // Loop on dimension
-      std::cout << "(" << dimensionsMinMax[i].first << "," << dimensionsMinMax[i].second << ")" << " | ";
+    for (int i = 0; i < nbInputs; i++) { // Loop on dimension
       for (int j = 0; j < nbKnots; j++) {
-        double threshold = (knots[j] - bias[i]) / weights[i];
-
-        if (threshold >= dimensionsMinMax[i].first && threshold <= dimensionsMinMax[i].second) {
-          matHypLocusTemp[i].push_back(threshold); // Placement of the hyperplan
-          std::cout <<  threshold << " ";
-        } 
+        double knot = lowKnot + binWidth * j;
+        double threshold = (knot - bias[i]) / weights[i];
+        matHypLocusTemp[i].push_back(threshold); // Placement of the hyperplan
       }
-      std::cout << "\n"; 
     }
-    std::cout << "\n"; 
     matHypLocus.insert(matHypLocus.end(), matHypLocusTemp.begin(), matHypLocusTemp.end());
   }
 
-  std::cout << "HyperLocus computed" << std::endl
-            << std::endl;
+  std::cout << "HyperLocus computed.\n\n";
 
   return matHypLocus;
+}
+
+/**
+ * @brief Checks wether a data is contained between 2 barriers.
+ *
+ * @param data
+ * @param lowerbarrier
+ * @param upperBarrier
+ * @return true
+ * @return false
+ */
+bool isBetweenBarriers(double data, double lowerBarrier, double upperBarrier) {
+  if (lowerBarrier > upperBarrier) {
+    return data > upperBarrier && data <= lowerBarrier;
+  } else {
+    return data >= lowerBarrier && data < upperBarrier;
+  }
+}
+
+bool isBelowLowestBarrier(double data, double lowestBarrier, double highestBarrier) {
+  return (lowestBarrier < highestBarrier) ? data < lowestBarrier : data >= lowestBarrier;
+}
+
+
+bool isAboveHighestBarrier(double data, double lowestBarrier, double highestBarrier) {
+  return (highestBarrier > lowestBarrier) ? data >= highestBarrier : data < highestBarrier;
+}
+
+/**
+ * @brief Finds which barrier bounds a given data and updates its scores.
+ * 
+ * @param data to be placed somewhere between barriers
+ * @param barriers vector of barriers
+ * @param scores vector of barriers scores
+ * @return true if the data has found an eclosing barrier
+ * @return false if the data remains unenclosed (should never happen)
+ */
+bool searchBarriers(double data, std::vector<double> &barriers, std::vector<int> &scores) {
+  int nbBarriers = barriers.size();
+
+  if (isBelowLowestBarrier(data, barriers[0], barriers[nbBarriers - 1])) {
+    scores[0]++;
+    return true;
+  }
+
+  if (isAboveHighestBarrier(data, barriers[0], barriers[nbBarriers - 1])) {
+    scores[nbBarriers - 1]++;
+    return true;
+  }
+
+  for (int bId = 1; bId < nbBarriers; bId++) {
+    if (isBetweenBarriers(data, barriers[bId - 1], barriers[bId])) {
+      scores[bId - 1]++;
+      scores[bId]++;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
+/**
+ * @brief Creates a new vector of barriers from another one that is filtered depending on how many datas each barrier bounds. 
+ * 
+ * @param barriers original barriers to filter
+ * @param scores vector with the number of contained datas per barrier
+ * @return std::vector<double> the filtered vector of barrier
+ */
+std::vector<double> filterBarriers(std::vector<double> &barriers, std::vector<int> &scores) {
+  std::vector<double> filteredBarriers;
+
+  for (int i = 0; i < scores.size(); i++) {
+    if (scores[i] > 0) {
+      filteredBarriers.push_back(barriers[i]);
+    }
+  }
+
+  return filteredBarriers;
+}
+
+/**
+ * @brief Optimizes a hyperlocus by removing barriers (knots/thresholds) that do not bound any data samples.
+ * For each feature, a barrier is retained only if it forms, together with an adjacent barrier, an interval that contains at least one data sample.
+ * If a barrier does not participate in enclosing any sample within its lower or upper interval, it is removed.
+ *
+ * @param originalHypLocus the hyperlocus to be optimized.
+ * @param datas dataset used to filter the barriers.
+ */
+void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds) {
+  std::vector<std::vector<double>> datas = ds.getDatas();
+  int nbNets = ds.getNbNets();
+
+  if (datas.size() < 1) {
+    throw InternalError("Connot optimize Hyperlocus. The given dataset does not contain any sample.");
+  }
+
+  int hyperlocusSize = originalHypLocus.size();
+  int nbFeatures = hyperlocusSize / nbNets;
+  int nbSamples = ds.getDatas().size();
+
+  for (int hlId = 0; hlId < hyperlocusSize; hlId++) {
+    std::vector<double> &currentBarriers = originalHypLocus[hlId];
+    int nbBarriers = currentBarriers.size();
+    std::vector<int> currentBarriersScores(nbBarriers);
+
+    for (int sId = 0; sId < nbSamples; sId++) {
+      double currentData = datas[sId][hlId % nbFeatures];
+      searchBarriers(currentData, currentBarriers, currentBarriersScores) ? 1 : 0;
+    }
+
+    originalHypLocus[hlId] = filterBarriers(currentBarriers, currentBarriersScores);
+  }
 }
 
 /**
@@ -91,7 +171,6 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &dataFileWeights
  */
 std::vector<std::vector<double>> calcHypLocus(const std::string &rulesFile, DataSetFid &dataset) {
   std::string line;
-  //TODO opti hyperlocus
   std::vector<std::vector<double>> matHypLocus(dataset.getNbAttributes());
   std::vector<std::set<double>> thresholds(dataset.getNbAttributes()); // Thresholds (=knots) for each attribute
 
