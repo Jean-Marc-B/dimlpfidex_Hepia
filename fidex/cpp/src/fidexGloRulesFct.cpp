@@ -1007,6 +1007,7 @@ int fidexGloRules(const std::string &command) {
     } else {
       matHypLocus = calcHypLocus(inputRulesFile, *trainDatas);
     }
+    // TODO add option 
     optimizeHypLocus(matHypLocus, *trainDatas);
 
     // Number of neurons in the first hidden layer (May be the number of input variables or a multiple)
