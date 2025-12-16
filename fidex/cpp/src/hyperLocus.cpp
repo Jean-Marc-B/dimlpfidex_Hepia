@@ -46,13 +46,16 @@ std::vector<std::vector<double>> calcHypLocus(DataSetFid &dataset, int nbQuantLe
 }
 
 /**
- * @brief Checks wether a data is contained between 2 barriers.
+ * @brief Checks whether a data value is contained between two barriers.
  *
- * @param data
- * @param lowerbarrier
- * @param upperBarrier
- * @return true
- * @return false
+ * The comparison automatically adapts if the barrier order is inverted
+ * (i.e. lowerBarrier > upperBarrier).
+ *
+ * @param data Value to be evaluated.
+ * @param lowerBarrier Lower barrier threshold.
+ * @param upperBarrier Upper barrier threshold.
+ * @return true If the data value lies between the two barriers.
+ * @return false Otherwise.
  */
 bool isBetweenBarriers(double data, double lowerBarrier, double upperBarrier) {
   if (lowerBarrier > upperBarrier) {
@@ -62,23 +65,46 @@ bool isBetweenBarriers(double data, double lowerBarrier, double upperBarrier) {
   }
 }
 
+/**
+ * @brief Checks whether a data value is below the lowest barrier.
+ *
+ * The comparison adapts automatically if the barrier order is inverted
+ * (i.e. lowestBarrier >= highestBarrier).
+ *
+ * @param data Value to be evaluated.
+ * @param lowestBarrier Lower barrier threshold.
+ * @param highestBarrier Upper barrier threshold.
+ * @return true If the data is considered below the lowest barrier.
+ * @return false Otherwise.
+ */
 bool isBelowLowestBarrier(double data, double lowestBarrier, double highestBarrier) {
   return (lowestBarrier < highestBarrier) ? data < lowestBarrier : data >= lowestBarrier;
 }
 
-
+/**
+ * @brief Checks whether a data value is above the highest barrier.
+ *
+ * The comparison adapts automatically if the barrier order is inverted
+ * (i.e. highestBarrier <= lowestBarrier).
+ *
+ * @param data Value to be evaluated.
+ * @param lowestBarrier Lower barrier threshold.
+ * @param highestBarrier Upper barrier threshold.
+ * @return true If the data is considered above the highest barrier.
+ * @return false Otherwise.
+ */
 bool isAboveHighestBarrier(double data, double lowestBarrier, double highestBarrier) {
   return (highestBarrier > lowestBarrier) ? data >= highestBarrier : data < highestBarrier;
 }
 
 /**
  * @brief Finds which barrier bounds a given data and updates its scores.
- * 
- * @param data to be placed somewhere between barriers
- * @param barriers vector of barriers
- * @param scores vector of barriers scores
- * @return true if the data has found an eclosing barrier
- * @return false if the data remains unenclosed (should never happen)
+ *
+ * @param data Value to be placed somewhere between barriers.
+ * @param barriers Vector of barriers.
+ * @param scores Vector of barriers scores.
+ * @return true If the data has found an enclosing barrier.
+ * @return false If the data remains unenclosed (should never happen).
  */
 bool searchBarriers(double data, std::vector<double> &barriers, std::vector<int> &scores) {
   int nbBarriers = barriers.size();
@@ -104,13 +130,12 @@ bool searchBarriers(double data, std::vector<double> &barriers, std::vector<int>
   return false;
 }
 
-
 /**
- * @brief Creates a new vector of barriers from another one that is filtered depending on how many datas each barrier bounds. 
- * 
- * @param barriers original barriers to filter
- * @param scores vector with the number of contained datas per barrier
- * @return std::vector<double> the filtered vector of barrier
+ * @brief Creates a new vector of barriers from another one that is filtered depending on how many datas each barrier bounds.
+ *
+ * @param barriers Original barriers to filter.
+ * @param scores Vector with the number of contained datas per barrier.
+ * @return std::vector<double> The filtered vector of barrier.
  */
 std::vector<double> filterBarriers(std::vector<double> &barriers, std::vector<int> &scores) {
   std::vector<double> filteredBarriers;
@@ -122,6 +147,23 @@ std::vector<double> filterBarriers(std::vector<double> &barriers, std::vector<in
   }
 
   return filteredBarriers;
+}
+
+/**
+ * @brief Computes the total number of elements inside a 2D vector. 
+ * 
+ * @param vec 2D vector to be measured. 
+ * @return int The number of elements.
+ */
+template <typename T>
+int sizeOf2DVector(std::vector<std::vector<T>> vec) {
+  int sum = 0;
+
+  for (std::vector<T> line : vec) {
+    sum += line.size();
+  }
+
+  return sum;
 }
 
 /**
@@ -143,6 +185,7 @@ void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSe
   int hyperlocusSize = originalHypLocus.size();
   int nbFeatures = hyperlocusSize / nbNets;
   int nbSamples = ds.getDatas().size();
+  int totalNbHyperplans = sizeOf2DVector(originalHypLocus);
 
   for (int hlId = 0; hlId < hyperlocusSize; hlId++) {
     std::vector<double> &currentBarriers = originalHypLocus[hlId];
@@ -156,6 +199,12 @@ void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSe
 
     originalHypLocus[hlId] = filterBarriers(currentBarriers, currentBarriersScores);
   }
+
+  int remainingNbHyperplans = sizeOf2DVector(originalHypLocus);
+  double remainingPercent = remainingNbHyperplans * 100.0 / (double)totalNbHyperplans;
+
+  std::streamsize defaultPrecision = std::cout.precision();
+  std::cout << "Optimization done. " << remainingNbHyperplans << "/" << totalNbHyperplans << " hyperplan(s) remaining (" << std::setprecision(3) << remainingPercent << std::setprecision(defaultPrecision) << "%).\n";
 }
 
 /**
