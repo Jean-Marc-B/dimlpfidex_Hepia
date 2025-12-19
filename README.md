@@ -134,7 +134,7 @@ cmake --build .
 
 With docker (from project root):
 ```shell
-docker build . -t dimlpfidex-build:latest
+docker build . -t compile:latest
 docker run -u $(id -u):$(id -g) -v ./:/app compile:latest
 ```
 
