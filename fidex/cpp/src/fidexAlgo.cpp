@@ -111,7 +111,15 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     int minHyp = -1; // Index of first hyperplane without any change of the best hyperplane
     int maxHyp = -1;
     // Randomize dimensions
+
+    //! rand coud be fucked up because of the mersenne twister for some reason
     iota(begin(dimensions), end(dimensions), 0); // Vector from 0 to nbIn-1
+
+    for (int item : dimensions) {
+      std::cout << item << ",";
+    }
+    std::cout << "\n";
+
     shuffle(begin(dimensions), end(dimensions), _rnd);
 
     std::vector<int> currentCovSamp;
