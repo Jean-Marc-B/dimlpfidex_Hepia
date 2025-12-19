@@ -147,6 +147,7 @@ void checkParametersLogicValues(Parameters &p) {
   // setting default values
   p.setDefaultBool(WITH_FIDEX, false);
   p.setDefaultBool(WITH_MINIMAL_VERSION, false);
+  p.setDefaultBool(HYPERPLAN_OPTI, true);
 
   // this sections check if values comply with program logic
 
@@ -290,7 +291,7 @@ int fidexGlo(const std::string &command) {
                                               WITH_FIDEX, WITH_MINIMAL_VERSION, TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, WEIGHTS_FILE,
                                               RULES_FILE, TEST_CLASS_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
                                               MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, NB_FIDEX_RULES, LOWEST_MIN_FIDELITY, DROPOUT_DIM, DROPOUT_HYP, NB_QUANT_LEVELS,
-                                              NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED};
+                                              NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -456,7 +457,10 @@ int fidexGlo(const std::string &command) {
       } else {
         matHypLocus = calcHypLocus(inputRulesFile, *testDatas);
       }
-      optimizeHypLocus(matHypLocus, *trainDatas);
+      // TODO add option
+    if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
+        optimizeHypLocus(matHypLocus, *trainDatas);
+      }
 
       // Number of neurons in the first hidden layer (May be the number of input variables or a multiple)
       auto nbIn = static_cast<int>(matHypLocus.size());

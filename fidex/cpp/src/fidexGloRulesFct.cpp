@@ -64,6 +64,7 @@ void showRulesParams() {
   printOptionDescription("--aggregate_folder <string>", "Path leading to the subrules folder. Useless if --aggregate_rules is not set.");
   printOptionDescription("--no_simplification <bool>", "If set, the generated rules will not go through the simplification process. Keeping every duplicated rule.");
   printOptionDescription("--verbose <int [0,3]>", "Sets the verbosity. 0 for no particular verbosity, 1 for the estimation time, 2 for the percentage update and 3 for threads information (default: 0)");
+  printOptionDescription("--hyperplan_opti <bool>", "If set, will filter generated hyperplans in order to remove any non pertinant hyperplans based on whether they enclose inputed data or not. (default: true)");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -200,7 +201,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     }
 
     t1 = omp_get_wtime();
-#pragma omp for schedule(dynamic, 1) nowait
+#pragma omp for nowait
     for (int idSample = startIndex; idSample < endIndex; idSample++) {
       std::vector<int> &trainPreds = trainDataset.getPredictions();
       std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
@@ -742,6 +743,7 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultInt(NB_THREADS, 1);
   p.setDefaultBool(AGGREGATE_RULES, false);
   p.setDefaultBool(NO_SIMPLIFICATION, false);
+  p.setDefaultBool(HYPERPLAN_OPTI, true);
   p.setDefaultInt(VERBOSE, 0);
 
   if (p.getInt(END_INDEX) != -1 && p.getInt(START_INDEX) > p.getInt(END_INDEX)) {
@@ -882,7 +884,7 @@ int fidexGloRules(const std::string &command) {
                                               MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                               DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
                                               NB_THREADS, COVERING_STRATEGY, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX,
-                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE};
+                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE, HYPERPLAN_OPTI};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -1007,8 +1009,10 @@ int fidexGloRules(const std::string &command) {
     } else {
       matHypLocus = calcHypLocus(inputRulesFile, *trainDatas);
     }
-    // TODO add option 
-    optimizeHypLocus(matHypLocus, *trainDatas);
+    // TODO add option
+    if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
+      optimizeHypLocus(matHypLocus, *trainDatas);
+    }
 
     // Number of neurons in the first hidden layer (May be the number of input variables or a multiple)
     auto nbIn = static_cast<int>(matHypLocus.size());

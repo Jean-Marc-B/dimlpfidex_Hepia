@@ -89,6 +89,7 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
   AGGREGATE_FOLDER,
   NO_SIMPLIFICATION,
   VERBOSE,
+  HYPERPLAN_OPTI,
   _NB_PARAMETERS // internal use only, do not consider it as a usable parameter
 };
 
@@ -166,6 +167,7 @@ static const std::unordered_map<std::string, ParameterCode> parameterNames = {
     {"aggregate_folder", AGGREGATE_FOLDER},
     {"no_simplification", NO_SIMPLIFICATION},
     {"verbose", VERBOSE},
+    {"hyperplan_opti", HYPERPLAN_OPTI},
 };
 
 /**

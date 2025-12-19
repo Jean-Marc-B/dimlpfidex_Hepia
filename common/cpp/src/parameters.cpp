@@ -413,6 +413,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setInt(VERBOSE, arg);
     break;
 
+  case HYPERPLAN_OPTI:
+    setBool(HYPERPLAN_OPTI, arg);
+    break;
+
   default: // If we put another -X option
     throw CommandArgumentException("Illegal option : " + param);
   }
