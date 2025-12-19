@@ -80,6 +80,7 @@ void checkFidexParametersLogicValues(Parameters &p) {
   p.setDefaultNbQuantLevels();
   p.setDefaultDecisionThreshold();
   p.setDefaultFidex();
+  p.setDefaultBool(HYPERPLAN_OPTI, true);
 
   // this sections check if values comply with program logic
 
@@ -212,7 +213,7 @@ int fidex(const std::string &command) {
                                               STATS_FILE, CONSOLE_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
                                               MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, HI_KNOT, DROPOUT_DIM, DROPOUT_HYP,
                                               NB_QUANT_LEVELS, DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS,
-                                              SIGMAS, NORMALIZATION_INDICES, SEED};
+                                              SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -394,7 +395,10 @@ int fidex(const std::string &command) {
     } else {
       matHypLocus = calcHypLocus(inputRulesFile, *testDatas);
     }
-    optimizeHypLocus(matHypLocus, *trainDatas);
+    // TODO add option
+    if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
+      optimizeHypLocus(matHypLocus, *trainDatas);
+    }
 
     Hyperspace hyperspace(matHypLocus); // Initialize hyperbox and get hyperplans
 
