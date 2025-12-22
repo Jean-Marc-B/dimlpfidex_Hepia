@@ -1014,7 +1014,7 @@ int fidexGloRules(const std::string &command) {
     } else {
       matHypLocus = calcHypLocus(inputRulesFile, *trainDatas);
     }
-    // TODO add option
+    
     if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
       optimizeHypLocus(matHypLocus, *trainDatas);
     }
