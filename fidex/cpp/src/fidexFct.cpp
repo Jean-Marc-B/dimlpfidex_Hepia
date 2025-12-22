@@ -58,6 +58,7 @@ void showFidexParams() {
   printOptionDescription("--sigmas <list<float ]-inf,inf[>>", "Standard deviation of each attribute index to be denormalized in the rules");
   printOptionDescription("--normalization_indices <list<int [0,nb_attributes-1]>>", "Attribute indices to be denormalized in the rules, only used when no normalization_file is given, index starts at 0 (default: [0,...,nb_attributes-1])");
   printOptionDescription("--seed <int [0,inf[>", "Seed for random number generation, 0=random. Anything else than 0 is an arbitrary seed that can be reused to obtain the same randomly generated sequence and therefore getting same results (default: 0)");
+  printOptionDescription("--hyperplan_opti <bool>", "If set, will filter generated hyperplans in order to remove any useless hyperplans. The selection is based on whether they enclose inputed data or not. (default: true)");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -395,7 +396,7 @@ int fidex(const std::string &command) {
     } else {
       matHypLocus = calcHypLocus(inputRulesFile, *testDatas);
     }
-    // TODO add option
+
     if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
       optimizeHypLocus(matHypLocus, *trainDatas);
     }
