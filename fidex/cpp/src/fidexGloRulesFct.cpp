@@ -201,7 +201,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     }
 
     t1 = omp_get_wtime();
-#pragma omp for nowait
+#pragma omp for
     for (int idSample = startIndex; idSample < endIndex; idSample++) {
       std::vector<int> &trainPreds = trainDataset.getPredictions();
       std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
@@ -322,14 +322,19 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     t2 = omp_get_wtime();
 
     // Each thread reports as soon as it is done with its chunk.
-#pragma omp critical(thread_summary)
-    {
-      if (showThreadInfo) {
-        std::cout << "Thread #" << threadId << " ended " << cnt << " iterations in " << (t2 - t1) << " seconds." << std::endl;
+#pragma omp for ordered
+    for (int i = 0; i < nbThreadsUsed; i++) {
+#pragma omp ordered
+      {
+        if (i == threadId) {
+          if (showThreadInfo) {
+            std::cout << "Thread #" << threadId << " ended " << cnt << " iterations in " << (t2 - t1) << " seconds." << std::endl;
+          }
+          rules.insert(rules.end(), localRules.begin(), localRules.end());
+          nbProblems += localNbProblems;
+          nbRulesNotFound += localNbRulesNotFound;
+        }
       }
-      rules.insert(rules.end(), localRules.begin(), localRules.end());
-      nbProblems += localNbProblems;
-      nbRulesNotFound += localNbRulesNotFound;
     }
   } // end of parallel section
 
