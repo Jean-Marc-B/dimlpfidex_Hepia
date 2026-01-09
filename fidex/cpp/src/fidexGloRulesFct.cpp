@@ -64,7 +64,7 @@ void showRulesParams() {
   printOptionDescription("--aggregate_folder <string>", "Path leading to the subrules folder. Useless if --aggregate_rules is not set.");
   printOptionDescription("--no_simplification <bool>", "If set, the generated rules will not go through the simplification process. Keeping every duplicated rule.");
   printOptionDescription("--verbose <int [0,3]>", "Sets the verbosity. 0 for no particular verbosity, 1 for the estimation time, 2 for the percentage update and 3 for threads information (default: 0)");
-  printOptionDescription("--hyperplan_opti <bool>", "If set, will filter generated hyperplans in order to remove any non pertinant hyperplans based on whether they enclose inputed data or not. (default: true)");
+  printOptionDescription("--hyperplan_opti <bool>", "If set, will filter generated hyperplans in order to remove any useless hyperplans. The selection is based on whether they enclose inputed data or not. (default: true)");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -1014,7 +1014,7 @@ int fidexGloRules(const std::string &command) {
     } else {
       matHypLocus = calcHypLocus(inputRulesFile, *trainDatas);
     }
-    
+
     if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
       optimizeHypLocus(matHypLocus, *trainDatas);
     }
