@@ -6,7 +6,8 @@ from tensorflow.keras import backend as K
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (Dense, Dropout, Flatten, Input, Conv2D,
                                      DepthwiseConv2D, MaxPooling2D, LeakyReLU, Resizing,
-                                     BatchNormalization, GlobalAveragePooling2D, Concatenate)
+                                     BatchNormalization, GlobalAveragePooling2D, Concatenate,
+                                     LayerNormalization)
 from tensorflow.keras.applications import ResNet50, VGG16
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import l2
@@ -762,10 +763,335 @@ def gathering_predictions(file_list, output_file):
         print(f"{output_file} written.")
 
 
+@tf.keras.utils.register_keras_serializable()
+class ViTPatchEmbedding(tf.keras.layers.Layer):
+    def __init__(self, patch_size, embed_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+        self.proj = Conv2D(
+            embed_dim,
+            kernel_size=patch_size,
+            strides=patch_size,
+            padding="valid",
+            use_bias=True,
+            name="proj",
+        )
+
+    def call(self, x):
+        x = self.proj(x)
+        batch = tf.shape(x)[0]
+        return tf.reshape(x, [batch, -1, self.embed_dim])
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "patch_size": self.patch_size,
+            "embed_dim": self.embed_dim,
+        })
+        return config
+
+@tf.keras.utils.register_keras_serializable()
+class ViTMLP(tf.keras.layers.Layer):
+    def __init__(self, hidden_dim, output_dim, drop_rate, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.drop_rate = drop_rate
+        self.fc1 = Dense(hidden_dim, name="fc1")
+        self.fc2 = Dense(output_dim, name="fc2")
+        self.drop1 = Dropout(drop_rate)
+        self.drop2 = Dropout(drop_rate)
+
+    def call(self, x, training=False):
+        x = self.fc1(x)
+        x = tf.keras.activations.gelu(x)
+        x = self.drop1(x, training=training)
+        x = self.fc2(x)
+        return self.drop2(x, training=training)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "hidden_dim": self.hidden_dim,
+            "output_dim": self.output_dim,
+            "drop_rate": self.drop_rate,
+        })
+        return config
+
+@tf.keras.utils.register_keras_serializable()
+class ViTSelfAttention(tf.keras.layers.Layer):
+    def __init__(self, embed_dim, num_heads, attn_drop_rate, proj_drop_rate, **kwargs):
+        super().__init__(**kwargs)
+        if embed_dim % num_heads != 0:
+            raise ValueError("embed_dim must be divisible by num_heads.")
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.attn_drop_rate = attn_drop_rate
+        self.proj_drop_rate = proj_drop_rate
+        self.head_dim = embed_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.qkv = Dense(embed_dim * 3, use_bias=True, name="qkv")
+        self.attn_drop = Dropout(attn_drop_rate)
+        self.proj = Dense(embed_dim, name="proj")
+        self.proj_drop = Dropout(proj_drop_rate)
+
+    def call(self, x, training=False):
+        batch = tf.shape(x)[0]
+        seq_len = tf.shape(x)[1]
+        qkv = self.qkv(x)
+        qkv = tf.reshape(qkv, [batch, seq_len, 3, self.num_heads, self.head_dim])
+        qkv = tf.transpose(qkv, [2, 0, 3, 1, 4])
+        q, k, v = qkv[0], qkv[1], qkv[2]
+        attn = tf.matmul(q, k, transpose_b=True) * self.scale
+        attn = tf.nn.softmax(attn, axis=-1)
+        attn = self.attn_drop(attn, training=training)
+        x = tf.matmul(attn, v)
+        x = tf.transpose(x, [0, 2, 1, 3])
+        x = tf.reshape(x, [batch, seq_len, self.embed_dim])
+        x = self.proj(x)
+        return self.proj_drop(x, training=training)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+            "attn_drop_rate": self.attn_drop_rate,
+            "proj_drop_rate": self.proj_drop_rate,
+        })
+        return config
+
+@tf.keras.utils.register_keras_serializable()
+class ViTEncoderBlock(tf.keras.layers.Layer):
+    def __init__(self, embed_dim, num_heads, mlp_dim, drop_rate, attn_drop_rate, **kwargs):
+        super().__init__(**kwargs)
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.mlp_dim = mlp_dim
+        self.drop_rate = drop_rate
+        self.attn_drop_rate = attn_drop_rate
+        self.norm1 = LayerNormalization(epsilon=1e-6, name="norm1")
+        self.attn = ViTSelfAttention(
+            embed_dim,
+            num_heads,
+            attn_drop_rate,
+            drop_rate,
+            name="attn",
+        )
+        self.norm2 = LayerNormalization(epsilon=1e-6, name="norm2")
+        self.mlp = ViTMLP(mlp_dim, embed_dim, drop_rate, name="mlp")
+
+    def call(self, x, training=False):
+        x = x + self.attn(self.norm1(x), training=training)
+        return x + self.mlp(self.norm2(x), training=training)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+            "mlp_dim": self.mlp_dim,
+            "drop_rate": self.drop_rate,
+            "attn_drop_rate": self.attn_drop_rate,
+        })
+        return config
+
+@tf.keras.utils.register_keras_serializable()
+class TimmViTBase(tf.keras.Model):
+    def __init__(
+        self,
+        num_classes,
+        image_size=384,
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4,
+        drop_rate=0.0,
+        attn_drop_rate=0.0,
+        mean=None,
+        std=None,
+        name="vit_base_patch16_384",
+        **kwargs,
+    ):
+        super().__init__(name=name, **kwargs)
+        self.num_classes = num_classes
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+        self.depth = depth
+        self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
+        self.drop_rate = drop_rate
+        self.attn_drop_rate = attn_drop_rate
+        self._mean = list(mean) if mean is not None else None
+        self._std = list(std) if std is not None else None
+        self.resize = Resizing(image_size, image_size, name="vit_resize")
+        self.patch_embed = ViTPatchEmbedding(
+            patch_size,
+            embed_dim,
+            name="patch_embed",
+        )
+        num_patches = (image_size // patch_size) ** 2
+        self.cls_token = self.add_weight(
+            name="cls_token",
+            shape=(1, 1, embed_dim),
+            initializer="zeros",
+            trainable=True,
+        )
+        self.pos_embed = self.add_weight(
+            name="pos_embed",
+            shape=(1, num_patches + 1, embed_dim),
+            initializer="zeros",
+            trainable=True,
+        )
+        self.pos_drop = Dropout(drop_rate)
+        self.blocks = [
+            ViTEncoderBlock(
+                embed_dim,
+                num_heads,
+                int(embed_dim * mlp_ratio),
+                drop_rate,
+                attn_drop_rate,
+                name=f"blocks_{i}",
+            )
+            for i in range(depth)
+        ]
+        self.norm = LayerNormalization(epsilon=1e-6, name="norm")
+        self.head = Dense(num_classes, activation="softmax", name="head")
+        if self._mean is not None and self._std is not None:
+            mean = tf.constant(self._mean, dtype=tf.float32)
+            std = tf.constant(self._std, dtype=tf.float32)
+            self.mean = tf.reshape(mean, [1, 1, 1, 3])
+            self.std = tf.reshape(std, [1, 1, 1, 3])
+        else:
+            self.mean = None
+            self.std = None
+
+    def call(self, inputs, training=False):
+        x = tf.cast(inputs, tf.float32)
+        if self.mean is not None:
+            x = (x - self.mean) / self.std
+        x = self.resize(x)
+        x = self.patch_embed(x)
+        batch = tf.shape(x)[0]
+        cls_tokens = tf.broadcast_to(self.cls_token, [batch, 1, self.embed_dim])
+        x = tf.concat([cls_tokens, x], axis=1)
+        x = x + self.pos_embed
+        x = self.pos_drop(x, training=training)
+        for blk in self.blocks:
+            x = blk(x, training=training)
+        x = self.norm(x)
+        x = x[:, 0]
+        return self.head(x)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "num_classes": self.num_classes,
+            "image_size": self.image_size,
+            "patch_size": self.patch_size,
+            "embed_dim": self.embed_dim,
+            "depth": self.depth,
+            "num_heads": self.num_heads,
+            "mlp_ratio": self.mlp_ratio,
+            "drop_rate": self.drop_rate,
+            "attn_drop_rate": self.attn_drop_rate,
+            "mean": self._mean,
+            "std": self._std,
+        })
+        return config
+
+def build_vit_base_patch16_384(input_shape, nb_classes, pretrained=True):
+    timm_model = None
+    mean = None
+    std = None
+
+    if pretrained:
+        try:
+            import timm
+        except ImportError as exc:
+            raise ImportError(
+                "timm is required for vit_timm pretrained weights. "
+                "Install timm or set vit_pretrained=False."
+            ) from exc
+        timm_model = timm.create_model("vit_base_patch16_384", pretrained=True)
+        mean = timm_model.default_cfg.get("mean")
+        std = timm_model.default_cfg.get("std")
+
+    model = TimmViTBase(
+        num_classes=nb_classes,
+        mean=mean,
+        std=std,
+    )
+
+    model(tf.zeros((1, input_shape[0], input_shape[1], input_shape[2]), dtype=tf.float32))
+
+    if timm_model is not None:
+        _load_timm_vit_base_patch16_384_weights(model, timm_model, nb_classes)
+        del timm_model
+
+    return model
+
+def _load_timm_vit_base_patch16_384_weights(keras_model, timm_model, nb_classes):
+    # Map timm weights into the Keras model to keep the saving/loading path consistent.
+    state = timm_model.state_dict()
+
+    def to_numpy(tensor):
+        return tensor.detach().cpu().numpy()
+
+    patch_weight = to_numpy(state["patch_embed.proj.weight"])
+    patch_bias = to_numpy(state["patch_embed.proj.bias"])
+    patch_weight = np.transpose(patch_weight, (2, 3, 1, 0))
+    keras_model.patch_embed.proj.set_weights([patch_weight, patch_bias])
+
+    keras_model.cls_token.assign(to_numpy(state["cls_token"]))
+    keras_model.pos_embed.assign(to_numpy(state["pos_embed"]))
+
+    for i, block in enumerate(keras_model.blocks):
+        prefix = f"blocks.{i}."
+        block.norm1.set_weights([
+            to_numpy(state[f"{prefix}norm1.weight"]),
+            to_numpy(state[f"{prefix}norm1.bias"]),
+        ])
+        block.attn.qkv.set_weights([
+            to_numpy(state[f"{prefix}attn.qkv.weight"]).T,
+            to_numpy(state[f"{prefix}attn.qkv.bias"]),
+        ])
+        block.attn.proj.set_weights([
+            to_numpy(state[f"{prefix}attn.proj.weight"]).T,
+            to_numpy(state[f"{prefix}attn.proj.bias"]),
+        ])
+        block.norm2.set_weights([
+            to_numpy(state[f"{prefix}norm2.weight"]),
+            to_numpy(state[f"{prefix}norm2.bias"]),
+        ])
+        block.mlp.fc1.set_weights([
+            to_numpy(state[f"{prefix}mlp.fc1.weight"]).T,
+            to_numpy(state[f"{prefix}mlp.fc1.bias"]),
+        ])
+        block.mlp.fc2.set_weights([
+            to_numpy(state[f"{prefix}mlp.fc2.weight"]).T,
+            to_numpy(state[f"{prefix}mlp.fc2.bias"]),
+        ])
+
+    keras_model.norm.set_weights([
+        to_numpy(state["norm.weight"]),
+        to_numpy(state["norm.bias"]),
+    ])
+
+    if getattr(timm_model, "num_classes", None) == nb_classes:
+        keras_model.head.set_weights([
+            to_numpy(state["head.weight"]).T,
+            to_numpy(state["head.bias"]),
+        ])
+
+
 ###############################################################
 # Train a CNN with a Resnet or with a small model
 
-def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu=False, remove_first_conv=False):
+def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, model_file, model_checkpoint_weights, X_train, Y_train, X_test, Y_test, train_pred_file, test_pred_file, model_stats, with_leaky_relu=False, remove_first_conv=False, vit_pretrained=True):
     """
     Trains a Convolutional Neural Network (CNN) using either a ResNet architecture or a small custom model.
 
@@ -774,7 +1100,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     - width: The size of the second dimension of the input image (image is height x width).
     - nbChannels: The number of channels in the input images (1 for grayscale, 3 for RGB).
     - nb_classes: The number of classes for classification.
-    - model: Can be resnet, VGG, VGG_metadatas, VGG_and_big, VGG_and_VGG, VGG_and_nClass_VGGs, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
+    - model: Can be resnet, VGG, VGG_metadatas, VGG_and_big, VGG_and_VGG, VGG_and_nClass_VGGs, vit_timm, big, small, MLP or MLP_Patch indicating the model architecture to use (small is a smaller custom model).
     - nbIt: The number of epochs to train the model.
     - model_file: File path to save the trained model.
     - model_checkpoint_weights: File path for saving the best model weights during training.
@@ -783,6 +1109,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     - train_pred_file: File path to save the training set predictions.
     - test_pred_file: File path to save the test set predictions.
     - model_stats: File path to save the model's performance statistics.
+    - vit_pretrained: Whether to load timm pretrained weights for vit_timm.
 
     Returns:
     - None. The trained model is saved to the specified file, and predictions and performance metrics are saved.
@@ -797,8 +1124,8 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     gc.collect()
     tf.keras.backend.clear_session()
 
-    if model not in ["resnet", "VGG", "VGG_metadatas", "VGG_and_big", "VGG_and_VGG", "VGG_and_nClass_VGGs", "small", "big", "MLP", "MLP_Patch"]:
-        raise ValueError("The model needs to be one of resnet, VGG, VGG_metadatas, VGG_and_big, VGG_and_VGG, VGG_and_nClass_VGGs, small, big, MLP or MLP_Patch")
+    if model not in ["resnet", "VGG", "VGG_metadatas", "VGG_and_big", "VGG_and_VGG", "VGG_and_nClass_VGGs", "vit_timm", "small", "big", "MLP", "MLP_Patch"]:
+        raise ValueError("The model needs to be one of resnet, VGG, VGG_metadatas, VGG_and_big, VGG_and_VGG, VGG_and_nClass_VGGs, vit_timm, small, big, MLP or MLP_Patch")
 
     if model == "MLP_Patch":
         if len(X_train) != 2 or len(X_test) != 2 or len(X_train[1][0]) != 2 or len(X_test[1][0]) != 2:
@@ -829,6 +1156,14 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
             raise ValueError("Wrong shape of data when training nb_class VGGs and VGG.")
         if not isinstance(X_train, list) or not isinstance(X_test, list) or not isinstance(height, tuple) or not isinstance(width, tuple) or not isinstance(nbChannels, tuple):
             raise ValueError("X_train, X_test, height, width and nb_channels must be tuples (image, probas).")
+
+    if model == "vit_timm":
+        if isinstance(X_train, tuple) or isinstance(X_test, tuple):
+            raise ValueError("X_train and X_test must be arrays for vit_timm.")
+        if not isinstance(height, (int, np.integer)) or not isinstance(width, (int, np.integer)) or isinstance(nbChannels, tuple):
+            raise ValueError("height, width and nbChannels must be integers for vit_timm.")
+        if nbChannels not in [1, 3]:
+            raise ValueError("vit_timm supports only 1 or 3 input channels.")
 
     # PREPARE DATA
 
@@ -898,7 +1233,7 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
             nbChannel_img = nbChannels[0]
         else:
             nbChannel_img = nbChannels
-        if (nbChannel_img == 1 and model in ["resnet", "VGG", "VGG_and_big", "VGG_and_VGG", "VGG_metadatas"]):
+        if (nbChannel_img == 1 and model in ["resnet", "VGG", "VGG_and_big", "VGG_and_VGG", "VGG_metadatas", "vit_timm"]):
             # B&W to RGB
             x_train = np.repeat(x_train, 3, axis=-1)
             X_test = np.repeat(X_test, 3, axis=-1)
@@ -1013,6 +1348,23 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
         model.build((None, height, width, 3))  # Build the model with the input shape
 
         model.compile(optimizer=Adam(learning_rate=0.00001), loss='categorical_crossentropy', metrics=['acc'])
+        model.summary()
+
+    elif model == "vit_timm":
+
+        if with_leaky_relu:
+            raise ValueError("vit_timm with leakyRelu is not supported.")
+
+        model = build_vit_base_patch16_384(
+            input_shape=(height, width, nbChannels),
+            nb_classes=nb_classes,
+            pretrained=vit_pretrained,
+        )
+
+        model.compile(optimizer=Adam(learning_rate=0.00001),
+                    loss='categorical_crossentropy',
+                    metrics=['acc'])
+
         model.summary()
 
     elif model == "VGG_metadatas":
@@ -1461,6 +1813,29 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
 ###############################################################
 
+def _model_input_channels(cnn_model):
+    shape = None
+    if hasattr(cnn_model, "input_shape"):
+        shape = cnn_model.input_shape
+        if isinstance(shape, (list, tuple)) and shape and isinstance(shape[0], (list, tuple, tf.TensorShape)):
+            shape = shape[0]
+    if shape is None and hasattr(cnn_model, "inputs") and cnn_model.inputs:
+        shape = cnn_model.inputs[0].shape
+    if shape is None:
+        return None
+    try:
+        return int(shape[-1]) if shape[-1] is not None else None
+    except (TypeError, ValueError):
+        return None
+
+def _should_expand_to_rgb(cfg, cnn_model, image):
+    if image.shape[2] != 1 or cfg.get("model") == "RF":
+        return False
+    input_channels = _model_input_channels(cnn_model)
+    if input_channels is not None:
+        return input_channels == 3
+    return cfg.get("model") in ["resnet", "VGG", "VGG_and_big", "VGG_and_VGG", "VGG_metadatas", "vit_timm"]
+
 def generate_filtered_images_and_predictions(cfg, CNNModel, image, filter_size, stride, intermediate_model=None):
 
     """
@@ -1477,7 +1852,7 @@ def generate_filtered_images_and_predictions(cfg, CNNModel, image, filter_size, 
     - positions: A list of (row, column) tuples indicating the top-left position of each filter applied.
     """
 
-    if (cfg["model"] != "RF" and image.shape[2] == 1 and CNNModel.input_shape[-1] == 3):
+    if _should_expand_to_rgb(cfg, CNNModel, image):
         # B&W to RGB
         image = np.repeat(image, 3, axis=-1)
 
@@ -1525,6 +1900,87 @@ def generate_filtered_images_and_predictions(cfg, CNNModel, image, filter_size, 
         #     prediction_at_target = predictions[index]
         #     print(f"La prédiction pour le sample_id {sample_id} à la position Height=8 et Width=8 et Classe=0 est : {prediction_at_target[0]}")
         return predictions, positions, nb_areas_per_filter
+
+###############################################################
+def compute_impact_patches(cfg, CNNModel, image, filter_size, stride, intermediate_model=None, baseline_pred=None, batch_size=512):
+
+    """
+    Generates images where a sliding patch is masked (set to black), predicts each masked image,
+    and returns the impact score = P(full image) - P(masked image) for every patch.
+
+    Parameters:
+    - CNNModel: The CNN model used for predicting the masked images.
+    - image: The input image to be processed (2D grayscale or 3D RGB).
+    - filter_size: The size of the filter applied to the image (height, width), can be an array of tuples if we apply several filters.
+    - stride: The stride value for moving the filter across the image (vertically, horizontally).
+    - batch_size: Batch size used for masked image predictions.
+
+    Returns:
+    - predictions: Impact scores (difference of probabilities/activations) for each masked image.
+    - positions: A list of (row, column) tuples indicating the top-left position of each mask applied.
+    - nb_areas_per_filter: Number of masked areas generated for each filter size (omitted if intermediate_model is provided).
+    """
+
+    if _should_expand_to_rgb(cfg, CNNModel, image):
+        # B&W to RGB
+        image = np.repeat(image, 3, axis=-1)
+
+    image_size = [image.shape[0], image.shape[1]]
+    masked_images = []
+    positions = []  # To keep the position of each mask
+    nb_areas_per_filter = [] # Keep track of the number of areas for each filter
+
+    for filter_sz, strd in zip(filter_size, stride):
+        nb_areas = 0
+        current_pixel = [0, 0]
+        while current_pixel[0] + filter_sz[0] <= image_size[0]:
+            while current_pixel[1] + filter_sz[1] <= image_size[1]:
+                masked_img = np.array(image, copy=True)
+                masked_img[current_pixel[0]:current_pixel[0]+filter_sz[0],
+                           current_pixel[1]:current_pixel[1]+filter_sz[1]] = 0  # Mask patch to black
+                masked_images.append(masked_img)
+                positions.append((current_pixel[0], current_pixel[1]))
+                nb_areas += 1
+
+                current_pixel[1] += strd[1]  # Move horizontally
+
+            current_pixel[1] = 0  # reset the column
+            current_pixel[0] += strd[0]  # Move vertically
+        nb_areas_per_filter.append(nb_areas)
+
+    masked_images = np.array(masked_images)
+
+    # Compute baseline prediction on the original image (with patch present)
+    if baseline_pred is not None:
+        baseline = np.array(baseline_pred, copy=False)
+        if baseline.ndim == 1:
+            baseline = baseline.reshape(1, -1)
+    else:
+        if intermediate_model is not None:
+            baseline = intermediate_model.predict(np.expand_dims(image, axis=0), verbose=0)
+        else:
+            if cfg["model"] == "RF":
+                baseline = CNNModel.predict_proba(image.reshape(1, -1))
+            else:
+                baseline = CNNModel.predict(np.expand_dims(image, axis=0), verbose=0)
+
+    # Get predictions on masked images and convert to impact scores
+    if intermediate_model is not None:
+        predictions = intermediate_model.predict(masked_images, verbose=0, batch_size=batch_size)
+        impacts = baseline - predictions
+        return impacts, positions
+
+    else:
+        if cfg["model"] == "RF":
+            masked_images_flattened = masked_images.reshape(masked_images.shape[0], -1)
+            predictions = CNNModel.predict_proba(masked_images_flattened)
+        else:
+            predictions = CNNModel.predict(masked_images, verbose=0, batch_size=batch_size)
+
+        # broadcast baseline over all masked images
+        impacts = baseline - predictions
+
+        return impacts, positions, nb_areas_per_filter
 
 ###############################################################
 # Generate patches for the dataset

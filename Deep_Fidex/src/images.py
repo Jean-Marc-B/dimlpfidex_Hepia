@@ -343,12 +343,13 @@ def split_title(title, max_line_length=50):
 
 def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_Height_proba_stat, size_Width_proba_stat, filter_size, classes, nb_channels, statistic):
 
-    if statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image", "SHAP_and_image"]:
+    if statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image", "SHAP_and_image", "patch_impact_and_image", "patch_impact_and_stats"]:
         prob_and_img_in_one_matrix = False
     else:
         prob_and_img_in_one_matrix = True
 
     nb_classes = len(classes)
+    is_patch_impact_stats = statistic == "patch_impact_and_stats"
 
     # Convert to RGB if necessary
     original_image_rgb = image_to_rgb(image)
@@ -370,8 +371,17 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
 
     for antecedent in rule.antecedents:
         filtered_image_intensity = np.zeros_like(original_image_rgb, dtype=float)
+        stats_part = False
 
-        if prob_and_img_in_one_matrix:
+        if is_patch_impact_stats:
+            if antecedent.attribute < split_id:
+                area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes))
+            else:
+                stats_part = True
+                stats_attribute = antecedent.attribute - split_id
+                area_Height, area_Width, channel_id = np.unravel_index(stats_attribute, (size_Height_proba_stat, size_Width_proba_stat, cfg["patch_stats_size"]))
+            is_proba_part = True
+        elif prob_and_img_in_one_matrix:
             area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes + nb_channels))
             is_proba_part = channel_id < nb_classes
         else:
@@ -381,7 +391,7 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
                 is_proba_part = antecedent.attribute < split_id
 
         if is_proba_part:
-            if not prob_and_img_in_one_matrix:
+            if not prob_and_img_in_one_matrix and not is_patch_impact_stats:
                 area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_chanels_stats))
 
             start_h = area_Height * STRIDE[0][0]
@@ -495,8 +505,17 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
         antecedent = rule.antecedents[i]
         ineq = ">=" if antecedent.inequality else "<"
         axes[i+2].imshow(img.astype(np.uint8))
+        stats_part = False
 
-        if prob_and_img_in_one_matrix:
+        if is_patch_impact_stats:
+            if antecedent.attribute < split_id:
+                area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_classes))
+            else:
+                stats_part = True
+                stats_attribute = antecedent.attribute - split_id
+                area_Height, area_Width, channel_id = np.unravel_index(stats_attribute, (size_Height_proba_stat, size_Width_proba_stat, cfg["patch_stats_size"]))
+            is_proba_part = True
+        elif prob_and_img_in_one_matrix:
             area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_chanels_stats + nb_channels))
             is_proba_part = channel_id < nb_classes
         else:
@@ -506,7 +525,7 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
                 is_proba_part = antecedent.attribute < split_id
 
         if is_proba_part: # proba part
-            if not prob_and_img_in_one_matrix:
+            if not prob_and_img_in_one_matrix and not is_patch_impact_stats:
                 area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute, (size_Height_proba_stat, size_Width_proba_stat, nb_chanels_stats))
 
             start_h = area_Height * STRIDE[0][0]
@@ -520,7 +539,7 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
                 statname = f"LBP_Descriptor_vector#{channel_id}"
             elif statistic == "DCT_and_image":
                 statname = f"DCT_Coefficient#{channel_id}"
-            elif statistic in ["stats_and_image", "SHAP_and_image"]:
+            elif statistic in ["stats_and_image", "SHAP_and_image"] or (is_patch_impact_stats and stats_part):
 
                 if cfg["nb_channels"] == 1:
                     channel_names = [""]
@@ -530,7 +549,7 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
                     raise ValueError("Only 1 or 3 channels are supported for images.")
                 stat_names = ["min", "max", "mean", "std"]
 
-                if statistic == "stats_and_image":
+                if statistic == "stats_and_image" or (is_patch_impact_stats and stats_part):
                     stat_index = channel_id // cfg["nb_channels"]
                     channel_index = channel_id % cfg["nb_channels"]
                     statname = channel_names[channel_index] + stat_names[stat_index]
@@ -546,8 +565,12 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
             else:
                 class_name = classes[channel_id]
                 statname = f"P_class_{class_name}"
+            if statistic == "patch_impact_and_image" or (is_patch_impact_stats and not stats_part):
+                rule_description = f"Impact_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]_on_class_{class_name}{ineq}{antecedent.value:.6f}"
+            else:
+                rule_description = f"{statname}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]{ineq}{antecedent.value:.6f}"
             axes[i+2].set_title(
-                f"{statname}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]{ineq}{antecedent.value:.6f}\n"
+                f"{rule_description}\n"
                 f"Covering size : {rule.coveringSizesWithNewAntecedent[i]}\n"
                 f"Gain of fidelity : {rule.increasedFidelity[i]:.6f}\n"
                 f"Change in accuracy : {rule.accuracyChanges[i]:.6f}"
@@ -799,7 +822,6 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
     global_rules = getRules(cfg["global_rules_file"])
     print(len(global_rules), "rules loaded.")
 
-
     # 2) Load attributes
     if args.statistic == "histogram":
         attributes = get_attribute_file(cfg["attributes_file"], cfg["nb_stats_attributes"])[0]
@@ -831,8 +853,8 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             rule.include_X = False
             for ant in rule.antecedents:
                 ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
-        elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter", "DCT_and_image", "LBP_and_image", "HOG_and_image", "HOG", "stats_and_image", "SHAP_and_image"]:
-                rule.include_X = False
+        else:
+            rule.include_X = False
         # Create folder for this rule
         rule_folder = os.path.join(cfg["rules_folder"], f"rule_{rule_id}_class_{cfg['classes'][rule.target_class]}")
         if os.path.exists(rule_folder):
@@ -878,7 +900,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     height_original = round(area_Height * scale_h)
                     width_original = round(area_Width * scale_w)
                     antecedent.attribute = f"Pixel_{height_original}x{width_original}x{channel}"
-        elif args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]:
+        elif args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "patch_impact_and_image", "patch_impact_and_stats"]:
             split_id = cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"] * cfg["nb_classes"]
             for antecedent in rule_to_print.antecedents:
                 if antecedent.attribute < split_id: # proba part
@@ -890,10 +912,33 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     end_w   = start_w + FILTER_SIZE[0][1] - 1
 
                     class_name = cfg["classes"][channel_id]
-                    antecedent.attribute = f"P_class_{class_name}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]"
-                else: # image part
-                    height, width, channel = np.unravel_index(antecedent.attribute - split_id, (cfg["size1D"], cfg["size1D"], cfg["nb_channels"]))
-                    antecedent.attribute = f"Pixel_{height}x{width}x{channel}"
+                    if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
+                        antecedent.attribute = f"Impact_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]_on_class_{class_name}"
+                    else:
+                        antecedent.attribute = f"P_class_{class_name}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]"
+                else: # image part or stats part (for patch_impact_and_stats)
+                    if args.statistic == "patch_impact_and_stats":
+                        area_Height, area_Width, channel_id = np.unravel_index(antecedent.attribute - split_id, (cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["patch_stats_size"]))
+
+                        start_h = area_Height * STRIDE[0][0]
+                        start_w = area_Width  * STRIDE[0][1]
+                        end_h   = start_h + FILTER_SIZE[0][0] - 1
+                        end_w   = start_w + FILTER_SIZE[0][1] - 1
+
+                        if cfg["nb_channels"] == 1:
+                            channel_names = [""]
+                        elif cfg["nb_channels"] == 3:
+                            channel_names = ["Red_", "Green_", "Blue_"]
+                        else:
+                            raise ValueError("Only 1 or 3 channels are supported for images.")
+                        stat_names = ["min", "max", "mean", "std"]
+                        stat_index = channel_id // cfg["nb_channels"]
+                        channel_index = channel_id % cfg["nb_channels"]
+                        statname = channel_names[channel_index] + stat_names[stat_index]
+                        antecedent.attribute = f"{statname}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]"
+                    else:
+                        height, width, channel = np.unravel_index(antecedent.attribute - split_id, (cfg["size1D"], cfg["size1D"], cfg["nb_channels"]))
+                        antecedent.attribute = f"Pixel_{height}x{width}x{channel}"
         elif args.statistic in ["LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image", "SHAP_and_image"]:
             split_id = cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"] * cfg["patch_stats_size"]
             for antecedent in rule_to_print.antecedents:
@@ -905,7 +950,35 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                     end_h   = start_h + FILTER_SIZE[0][0] - 1
                     end_w   = start_w + FILTER_SIZE[0][1] - 1
 
-                    antecedent.attribute = f"Descriptor_vector#{channel_id}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]"
+                    if args.statistic in ["HOG_and_image", "HOG"]:
+                        statname = f"HOG_Descriptor_vector#{channel_id}"
+                    elif args.statistic == "LBP_and_image":
+                        statname = f"LBP_Descriptor_vector#{channel_id}"
+                    elif args.statistic == "DCT_and_image":
+                        statname = f"DCT_Coefficient#{channel_id}"
+                    elif args.statistic in ["stats_and_image", "SHAP_and_image"]:
+                        if cfg["nb_channels"] == 1:
+                            channel_names = [""]
+                        elif cfg["nb_channels"] == 3:
+                            channel_names = ["Red_", "Green_", "Blue_"]
+                        else:
+                            raise ValueError("Only 1 or 3 channels are supported for images.")
+                        stat_names = ["min", "max", "mean", "std"]
+
+                        if args.statistic == "stats_and_image":
+                            stat_index = channel_id // cfg["nb_channels"]
+                            channel_index = channel_id % cfg["nb_channels"]
+                            statname = channel_names[channel_index] + stat_names[stat_index]
+                        else:
+                            stat_block = 4 * cfg["nb_channels"]
+                            class_id = channel_id // stat_block
+                            remainder = channel_id % stat_block
+                            stat_id = remainder // cfg["nb_channels"]
+                            channel = remainder % cfg["nb_channels"]
+                            statname = f"SHAP_{stat_names[stat_id]}_{channel_names[channel]}_{cfg['classes'][class_id]}"
+                    else:
+                        statname = f"Descriptor_vector#{channel_id}"
+                    antecedent.attribute = f"{statname}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]"
                 else: # image part
                     height, width, channel = np.unravel_index(antecedent.attribute - split_id, (cfg["size1D"], cfg["size1D"], cfg["nb_channels"]))
                     antecedent.attribute = f"Pixel_{height}x{width}x{channel}"
@@ -926,6 +999,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             if data_in_rules is None:
                 data_in_rules = X_train
             rule.covered_samples = getCoveredSamples(rule, data_in_rules)[1]
+
         for img_id in rule.covered_samples[0:10]:
             img = X_train[img_id]
             true_class = cfg['classes'][np.argmax(Y_train[img_id])]
@@ -942,10 +1016,10 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
                 highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
-            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image", "SHAP_and_image"]:
-                highlighted_image = highlight_area_probability_image(cfg, img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
+            else:
+                highlighted_image = highlight_area_probability_image(cfg, img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
 
             highlighted_image.savefig(f"{rule_folder}/sample_{img_id}.png")
             plt.close(highlighted_image)
@@ -1030,8 +1104,8 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
                 rule.include_X = False
                 for ant in rule.antecedents:
                     ant.attribute = attributes[ant.attribute] # Replace the attribute's index by its true name
-            elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "convDimlpFilter", "LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image", "SHAP_and_image"]:
-                    rule.include_X = False
+            else:
+                rule.include_X = False
 
             if args.statistic == "histogram":
                 if getattr(args, "train_with_patches", False):
@@ -1046,10 +1120,10 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
                 highlighted_image = highlight_area_histograms(CNNModel, img, true_class, FILTER_SIZE, rule, cfg["classes"], predictions, positions, nb_areas_per_filter)
             elif args.statistic == "activation_layer":
                 highlighted_image = highlight_area_activations_sum(cfg, CNNModel, intermediate_model, img, true_class, rule, FILTER_SIZE, STRIDE, cfg["classes"])
-            elif args.statistic in ["probability", "probability_and_image","probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image", "SHAP_and_image"]:
-                highlighted_image = highlight_area_probability_image(cfg, img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
             elif args.statistic == "convDimlpFilter":
                 highlighted_image = highlight_area_first_conv(img, true_class, rule, CNNModel, height_feature_map, width_feature_map, nb_channels_feature_map)
+            else:
+                highlighted_image = highlight_area_probability_image(cfg, img, true_class, rule, cfg["size1D"], cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], FILTER_SIZE, cfg["classes"], cfg["nb_channels"], args.statistic)
 
             highlighted_image.savefig(f"{rule_folder}/rule_{id_rule}.png")
             plt.close(highlighted_image)
