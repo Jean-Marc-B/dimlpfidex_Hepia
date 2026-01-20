@@ -39,8 +39,24 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
         test_descriptors_h1 = test_descriptors_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"],cfg["patch_stats_size"]) #(100,21,21,32)
         trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["patch_stats_size"], cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_descriptors_h1, Y_train, test_descriptors_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
 
+    elif args.statistic == "patch_impact_and_stats":
+        print("Loading patch impact stats and patch stats...")
+        train_patch_impact_and_stats = np.loadtxt(cfg["train_stats_file"]).astype('float32')
+        test_patch_impact_and_stats = np.loadtxt(cfg["test_stats_file"]).astype('float32')
+        print("Patch impact stats and patch stats loaded.")
 
-    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image"]:   # We create an image out of the probabilities(or stats) (for each class) of cropped areas of the original image
+        train_patch_impact_stats_h1, mu, sigma = compute_first_hidden_layer("train", train_patch_impact_and_stats, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"], activation_fct_stairobj="identity")
+        test_patch_impact_stats_h1 = compute_first_hidden_layer("test", test_patch_impact_and_stats, K_VAL, NB_QUANT_LEVELS, HIKNOT, mu=mu, sigma=sigma, activation_fct_stairobj="identity")
+        if args.test:
+            nbIt_current = 2
+        else:
+            nbIt_current = 80
+        nb_chanels_stats = cfg["nb_classes"] + cfg["patch_stats_size"]
+        train_patch_impact_stats_h1 = train_patch_impact_stats_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"],nb_chanels_stats) # Mnist : (100,22,22,14)
+        test_patch_impact_stats_h1 = test_patch_impact_stats_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"],nb_chanels_stats) # Mnist : (100,22,22,14)
+        trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], nb_chanels_stats, cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_patch_impact_stats_h1, Y_train, test_patch_impact_stats_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
+
+    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image", "patch_impact_and_image"]:   # We create an image out of the probabilities(or stats) (for each class) of cropped areas of the original image
         # Load probas of areas from file
         print("Loading patch stats...")
         train_patch_stats = np.loadtxt(cfg["train_stats_file"]).astype('float32')
@@ -93,7 +109,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
             # test_patch_stats_img_h1 = test_patch_stats_img_h1.reshape((nb_test_samples,)+cfg["output_size"])
             #print(train_patch_stats_img.shape)  # (nb_train_samples, 22, 22, 10)
             #print(test_patch_stats.shape)  # (nb_train_samples, 22, 22, 10)
-            if args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image"]:
+            if args.statistic in ["probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image", "patch_impact_and_image"]:
                 nb_chanels_stats = cfg["nb_classes"]
                 if args.statistic in ["LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image"]:
                     nb_chanels_stats = cfg["patch_stats_size"]
@@ -116,7 +132,7 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                 train_patch_stats_img_h1 = train_patch_stats_img_h1.reshape(nb_train_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
                 test_patch_stats_img_h1 = test_patch_stats_img_h1.reshape(nb_test_samples, cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"] + cfg["nb_channels"]) #(100, 26, 26, 13)
                 trainCNN(cfg["size_Height_proba_stat"], cfg["size_Width_proba_stat"], cfg["nb_classes"]+cfg["nb_channels"], cfg["nb_classes"], "big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], train_patch_stats_img_h1, Y_train, test_patch_stats_img_h1, Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
-            elif args.statistic in ["probability_and_image", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image"]: #Train with VGG for image and CNN for probas, stats or HOG
+            elif args.statistic in ["probability_and_image", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image", "patch_impact_and_image"]: #Train with VGG for image and CNN for probas, stats or HOG
                 trainCNN((cfg["size1D"], cfg["size_Height_proba_stat"]), (cfg["size1D"], cfg["size_Width_proba_stat"]), (cfg["nb_channels"], nb_chanels_stats), cfg["nb_classes"], "VGG_and_big", nbIt_current, cfg["batch_size_second_model"], cfg["second_model_file"], cfg["second_model_checkpoint_weights"], (train_img_part, train_proba_part), Y_train, (test_img_part, test_proba_part), Y_test, cfg["second_model_train_pred"], cfg["second_model_test_pred"], cfg["second_model_stats"])
             else:
                 # Probability_multi_nets create nb_classes networks and gather best probability among them. The images keep only the probabilities of areas for one class and add B&W image (or H and S of HSL)
