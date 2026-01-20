@@ -1,12 +1,14 @@
 # stats.py
 import shap
 import time
+import os
 import numpy as np
 import tensorflow as tf
 
 from utils.utils import (
     getHistogram,
     generate_filtered_images_and_predictions,
+    compute_impact_patches,
     output_data
 )
 from utils.config import *
@@ -97,7 +99,7 @@ def compute_activation_sums(cfg, nb_samples, data, size1D, nb_channels, CNNModel
 
 ###############################################################
 
-def compute_proba_images(cfg, nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride):
+def compute_proba_images(cfg, nb_samples, data, size1D, nb_channels, nb_classes, CNNModel, filter_size, stride, args, baseline_preds=None):
 
     # Number of patches produced by the sliding window
     nb_patches = sum(
@@ -111,8 +113,23 @@ def compute_proba_images(cfg, nb_samples, data, size1D, nb_channels, nb_classes,
     for sample_id in range(nb_samples):
         image = data[sample_id]
         image = image.reshape(size1D, size1D, nb_channels)
-        predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
-            cfg, CNNModel, image, filter_size, stride)
+        baseline = None
+        if baseline_preds is not None:
+            baseline = baseline_preds[sample_id]
+        if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
+            stats_batch_size = getattr(args, "stats_batch_size", 512)
+            predictions, positions, nb_areas_per_filter = compute_impact_patches(
+                cfg,
+                CNNModel,
+                image,
+                filter_size,
+                stride,
+                baseline_pred=baseline,
+                batch_size=stats_batch_size,
+            )
+        else:
+            predictions, positions, nb_areas_per_filter = generate_filtered_images_and_predictions(
+                cfg, CNNModel, image, filter_size, stride)
         # print(predictions.shape)  # (484, 10)
         predictions = predictions.reshape(output_size)
         # print(predictions.shape) # (4840,)
@@ -122,7 +139,7 @@ def compute_proba_images(cfg, nb_samples, data, size1D, nb_channels, nb_classes,
 
 ###############################################################
 
-def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
+def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args, stats_file = None):
     """
     Compute statistics :
       - histograms
@@ -130,7 +147,10 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
       - probabilities
     with respect to the value of args.statistic.
     """
-    start_time_stats_computation = time.time()
+
+    if not stats_file:
+        stats_file = [cfg["train_stats_file"], cfg["test_stats_file"]]
+
     nb_train_images = len(X_train)
     nb_test_images = len(X_test)
     train_data = X_train
@@ -161,8 +181,8 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
 
         train_histograms = train_histograms.reshape(nb_train_images, cfg["nb_stats_attributes"])
         test_histograms = test_histograms.reshape(nb_test_images, cfg["nb_stats_attributes"])
-        output_data(train_histograms, cfg["train_stats_file"])
-        output_data(test_histograms, cfg["test_stats_file"])
+        output_data(train_histograms, stats_file[0])
+        output_data(test_histograms, stats_file[1])
         print("Histograms saved.")
 
     elif args.statistic == "activation_layer":
@@ -188,11 +208,12 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
         test_sums = (test_sums - mean) / std
         print("\nTest sum of activation layer patches computed.\n")
 
-        output_data(train_sums, cfg["train_stats_file"])
-        output_data(test_sums, cfg["test_stats_file"])
+        output_data(train_sums, stats_file[0])
+        output_data(test_sums, stats_file[1])
         print("Sums saved.")
 
-    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one"]: # We create an image out of the probabilities (for each class) of cropped areas of the original image
+    elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "patch_impact_and_image", "patch_impact_and_stats"]: # We create an image out of the probabilities (for each class) of cropped areas of the original image
+        baseline_train = baseline_test = None
         if args.train_with_patches:
             print("\nGathering train probability of patches...")
             train_pred_data = train_pred # shape (nb_images_train*cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"], nb_classes)
@@ -204,26 +225,43 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args):
             nb_images_test = test_pred_data.shape[0] // (cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"])
             test_probas = test_pred_data.reshape(nb_images_test, -1) # shape (nb_images_test, cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*nb_classes)
         else:
-            print("\nComputing train probability images of patches...\n")
+            if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
+                # use stored full-image predictions as baselines if available
+                if os.path.exists(cfg["train_pred_file"]):
+                    baseline_train = np.loadtxt(cfg["train_pred_file"])
+                if os.path.exists(cfg["test_pred_file"]):
+                    baseline_test = np.loadtxt(cfg["test_pred_file"])
+            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+                print("\nComputing patch impacts on training set...\n")
+            else:
+                print("\nComputing train probability images of patches...\n")
             # Get sums for each train sample
             train_probas = compute_proba_images(cfg, nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
-                                                cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
+                                                cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE, args, baseline_train)
             # shape (nb_train_images(images), cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*nb_classes)
-            print("\nComputed train probability images of patches.")
+            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+                print("\nComputed patch impacts on training set.")
+            else:
+                print("\nComputed train probability images of patches.")
 
-            print("\nComputing test probability images of patches...\n")
+            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+                print("\nComputing patch impacts on testing set...\n")
+            else:
+                print("\nComputing test probability images of patches...\n")
             # Get sums for each train sample
             test_probas = compute_proba_images(cfg, nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
-                                            cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE)
-            print("\nComputed test probability images of patches.")
+                                            cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE, args, baseline_test)
+            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+                print("\nComputed patch impacts on testing set.")
+            else:
+                print("\nComputed test probability images of patches.")
 
-        output_data(train_probas, cfg["train_stats_file"])
-        output_data(test_probas, cfg["test_stats_file"])
-        print("Probability images saved.")
-
-    end_time_stats_computation = time.time()
-    full_time_stats_computation = end_time_stats_computation - start_time_stats_computation
-    print(f"\nStats computation time = {full_time_stats_computation:.2f} sec")
+        output_data(train_probas, stats_file[0])
+        output_data(test_probas, stats_file[1])
+        if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+            print("Patch impact images saved.")
+        else:
+            print("Probability images saved.")
 
 def compute_HOG(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples):
     """
@@ -346,8 +384,8 @@ def compute_LBP_center_bits(cfg, X_train, X_test, nb_original_train_samples, nb_
     R = int((min(H, W) - 1) // 2)
     if R < 1:
         raise ValueError(f"Patch too small for LBP (got H={H}, W={W} -> R={R}). Need min(H,W) >= 3.")
-    #P = int(8 * R)
-    P = 24
+    P = int(8 * R)
+    #P = 24
 
     # ---- 3) Central index (works for odd or even sizes)
     ci, cj = H // 2, W // 2  # floor(H/2), floor(W/2)
@@ -381,7 +419,7 @@ def compute_LBP_center_bits(cfg, X_train, X_test, nb_original_train_samples, nb_
     print(f"LBP(center) bits for testing  saved to {cfg['test_stats_file']} with shape {lbp_test.shape}")
 
 
-def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples):
+def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, nb_original_test_samples, stats_file = None):
     """
     Compute simple statistics (min, max, mean, std) for small patches in the training and testing datasets.
     This function computes basic statistics for each small patch in the training and testing datasets.
@@ -421,8 +459,10 @@ def compute_little_patch_stats(cfg, X_train, X_test, nb_original_train_samples, 
     test_stats = test_stats.reshape(nb_original_test_samples, -1)
 
     # Save features to files defined in cfg
-    np.savetxt(cfg["train_stats_file"], train_stats)
-    np.savetxt(cfg["test_stats_file"], test_stats)
+    if not stats_file:
+        stats_file = [cfg["train_stats_file"], cfg["test_stats_file"]]
+    np.savetxt(stats_file[0], train_stats)
+    np.savetxt(stats_file[1], test_stats)
 
     print(f"Simple statistics for training set saved to {cfg['train_stats_file']} with shape {train_stats.shape}")
     print(f"Simple statistics for testing set saved to {cfg['test_stats_file']} with shape {test_stats.shape}")
@@ -434,20 +474,45 @@ def compute_Shap(cfg, X_train, X_test, model, nb_original_train_samples, nb_orig
 
     Keeps the original DeepExplainer workflow (for CNNs) to avoid breaking previous behaviour.
     """
+    def unpack_data(data):
+        if isinstance(data, tuple) and len(data) == 2:
+            return data[0], data[1]
+        return data, None
+
+    train_patches, _ = unpack_data(X_train)
+    test_patches, _ = unpack_data(X_test)
 
     # Create a SHAP explainer with a random background subset (max 100 samples)
-    nb_background = min(X_train.shape[0], 100)
-    if nb_background < X_train.shape[0]:
-        background_idx = np.random.choice(X_train.shape[0], size=nb_background, replace=False)
-        background_data = X_train[background_idx].astype(np.float32)
+    nb_background = min(train_patches.shape[0], 100)
+    if nb_background < train_patches.shape[0]:
+        background_idx = np.random.choice(train_patches.shape[0], size=nb_background, replace=False)
+        background_data = train_patches[background_idx].astype(np.float32)
     else:
-        background_data = X_train.astype(np.float32)
+        background_data = train_patches.astype(np.float32)
     explainer = shap.DeepExplainer(model, background_data)
 
     def _stack_deep_shap_outputs(shap_values):
+        """
+        Normalize SHAP outputs to a 5D array (N, H, W, C, K).
+        Handles cases where DeepExplainer returns a singleton extra dimension.
+        """
         if isinstance(shap_values, list):
-            return np.stack(shap_values, axis=-1)  # (N, H, W, C, K)
-        return shap_values[..., np.newaxis]       # (N, H, W, C, 1) for binary
+            shap_patch = np.stack(shap_values, axis=-1)  # (N, H, W, C, K) or (N, H, W, C, 1, K)
+        else:
+            shap_patch = shap_values
+
+        shap_patch = np.asarray(shap_patch)
+
+        # Remove trailing singleton class dimension if present
+        if shap_patch.ndim == 6 and shap_patch.shape[-1] == 1:
+            shap_patch = np.squeeze(shap_patch, axis=-1)
+        # Remove penultimate singleton if stacking produced (N,H,W,C,1,K)
+        if shap_patch.ndim == 6 and shap_patch.shape[-2] == 1:
+            shap_patch = np.squeeze(shap_patch, axis=-2)
+
+        if shap_patch.ndim != 5:
+            raise ValueError(f"Unexpected SHAP shape {shap_patch.shape}, expected 5D (N,H,W,C,K).")
+        return shap_patch
 
     def patch_stats_from_shap(shap_values, nb_original_samples):
         """
@@ -464,7 +529,7 @@ def compute_Shap(cfg, X_train, X_test, model, nb_original_train_samples, nb_orig
             raise ValueError(f"Unexpected SHAP shape {shap_patch.shape}, expected 5D (N,H,W,C,K).")
 
         nb_classes_present = shap_patch.shape[-1]
-        class_indices = [1] if nb_classes_present == 2 else list(range(nb_classes_present))
+        class_indices = list(range(nb_classes_present))
 
         per_class_stats = []
         for cls_idx in class_indices:
@@ -479,11 +544,11 @@ def compute_Shap(cfg, X_train, X_test, model, nb_original_train_samples, nb_orig
         return patch_stats.reshape(nb_original_samples, -1)
 
     print("Computing SHAP values for training set (DeepExplainer)...")
-    shap_values_train = explainer.shap_values(X_train, check_additivity=False)
+    shap_values_train = explainer.shap_values(train_patches, check_additivity=False)
     shap_train_stats = patch_stats_from_shap(shap_values_train, nb_original_train_samples)
 
     print("Computing SHAP values for testing set (DeepExplainer)...")
-    shap_values_test = explainer.shap_values(X_test, check_additivity=False)
+    shap_values_test = explainer.shap_values(test_patches, check_additivity=False)
     shap_test_stats = patch_stats_from_shap(shap_values_test, nb_original_test_samples)
 
     # --- Save features to files defined in cfg ---

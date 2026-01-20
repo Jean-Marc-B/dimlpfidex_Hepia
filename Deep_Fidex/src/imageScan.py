@@ -29,7 +29,7 @@ if not os.environ.get(_MARK): # relaunch the script in a clean environment
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" # Change this to select the GPU to use, -1 to use CPU only
+os.environ["CUDA_VISIBLE_DEVICES"] = "1" # Change this to select the GPU to use, -1 to use CPU only
 
 import tensorflow as tf
 # from tensorflow.keras.mixed_precision import set_global_policy
@@ -174,9 +174,16 @@ if __name__ == "__main__":
         if args.train_with_patches or args.train:
             raise ValueError("There is no training for LBP, DCT, HOG and for stats, remove --train and set --train_with_patches to False.")
 
-    if (args.statistic in ["LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image"] or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
+    if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
+        if args.train_with_patches:
+            raise ValueError("There is no training with patches for patch impact statistic, set --train_with_patches to False.")
+
+
+    if (args.statistic in ["LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image", "patch_impact_and_stats"] or args.train_with_patches) and (args.train or args.stats or ((args.images is not None) and args.statistic == "histogram") or args.heatmap):
         print("Creating patches...")
         X_train_patches, Y_train_patches, train_positions, X_test_patches, Y_test_patches, test_positions, nb_areas = create_patches(X_train, Y_train, X_test, Y_test, FILTER_SIZE[0], STRIDE[0])
+
+
     # TRAINING
     if args.train:
         if args.train_with_patches:
@@ -212,9 +219,29 @@ if __name__ == "__main__":
     # STATISTICS
     if args.stats:
         start_time_stats = time.time()
-        if args.statistic in ["HOG_and_image", "HOG"]:
+        if args.statistic == "patch_impact_and_stats":
+            compute_stats(cfg, X_train, X_test, firstModel, intermediate_model, args, stats_file=[cfg["train_stats_file_1"], cfg["test_stats_file_1"]])
+            compute_little_patch_stats(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test), stats_file=[cfg["train_stats_file_2"], cfg["test_stats_file_2"]])
+            print("Patch impact stats and patch stats computed and saved.")
+            print("Concatenating patch impact stats and patch stats...")
+            train_patch_impact_stats = np.loadtxt(cfg["train_stats_file_1"]).astype('float32')
+            test_patch_impact_stats = np.loadtxt(cfg["test_stats_file_1"]).astype('float32')
+            train_patch_stats = np.loadtxt(cfg["train_stats_file_2"]).astype('float32')
+            test_patch_stats = np.loadtxt(cfg["test_stats_file_2"]).astype('float32')
+            # Concatenate patch impact stats and patch stats
+            # train_patch_impact_stats shape : (nb_train_data, nb_patches * nb_classes),
+
+            train_patch_impact_stats = np.concatenate((train_patch_impact_stats, train_patch_stats), axis=1)
+            test_patch_impact_stats = np.concatenate((test_patch_impact_stats, test_patch_stats), axis=1)
+            print("Concatenation done.")
+            # train_patch_impact_stats shape : (nb_test_data, nb_patches * (nb_classes + patch_stats_size)) ( = cfg["nb_stats_attributes"])
+            print("Saving concatenated stats...")
+            output_data(train_patch_impact_stats, cfg["train_stats_file"])
+            output_data(test_patch_impact_stats, cfg["test_stats_file"])
+            print("Concatenated stats saved.")
+        elif args.statistic in ["HOG_and_image", "HOG"]:
             compute_HOG(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
-        elif args.statistic == "stats_and_image":
+        elif args.statistic in ["stats_and_image"]:
             compute_little_patch_stats(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
         elif args.statistic in ["LBP_and_image"]:
             compute_LBP_center_bits(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test))
@@ -241,7 +268,7 @@ if __name__ == "__main__":
                     myFile.write(f"P_{i}>={j:.6g}\n")
 
     # Update stats file
-    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
+    if args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image", "patch_impact_and_image"]:   # We create an image out of the probabilities (for each class) of cropped areas of the original image
         cfg["train_stats_file"] = cfg["train_stats_file_with_image"]
         cfg["test_stats_file"] = cfg["test_stats_file_with_image"]
 
