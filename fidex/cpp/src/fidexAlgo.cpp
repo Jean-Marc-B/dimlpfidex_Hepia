@@ -104,7 +104,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
     std::unique_ptr<Hyperbox> bestHyperbox(new Hyperbox());                                // best hyperbox to choose for next step
     std::unique_ptr<Hyperbox> currentHyperbox(new Hyperbox());
     double mainSampleValue;
-    int attribut;
+    int attribute;
     int dimension;
     int indexBestHyp = -1;
     int bestDimension = -1;
@@ -122,8 +122,8 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
       }
 
       dimension = dimensions[d];
-      attribut = dimension % nbAttributes;
-      mainSampleValue = mainSampleValues[attribut];
+      attribute = dimension % nbAttributes;
+      mainSampleValue = mainSampleValues[attribute];
 
       // Test if we dropout this dimension
       if (hasdd && dis(_rnd) < dropoutDim) {
@@ -144,7 +144,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
 
         double hypValue = hyperspace->getHyperLocus()[dimension][k];
         bool mainSampleGreater = hypValue <= mainSampleValue;                                                                                     // Check if main sample value is on the right of the hyperplane
-        currentHyperbox->computeCoveredSamples(hyperspace->getHyperbox()->getCoveredSamples(), attribut, trainData, mainSampleGreater, hypValue); // Compute new cover samples
+        currentHyperbox->computeCoveredSamples(hyperspace->getHyperbox()->getCoveredSamples(), attribute, trainData, mainSampleGreater, hypValue); // Compute new cover samples
         currentHyperbox->computeFidelity(mainSamplePred, trainPreds);                                                                             // Compute fidelity
 
         // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover and, if allowNoFidChange is set to true, not if covering size is equal or greater than the rule covering size (we accept lower covering for a same fidelity)
