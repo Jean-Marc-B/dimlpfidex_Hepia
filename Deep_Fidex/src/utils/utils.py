@@ -1427,24 +1427,41 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
 
         probability_input = Input(shape=(height[1], width[1], nbChannels[1]))
         y = Resizing(2*height[1], 2*width[1])(probability_input)
+        cur_h = int(height[1])
+        cur_w = int(width[1])
+        cur_h *= 2
+        cur_w *= 2
 
         # Première couche de convolution
         y = Conv2D(64, (3, 3), activation=None, padding='same', strides=2, kernel_regularizer=l2(0.0005))(y)
+        cur_h = (cur_h + 1) // 2
+        cur_w = (cur_w + 1) // 2
         y = BatchNormalization()(y)
         y = tf.keras.layers.LeakyReLU(alpha=0.1)(y)
-        y = MaxPooling2D(pool_size=(2, 2), name='first_conv_end')(y)
+        if cur_h >= 2 and cur_w >= 2:
+            y = MaxPooling2D(pool_size=(2, 2), name='first_conv_end')(y)
+            cur_h = (cur_h - 2) // 2 + 1
+            cur_w = (cur_w - 2) // 2 + 1
+        else:
+            y = tf.keras.layers.Activation("linear", name='first_conv_end')(y)
 
         # Deuxième couche de convolution
         y = Conv2D(128, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005))(y)
         y = BatchNormalization()(y)
         y = tf.keras.layers.LeakyReLU(alpha=0.1)(y)
-        y = MaxPooling2D(pool_size=(2, 2))(y)
+        if cur_h >= 2 and cur_w >= 2:
+            y = MaxPooling2D(pool_size=(2, 2))(y)
+            cur_h = (cur_h - 2) // 2 + 1
+            cur_w = (cur_w - 2) // 2 + 1
 
         # Troisième couche de convolution
         y = Conv2D(256, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005))(y)
         y = BatchNormalization()(y)
         y = tf.keras.layers.LeakyReLU(alpha=0.1)(y)
-        y = MaxPooling2D(pool_size=(2, 2))(y)
+        if cur_h >= 2 and cur_w >= 2:
+            y = MaxPooling2D(pool_size=(2, 2))(y)
+            cur_h = (cur_h - 2) // 2 + 1
+            cur_w = (cur_w - 2) // 2 + 1
 
         # Passage à une couche dense
         y = Flatten()(y)
@@ -1698,27 +1715,44 @@ def trainCNN(height, width, nbChannels, nb_classes, model, nbIt, batch_size, mod
     elif model == "big":
         model = Sequential()
         model.add(Input(shape=(height, width, nbChannels)))
+        cur_h = int(height)
+        cur_w = int(width)
 
         if not remove_first_conv:
             model.add(Resizing(2*height, 2*width))
+            cur_h *= 2
+            cur_w *= 2
 
             # Première couche de convolution
             model.add(Conv2D(64, (3, 3), activation=None, padding='same', strides=2, kernel_regularizer=l2(0.0005)))
+            cur_h = (cur_h + 1) // 2
+            cur_w = (cur_w + 1) // 2
             model.add(BatchNormalization())
             model.add(tf.keras.layers.LeakyReLU(alpha=0.1))
-            model.add(MaxPooling2D(pool_size=(2, 2), name='first_conv_end'))
+            if cur_h >= 2 and cur_w >= 2:
+                model.add(MaxPooling2D(pool_size=(2, 2), name='first_conv_end'))
+                cur_h = (cur_h - 2) // 2 + 1
+                cur_w = (cur_w - 2) // 2 + 1
+            else:
+                model.add(tf.keras.layers.Activation("linear", name='first_conv_end'))
 
         # Deuxième couche de convolution
         model.add(Conv2D(128, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005)))
         model.add(BatchNormalization())
         model.add(tf.keras.layers.LeakyReLU(alpha=0.1))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        if cur_h >= 2 and cur_w >= 2:
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+            cur_h = (cur_h - 2) // 2 + 1
+            cur_w = (cur_w - 2) // 2 + 1
 
         # Troisième couche de convolution
         model.add(Conv2D(256, (3, 3), activation=None, padding='same', kernel_regularizer=l2(0.0005)))
         model.add(BatchNormalization())
         model.add(tf.keras.layers.LeakyReLU(alpha=0.1))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        if cur_h >= 2 and cur_w >= 2:
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+            cur_h = (cur_h - 2) // 2 + 1
+            cur_w = (cur_w - 2) // 2 + 1
 
         # Passage à une couche dense
         model.add(Flatten())
