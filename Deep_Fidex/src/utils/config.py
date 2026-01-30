@@ -16,7 +16,7 @@ AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "VGG_and_big", "resnet", "vit_ti
 
 # Filters
 FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
-STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
+STRIDE = [[2, 2]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
 NB_BINS = 9  # Number of bins wanted for probabilities (ex: NProb>=0.1, NProb>=0.2, etc.)
@@ -125,10 +125,10 @@ def load_config(args, script_dir):
         elif config["model"] != "RF":
             raise ValueError("Wrong model given, give one of VGG, VGG_metadatas, VGG_and_big, resnet, vit_timm, small, big, MLP, MLP_Patch, RF")
 
-    if args.statistic == "patch_impact_and_image" or "patch_impact_and_stats":
-        config["model"] = "vit_timm"
-        if not args.test:
-            config["nbIt"] = 200
+    # if args.statistic == "patch_impact_and_image" or "patch_impact_and_stats":
+    #     config["model"] = "vit_timm"
+    #     if not args.test:
+    #         config["nbIt"] = 200
 
     if config["model"] == "RF" and args.statistic == "activation_layer":
         raise ValueError("activation_layer can't use a Random Forest to train.")

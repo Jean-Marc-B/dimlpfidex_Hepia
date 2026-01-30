@@ -117,7 +117,7 @@ def compute_proba_images(cfg, nb_samples, data, size1D, nb_channels, nb_classes,
         if baseline_preds is not None:
             baseline = baseline_preds[sample_id]
         if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
-            stats_batch_size = getattr(args, "stats_batch_size", 512)
+            stats_batch_size = getattr(args, "stats_batch_size", 128)
             predictions, positions, nb_areas_per_filter = compute_impact_patches(
                 cfg,
                 CNNModel,
@@ -231,7 +231,7 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args, stat
                     baseline_train = np.loadtxt(cfg["train_pred_file"])
                 if os.path.exists(cfg["test_pred_file"]):
                     baseline_test = np.loadtxt(cfg["test_pred_file"])
-            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+            if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
                 print("\nComputing patch impacts on training set...\n")
             else:
                 print("\nComputing train probability images of patches...\n")
@@ -239,26 +239,26 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args, stat
             train_probas = compute_proba_images(cfg, nb_train_images, X_train, cfg["size1D"], cfg["nb_channels"],
                                                 cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE, args, baseline_train)
             # shape (nb_train_images(images), cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]*nb_classes)
-            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+            if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
                 print("\nComputed patch impacts on training set.")
             else:
                 print("\nComputed train probability images of patches.")
 
-            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+            if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
                 print("\nComputing patch impacts on testing set...\n")
             else:
                 print("\nComputing test probability images of patches...\n")
             # Get sums for each train sample
             test_probas = compute_proba_images(cfg, nb_test_images, X_test, cfg["size1D"], cfg["nb_channels"],
                                             cfg["nb_classes"], CNNModel, FILTER_SIZE, STRIDE, args, baseline_test)
-            if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+            if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
                 print("\nComputed patch impacts on testing set.")
             else:
                 print("\nComputed test probability images of patches.")
 
         output_data(train_probas, stats_file[0])
         output_data(test_probas, stats_file[1])
-        if args.statistic == ["patch_impact_and_image", "patch_impact_and_stats"]:
+        if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
             print("Patch impact images saved.")
         else:
             print("Probability images saved.")
