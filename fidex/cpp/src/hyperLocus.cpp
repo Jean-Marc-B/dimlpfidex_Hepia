@@ -6,7 +6,7 @@
  * This function calculates the positions of the hyperplanes using the number of quantization levels,
  * the size of the interval, the bias and the weights, and then stores these positions in the hyperlocus matrix.
  *
- * @param dataset Dataset object. 
+ * @param dataset Dataset object.
  * @param nbQuantLevels Number of quantization levels.
  * @param hiKnot Upper bound of the interval.
  * @return Matrix representing the hyperlocus.
@@ -33,7 +33,7 @@ std::vector<std::vector<double>> calcHypLocus(DataSetFid &dataset, int nbQuantLe
       for (int j = 0; j < nbKnots; j++) {
         double knot = lowKnot + binWidth * j;
         double barrier = (knot - bias[i]) / weights[i];
-        hyperlocus[i][j]=barrier; // Placement of the hyperplan
+        hyperlocus[i][j] = barrier; // Placement of the hyperplan
       }
     }
   }
@@ -130,11 +130,11 @@ int sizeOf2DVector(std::vector<std::vector<T>> vec) {
  */
 void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds) {
   std::vector<std::vector<double>> datas = ds.getDatas();
-  
+
   if (sizeOf2DVector(datas) < 1) {
     throw InternalError("Connot optimize Hyperlocus. The given dataset does not contain any sample.");
   }
-  
+
   int nbNets = ds.getNbNets();
   int hyperlocusSize = originalHypLocus.size();
   int nbSamples = ds.getDatas().size();
