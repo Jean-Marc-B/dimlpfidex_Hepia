@@ -84,6 +84,45 @@ bool searchBarriers(double data, std::vector<double> &barriers, std::vector<int>
   return false;
 }
 
+std::vector<int> reviveBarriersScore(std::vector<int> &scores) {
+  // revive strategy, aims to revive barriers in the middle of 2 barriers separated by a consequent gap of dead barriers
+  int gap = 0;
+  int lower_barrier_id = 0;
+  bool allow_count = false;
+
+  std::cout << "Before reviving process:\n";
+  for (int score : scores) {
+    std::cout << score << ",";
+  }
+  std::cout << "\n";
+
+  for (int i = 1; i < scores.size(); i++) {
+    if (!allow_count && scores[i - 1] > 0 && scores[i] == 0) {
+      allow_count = true;
+      lower_barrier_id = i - 1;
+      gap = 1;
+
+    } else if (allow_count && scores[i] > 0 && gap > 0) {
+      // revive barrier if possible with gap value
+      allow_count = false;
+      scores[i - gap / 2 + 1] = scores[lower_barrier_id] + scores[i];
+      scores[lower_barrier_id] = 0;
+      scores[i] = 0;
+
+    } else if (allow_count) {
+      gap++;
+    }
+  }
+
+  std::cout << "After reviving process:\n";
+  for (int score : scores) {
+    std::cout << score << ",";
+  }
+  std::cout << "\n\n";
+
+  return scores;
+}
+
 /**
  * @brief Creates a new vector of barriers from another one that is filtered depending on how many datas each barrier bounds.
  *
@@ -99,7 +138,7 @@ std::vector<double> filterBarriers(std::vector<double> &barriers, std::vector<in
       filteredBarriers.push_back(barriers[i]);
     }
   }
-
+  // TODO: would be great to assert that scores are equal to nb samples
   return filteredBarriers;
 }
 
@@ -151,6 +190,7 @@ void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSe
       searchBarriers(currentData, currentBarriers, currentBarriersScores);
     }
 
+    // currentBarriersScores = reviveBarriersScore(currentBarriersScores); // TODO: test further to assert it is useful
     originalHypLocus[hlId] = filterBarriers(currentBarriers, currentBarriersScores);
   }
 
