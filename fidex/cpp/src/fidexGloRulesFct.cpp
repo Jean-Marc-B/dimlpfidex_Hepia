@@ -65,6 +65,7 @@ void showRulesParams() {
   printOptionDescription("--no_simplification <bool>", "If set, the generated rules will not go through the simplification process. Keeping every duplicated rule.");
   printOptionDescription("--verbose <int [0,3]>", "Sets the verbosity. 0 for no particular verbosity, 1 for the estimation time, 2 for the percentage update and 3 for threads information (default: 0)");
   printOptionDescription("--hyperplan_opti <bool>", "If set, will filter generated hyperplans in order to remove any useless hyperplans. The selection is based on whether they enclose inputed data or not. (default: true)");
+  printOptionDescription("--revive_barriers <bool>", "(experimental) If set, will go through all filtered barriers and try to 'revive' previously filtered barriers if they are in the middle of 2 enclosing alive barriers. This can improve antecedants meaningness (default: false)");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -750,6 +751,7 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultBool(NO_SIMPLIFICATION, false);
   p.setDefaultBool(HYPERPLAN_OPTI, true);
   p.setDefaultInt(VERBOSE, 0);
+  p.setDefaultBool(REVIVE_BARRIERS, false);
 
   if (p.getInt(END_INDEX) != -1 && p.getInt(START_INDEX) > p.getInt(END_INDEX)) {
     throw CommandArgumentException("start_index cannot be greater than end_index.");
@@ -889,7 +891,7 @@ int fidexGloRules(const std::string &command) {
                                               MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                               DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
                                               NB_THREADS, COVERING_STRATEGY, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX,
-                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE, HYPERPLAN_OPTI};
+                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -1016,7 +1018,7 @@ int fidexGloRules(const std::string &command) {
     }
 
     if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
-      optimizeHypLocus(matHypLocus, *trainDatas);
+      optimizeHypLocus(matHypLocus, *trainDatas, params->getBool(REVIVE_BARRIERS));
     }
 
     // Number of neurons in the first hidden layer (May be the number of input variables or a multiple)
