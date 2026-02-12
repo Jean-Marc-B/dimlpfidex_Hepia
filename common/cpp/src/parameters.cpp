@@ -417,6 +417,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setBool(HYPERPLAN_OPTI, arg);
     break;
 
+  case REVIVE_BARRIERS:
+    setBool(REVIVE_BARRIERS, arg);
+    break;
+
   default: // If we put another -X option
     throw CommandArgumentException("Illegal option : " + param);
   }

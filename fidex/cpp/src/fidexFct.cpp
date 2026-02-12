@@ -59,6 +59,7 @@ void showFidexParams() {
   printOptionDescription("--normalization_indices <list<int [0,nb_attributes-1]>>", "Attribute indices to be denormalized in the rules, only used when no normalization_file is given, index starts at 0 (default: [0,...,nb_attributes-1])");
   printOptionDescription("--seed <int [0,inf[>", "Seed for random number generation, 0=random. Anything else than 0 is an arbitrary seed that can be reused to obtain the same randomly generated sequence and therefore getting same results (default: 0)");
   printOptionDescription("--hyperplan_opti <bool>", "If set, will filter generated hyperplans in order to remove any useless hyperplans. The selection is based on whether they enclose inputed data or not. (default: true)");
+  printOptionDescription("--revive_barriers <bool>", "(experimental) If set, will go through all filtered barriers and try to 'revive' previously filtered barriers if they are in the middle of 2 enclosing alive barriers. This can improve antecedants meaningness (default: false)");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -82,6 +83,7 @@ void checkFidexParametersLogicValues(Parameters &p) {
   p.setDefaultDecisionThreshold();
   p.setDefaultFidex();
   p.setDefaultBool(HYPERPLAN_OPTI, true);
+  p.setDefaultBool(REVIVE_BARRIERS, false);
 
   // this sections check if values comply with program logic
 
@@ -214,7 +216,7 @@ int fidex(const std::string &command) {
                                               STATS_FILE, CONSOLE_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
                                               MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, HI_KNOT, DROPOUT_DIM, DROPOUT_HYP,
                                               NB_QUANT_LEVELS, DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS,
-                                              SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI};
+                                              SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -398,7 +400,7 @@ int fidex(const std::string &command) {
     }
 
     if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
-      optimizeHypLocus(matHypLocus, *trainDatas);
+      optimizeHypLocus(matHypLocus, *trainDatas, params->getBool(REVIVE_BARRIERS));
     }
 
     Hyperspace hyperspace(matHypLocus); // Initialize hyperbox and get hyperplans

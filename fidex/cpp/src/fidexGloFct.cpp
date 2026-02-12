@@ -73,6 +73,7 @@ void showFidexGloParams() {
   printOptionDescription("--normalization_indices <list<int [0,nb_attributes-1]>>", "Attribute indices to be denormalized in the rules, only used when no normalization_file is given, index starts at 0 (default: [0,...,nb_attributes-1])");
   printOptionDescription("--seed <int [0,inf[>", "Seed for random number generation, 0=random. Anything else than 0 is an arbitrary seed that can be reused to obtain the same randomly generated sequence and therefore getting same results (default: 0)");
   printOptionDescription("--hyperplan_opti <bool>", "If set, will filter generated hyperplans in order to remove any useless hyperplans. The selection is based on whether they enclose inputed data or not. (default: true)");
+  printOptionDescription("--revive_barriers <bool>", "(experimental) If set, will go through all filtered barriers and try to 'revive' previously filtered barriers if they are in the middle of 2 enclosing alive barriers. This can improve antecedants meaningness (default: false)");
 
   std::cout << std::endl
             << "----------------------------" << std::endl
@@ -149,6 +150,7 @@ void checkParametersLogicValues(Parameters &p) {
   p.setDefaultBool(WITH_FIDEX, false);
   p.setDefaultBool(WITH_MINIMAL_VERSION, false);
   p.setDefaultBool(HYPERPLAN_OPTI, true);
+  p.setDefaultBool(REVIVE_BARRIERS, false);
 
   // this sections check if values comply with program logic
 
@@ -292,7 +294,7 @@ int fidexGlo(const std::string &command) {
                                               WITH_FIDEX, WITH_MINIMAL_VERSION, TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, WEIGHTS_FILE,
                                               RULES_FILE, TEST_CLASS_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
                                               MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, NB_FIDEX_RULES, LOWEST_MIN_FIDELITY, DROPOUT_DIM, DROPOUT_HYP, NB_QUANT_LEVELS,
-                                              NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI};
+                                              NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -460,7 +462,7 @@ int fidexGlo(const std::string &command) {
       }
 
       if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
-        optimizeHypLocus(matHypLocus, *trainDatas);
+        optimizeHypLocus(matHypLocus, *trainDatas, params->getBool(REVIVE_BARRIERS));
       }
 
       // Number of neurons in the first hidden layer (May be the number of input variables or a multiple)

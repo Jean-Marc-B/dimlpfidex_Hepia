@@ -31,7 +31,8 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &rulesFile, Data
  *
  * @param originalHypLocus the hyperlocus to be optimized.
  * @param datas dataset used to filter the barriers.
+ * @param enableRevive determines the use of the barrier reviving process.
  */
-void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds);
+void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds, bool enableRevive);
 
 #endif // HYPERLOCUSFCT_H
