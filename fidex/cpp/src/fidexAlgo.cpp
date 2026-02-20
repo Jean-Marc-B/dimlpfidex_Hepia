@@ -49,7 +49,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   std::vector<int> &trainTrueClass = _trainDataset->getClasses();
   std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();
   std::vector<std::vector<double>> &trainPredictionScores = _trainDataset->getPredictionScores();
-  auto nbInputs = static_cast<int>(hyperspace->getHyperLocus().size());
+  auto nbInputs = static_cast<int>(hyperspace->getHyperLocus().size()); // number of features
   int maxIterations = _parameters->getInt(MAX_ITERATIONS);
   double dropoutDim = _parameters->getFloat(DROPOUT_DIM);
   double dropoutHyp = _parameters->getFloat(DROPOUT_HYP);
@@ -57,6 +57,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   bool hasdd = dropoutDim > 0.001;
   bool hasdh = dropoutHyp > 0.001;
 
+  // For denormalization :
   std::vector<int> normalizationIndices;
   std::vector<double> mus;
   std::vector<double> sigmas;
@@ -82,7 +83,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
 
   // Compute initial covering
   std::vector<int> coveredSamples(trainData.size());   // Samples covered by the hyperbox
-  iota(begin(coveredSamples), end(coveredSamples), 0); // Vector from 0 to len(coveredSamples)-1
+  iota(begin(coveredSamples), end(coveredSamples), 0); // The vector goes from 0 to len(coveredSamples)-1
 
   // Store covering and compute initial fidelity
   hyperspace->getHyperbox()->setCoveredSamples(coveredSamples);
@@ -97,9 +98,9 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   }
 
   int nbIt = 0;
-  std::vector<int> dimensions(nbInputs);
+  std::vector<int> dimensions(nbInputs); // Vector of all features
 
-  while (hyperspace->getHyperbox()->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough
+  while (hyperspace->getHyperbox()->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough, we try to add a new discriminative hyperplane (antecedent in the rule)
     std::unique_ptr<Hyperbox> bestHyperbox(new Hyperbox());                                // best hyperbox to choose for next step
     std::unique_ptr<Hyperbox> currentHyperbox(new Hyperbox());
     double mainSampleValue;
@@ -128,7 +129,6 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
       if (hasdd && dis(_rnd) < dropoutDim) {
         continue; // Drop this dimension if below parameter ex: param=0.2 -> 20% are dropped
       }
-      bool maxHypBlocked = true; // We assure that we can't increase maxHyp index for the current best hyperbox
 
       size_t nbHyp = hyperspace->getHyperLocus()[dimension].size();
       if (nbHyp == 0) {
@@ -151,18 +151,8 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
           bestHyperbox->setFidelity(currentHyperbox->getFidelity()); // Update best hyperbox
           bestHyperbox->setCoveredSamples(currentHyperbox->getCoveredSamples());
           indexBestHyp = k;
-          minHyp = k; // New best
-          maxHyp = -1;
-          maxHypBlocked = false; // We can increase maxHyp if next is the same
           bestDimension = dimension;
-        } else if (currentHyperbox->getFidelity() == bestHyperbox->getFidelity() && currentHyperbox->getCoveredSamples().size() == bestHyperbox->getCoveredSamples().size()) {
-          if (!maxHypBlocked) {
-            maxHyp = k; // Index of last (for now) hyperplane which is equal to the best.
-          }
-        } else {
-          maxHypBlocked = true; // we can't increase maxHyp anymore for this best hyperplane
         }
-
         if (bestHyperbox->getFidelity() >= minFidelity) {
           break;
         }
@@ -171,9 +161,6 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
 
     // Modification of our hyperbox with the best at this iteration and modify discriminative hyperplanes
     if (indexBestHyp != -1 && bestDimension != -1) { // If we found any good dimension with good hyperplane (with enough covering)
-      if (maxHyp != -1) {
-        indexBestHyp = (maxHyp + minHyp) / 2;
-      }
       // The antecedent is not added if fidelity did not increase or, if allowNoFidChange is set to true, if fidelity is stable with lower covering (to avoid XOR problems and find a way through)
       if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity() || (allowNoFidChange && bestHyperbox->getFidelity() == hyperspace->getHyperbox()->getFidelity() && bestHyperbox->getCoveredSamples().size() < hyperspace->getHyperbox()->getCoveredSamples().size())) {
         // if (bestHyperbox->getFidelity() > hyperspace->getHyperbox()->getFidelity()) {
