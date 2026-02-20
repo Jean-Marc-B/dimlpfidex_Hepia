@@ -210,7 +210,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
       int mainSamplePred = trainPreds[idSample];
       cnt += 1;
 
-      ruleCreated = fidex.launchFidex(rule, mainSampleValues, mainSamplePred, -1);
+      ruleCreated = fidex.launchFidex(rule, mainSampleValues, mainSamplePred);
 
       if (!ruleCreated) {
         localNbRulesNotFound += 1;
@@ -695,7 +695,7 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
     std::vector<double> &mainSampleValues = trainData[idSample];
     int mainSamplePred = trainPreds[idSample];
 
-    ruleCreated = fidex.launchFidex(rule, mainSampleValues, mainSamplePred, -1);
+    ruleCreated = fidex.launchFidex(rule, mainSampleValues, mainSamplePred);
 
     if (!ruleCreated) {
       nbRulesNotFound += 1;

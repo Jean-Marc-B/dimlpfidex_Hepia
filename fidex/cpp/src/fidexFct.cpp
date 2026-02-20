@@ -452,7 +452,7 @@ int fidex(const std::string &command) {
 
       // Launch fidexAlgo
       fidex.setMainSamplePredValue(mainSamplePredValue);
-      fidex.launchFidex(rule, mainSampleValues, mainSamplePred, mainSampleClass, true);
+      fidex.launchFidex(rule, mainSampleValues, mainSamplePred, true);
 
       meanFidelity += rule.getFidelity();
       meanAccuracy += rule.getAccuracy();

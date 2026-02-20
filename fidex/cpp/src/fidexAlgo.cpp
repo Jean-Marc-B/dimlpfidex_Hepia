@@ -33,11 +33,10 @@ Fidex::Fidex(DataSetFid &trainDataset, Parameters &parameters, Hyperspace &hyper
  * @param mainSamplePred An integer representing the predicted class of the main sample.
  * @param minFidelity A double representing the minimum fidelity threshold for rule creation.
  * @param minNbCover An integer representing the minimum number of samples a rule must cover.
- * @param mainSampleClass An integer representing the class of the main sample. Default is -1.
  * @return True if a rule meeting the criteria is successfully computed.
  * @return False if no rule meeting the criteria can be computed.
  */
-bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover, int mainSampleClass) {
+bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover) {
 
   specs.nbIt = 0;
 
@@ -230,14 +229,13 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
  * @param mainSamplePred An integer representing the predicted class of the main sample.
  * @param minFidelity A float representing the minimum fidelity threshold for rule creation.
  * @param minNbCover An integer representing the minimum number of samples a rule must cover.
- * @param mainSampleClass An integer representing the class of the main sample.
  * @param verbose A boolean flag for detailed verbose output.
  * @param detailedVerbose A boolean flag for detailed verbose output. Default is false.
  * @param foundRule A boolean indicating whether a rule was found in a previous attempt. Default is false.
  * @return True if a rule meeting the criteria is successfully computed.
  * @return False if no rule meeting the criteria can be computed.
  */
-bool Fidex::tryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, int mainSampleClass, bool verbose, bool detailedVerbose, bool foundRule) {
+bool Fidex::tryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose, bool detailedVerbose, bool foundRule) {
   if (detailedVerbose && verbose) {
     if (foundRule) {
       std::cout << "A rule has been found. ";
@@ -247,7 +245,7 @@ bool Fidex::tryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, i
     std::cout << "Restarting fidex with a minimum covering of " << minNbCover << " and a minimum accepted fidelity of " << minFidelity << "." << std::endl;
   }
 
-  bool ruleCreated = compute(rule, mainSampleValues, mainSamplePred, minFidelity, minNbCover, mainSampleClass);
+  bool ruleCreated = compute(rule, mainSampleValues, mainSamplePred, minFidelity, minNbCover);
   if (verbose) {
     std::cout << "Final fidelity : " << rule.getFidelity() << std::endl;
   }
@@ -264,20 +262,19 @@ bool Fidex::tryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, i
  * @param mainSampleValues A vector of double values representing the main sample values.
  * @param mainSamplePred An integer representing the predicted class of the main sample.
  * @param minFidelity A float representing the minimum fidelity threshold for rule creation.
- * @param mainSampleClass An integer representing the class of the main sample.
  * @param left The starting point of the search range.
  * @param right The ending point of the search range.
  * @param verbose A boolean flag for detailed verbose output.
  * @return The best covering found that meets the minimum fidelity criteria. Returns -1 if no such covering is found.
  */
-int Fidex::dichotomicSearch(Rule &bestRule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int mainSampleClass, int left, int right, bool verbose) {
+int Fidex::dichotomicSearch(Rule &bestRule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int left, int right, bool verbose) {
   int bestCovering = -1;
   int currentMinNbCover = right + 1;
   bool foundRule = false;
   while (currentMinNbCover != ceil((right + left) / 2.0) && left <= right) {
     currentMinNbCover = static_cast<int>(ceil((right + left) / 2.0));
     Rule tempRule;
-    if (tryComputeFidex(tempRule, mainSampleValues, mainSamplePred, minFidelity, currentMinNbCover, mainSampleClass, verbose, true, foundRule)) {
+    if (tryComputeFidex(tempRule, mainSampleValues, mainSamplePred, minFidelity, currentMinNbCover, verbose, true, foundRule)) {
       bestCovering = currentMinNbCover;
       bestRule = tempRule;
       left = currentMinNbCover + 1;
@@ -298,12 +295,11 @@ int Fidex::dichotomicSearch(Rule &bestRule, std::vector<double> &mainSampleValue
  * @param mainSamplePred An integer representing the predicted class of the main sample.
  * @param minFidelity A reference to a float representing the current minimum fidelity threshold for rule creation. May be adjusted.
  * @param minNbCover An integer representing the minimum number of samples a rule must cover.
- * @param mainSampleClass An integer representing the class of the main sample.
  * @param verbose A boolean flag for detailed verbose output.
  * @return True if a rule meeting the criteria is successfully computed within the maximum number of attempts.
  * @return False if no rule meeting the criteria can be computed within the maximum number of attempts.
  */
-bool Fidex::retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, int mainSampleClass, bool verbose) {
+bool Fidex::retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose) {
   int counterFailed = 0; // Number of times we failed to find a rule with maximal fidexlity when minNbCover is 1
   int maxFailedAttempts = _parameters->getInt(MAX_FAILED_ATTEMPTS);
   bool allowNoFidChange = _parameters->getBool(ALLOW_NO_FID_CHANGE);
@@ -311,7 +307,7 @@ bool Fidex::retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues,
   bool ruleCreated = false;
   bool hasDropout = _parameters->getFloat(DROPOUT_DIM) > 0.001 || _parameters->getFloat(DROPOUT_HYP) > 0.001;
   do {
-    ruleCreated = tryComputeFidex(rule, mainSampleValues, mainSamplePred, minFidelity, minNbCover, mainSampleClass, verbose, true);
+    ruleCreated = tryComputeFidex(rule, mainSampleValues, mainSamplePred, minFidelity, minNbCover, verbose, true);
     if (!ruleCreated) {
       counterFailed += 1;
     }
@@ -350,12 +346,11 @@ bool Fidex::retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues,
  * @param rule Reference to the Rule object to be potentially updated by the computation.
  * @param mainSampleValues A vector of double values representing the main sample values.
  * @param mainSamplePred An integer representing the predicted class of the main sample.
- * @param mainSampleClass An integer representing the class of the main sample.
  * @param verbose A boolean flag for detailed verbose output. Default is false.
  * @return True if a rule meeting the criteria is successfully computed.
  * @return False if no rule meeting the criteria can be computed.
  */
-bool Fidex::launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, int mainSampleClass, bool verbose) {
+bool Fidex::launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, bool verbose) {
 
   int minNbCover = _parameters->getInt(MIN_COVERING);
   float minFidelity = _parameters->getFloat(MIN_FIDELITY);
@@ -367,7 +362,7 @@ bool Fidex::launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int m
   }
 
   // Try to find a rule
-  if (!tryComputeFidex(rule, mainSampleValues, mainSamplePred, minFidelity, minNbCover, mainSampleClass, verbose)) {
+  if (!tryComputeFidex(rule, mainSampleValues, mainSamplePred, minFidelity, minNbCover, verbose)) {
     // If no rule is found
 
     // With covering strategy
@@ -378,7 +373,7 @@ bool Fidex::launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int m
 
       // Dichotomic search to find a rule with best covering
       if (right > 0) {
-        bestCovering = dichotomicSearch(bestRule, mainSampleValues, mainSamplePred, minFidelity, mainSampleClass, 1, right, verbose);
+        bestCovering = dichotomicSearch(bestRule, mainSampleValues, mainSamplePred, minFidelity, 1, right, verbose);
       }
 
       // Coundn't find a rule with minimal fidelity 1, we search for a lower minimal fidelity
@@ -386,11 +381,11 @@ bool Fidex::launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int m
         float currentMinFidelity = minFidelity;
         while (!ruleCreated && currentMinFidelity > _parameters->getFloat(LOWEST_MIN_FIDELITY)) {
           currentMinFidelity -= 0.05f;
-          ruleCreated = tryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, mainSampleClass, verbose, true);
+          ruleCreated = tryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, verbose, true);
         }
         // Coundn't find a rule, we retry maxFailedAttempts times
         if (!ruleCreated) {
-          foundRule = retryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, mainSampleClass, verbose);
+          foundRule = retryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, verbose);
         }
 
       } else { // If we found a correct rule during dichotomic search
