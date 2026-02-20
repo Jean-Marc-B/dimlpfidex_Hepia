@@ -475,13 +475,13 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
     total_images = num_antecedents + 2  # Original, combined, and individual filters
 
     # We set a maximum number of columns per row for better visualization
-    max_columns = 2
+    max_columns = 4
     num_columns = min(max_columns, total_images)
     num_rows = (total_images + num_columns - 1) // num_columns  # Calculate the number of rows
 
     # Create the matplotlib figure with dynamic rows and columns
     fig, axes = plt.subplots(num_rows, num_columns, figsize=(5 * num_columns, 5 * num_rows), constrained_layout=True)
-    fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
+    #fig.suptitle("Original, Combined, and Individual Highlighted Areas for each rule antecedent", fontsize=16)
 
     # If axes is a single AxesSubplot, convert it to a list for consistent indexing
     if isinstance(axes, np.ndarray):
@@ -496,8 +496,7 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
     axes[0].axis('off')
     # Show combined image
     axes[1].imshow(combined_image.astype(np.uint8))
-    axes[1].set_title("Combined Filters", fontsize=20)
-    #axes[1].set_title("Combined Filters")
+    axes[1].set_title("Combined Antecedents", fontsize=20)
     axes[1].axis('off')
 
     # Show each antecedent image
@@ -566,15 +565,16 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
                 class_name = classes[channel_id]
                 statname = f"P_class_{class_name}"
             if statistic == "patch_impact_and_image" or (is_patch_impact_stats and not stats_part):
-                rule_description = f"Impact_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]_on_class_{class_name}{ineq}{antecedent.value:.6f}"
+                rule_description = f"Impact area [{start_h}-{end_h}]x[{start_w}-{end_w}]\nOn class {class_name}{ineq}{antecedent.value:.6f}"
             else:
                 rule_description = f"{statname}_area_[{start_h}-{end_h}]x[{start_w}-{end_w}]{ineq}{antecedent.value:.6f}"
             axes[i+2].set_title(
                 f"{rule_description}\n"
                 f"Covering size : {rule.coveringSizesWithNewAntecedent[i]}\n"
                 f"Gain of fidelity : {rule.increasedFidelity[i]:.6f}\n"
-                f"Change in accuracy : {rule.accuracyChanges[i]:.6f}"
+                f"Change in accuracy : {rule.accuracyChanges[i]:.6f}", fontsize=19
                 )
+
 
 
         else: # image part
@@ -585,10 +585,10 @@ def highlight_area_probability_image(cfg, image, true_class, rule, size1D, size_
                 width = round(area_Width * scale_w)
                 channel = antecedent.attribute % nb_channels
             axes[i+2].set_title(
-                f"Pixel_{height}x{width}x{channel}{ineq}{antecedent.value:.6f}\n"
+                f"Pixel {height}x{width}x{channel}{ineq}{antecedent.value:.6f}\n"
                 f"Covering size : {rule.coveringSizesWithNewAntecedent[i]}\n"
                 f"Gain of fidelity : {rule.increasedFidelity[i]:.6f}\n"
-                f"Change in accuracy : {rule.accuracyChanges[i]:.6f}"
+                f"Change in accuracy : {rule.accuracyChanges[i]:.6f}", fontsize=19
                 )
         axes[i+2].axis('off')
 
