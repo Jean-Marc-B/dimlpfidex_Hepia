@@ -16,7 +16,7 @@ AVAILABLE_CNN_MODELS = ["VGG", "VGG_metadatas", "VGG_and_big", "resnet", "vit_ti
 
 # Filters
 FILTER_SIZE = [[7, 7]]  # Filter size applied on the image
-STRIDE = [[2, 2]]  # Shift between each filter (need to specify one per filter size)
+STRIDE = [[1, 1]]  # Shift between each filter (need to specify one per filter size)
 if len(STRIDE) != len(FILTER_SIZE):
     raise ValueError("Error : There is not the same amout of strides and filter sizes.")
 NB_BINS = 9  # Number of bins wanted for probabilities (ex: NProb>=0.1, NProb>=0.2, etc.)
@@ -26,8 +26,8 @@ PROBABILITY_THRESHOLDS = getProbabilityThresholds(NB_BINS)
 HIKNOT = 5
 NB_QUANT_LEVELS = 100
 K_VAL = 1.0
-DROPOUT_HYP = 0.95
-DROPOUT_DIM = 0.95
+DROPOUT_HYP = 0.85
+DROPOUT_DIM = 0.85
 
 # ===============================
 # FONCTION TO INITIALIZE PARAMETERS WITH RESPECT TO THE ARGUMENTS
