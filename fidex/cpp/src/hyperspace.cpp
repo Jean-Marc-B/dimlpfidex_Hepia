@@ -93,19 +93,19 @@ Rule Hyperspace::ruleExtraction(std::vector<double> &mainSampleData, const int m
 /**
  * @brief Computes the confidence of the rule with respect to the main sample prediction and training output values of the covered samples.
  *
- * @param trainOutputValuesPredictions Output values of the training data predictions.
+ * @param trainPredictionScores Train data predictions scores.
  * @param rulePred Prediction of the rule.
  * @param mainSamplePredValueOnRulePred Output value of the main sample prediction (optional).
  * @return The confidence of the rule.
  */
-double Hyperspace::computeRuleConfidence(std::vector<std::vector<double>> &trainOutputValuesPredictions, const int rulePred, double mainSamplePredValueOnRulePred) const { // Mean output value of prediction of class chosen by the rule(which is the main sample prediction) for the covered samples
+double Hyperspace::computeRuleConfidence(std::vector<std::vector<double>> &trainPredictionScores, const int rulePred, double mainSamplePredValueOnRulePred) const { // Mean output value of prediction of class chosen by the rule(which is the main sample prediction) for the covered samples
 
   double total = 0; // Number of indexes predicted good
 
   std::vector<int> coveredSamples = hyperbox->getCoveredSamples();
   // Value of output prediction for class mainSamplePred(rule class)
   for (int idSample : coveredSamples) {
-    total += trainOutputValuesPredictions[idSample][rulePred]; // Value of output prediction for class rulePred(rule class)
+    total += trainPredictionScores[idSample][rulePred]; // Value of output prediction for class rulePred(rule class)
   }
 
   size_t nbCovered = coveredSamples.size();

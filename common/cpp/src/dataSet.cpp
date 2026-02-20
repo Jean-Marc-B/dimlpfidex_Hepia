@@ -169,10 +169,9 @@ DataSetFid::DataSetFid(const std::string &name, const std::string &weightFile) :
   setWeights(weightFile);
 }
 
-
 /**
  * @brief Allows to set weights from file
- * 
+ *
  * @param weightFile path of file
  */
 void DataSetFid::setWeights(const std::string &weightFile) {
@@ -494,7 +493,7 @@ void DataSetFid::setDataLine(const std::string &line, const std::string &dataFil
 void DataSetFid::setPredLine(const std::string &line, const std::string &predFile) {
 
   std::vector<double> valuesPred = parseFileLine(line, predFile);
-  outputValuesPredictions.push_back(valuesPred);
+  predictionScores.push_back(valuesPred);
 
   if (static_cast<int>(valuesPred.size()) != _nbClasses) {
     throw FileContentError("Error in dataset " + datasetName + " : in file " + predFile + ", the number of predictions is not equal to the number of classes (" + std::to_string(_nbClasses) + ") for each sample.");
@@ -704,9 +703,9 @@ std::vector<int> &DataSetFid::getPredictions() {
  *
  * @return The prediction output values of the samples.
  */
-std::vector<std::vector<double>> &DataSetFid::getOutputValuesPredictions() {
+std::vector<std::vector<double>> &DataSetFid::getPredictionScores() {
   if (hasPreds) {
-    return outputValuesPredictions;
+    return predictionScores;
   } else {
     throw CommandArgumentException("Error in dataset " + datasetName + " : prediction file not specified for this dataset.");
   }

@@ -306,14 +306,14 @@ int fidex(const std::string &command) {
     std::vector<int> mainSamplesPreds;
     std::vector<int> mainSamplesTrueClass;
     std::vector<std::vector<double>> mainSamplesValues;
-    std::vector<std::vector<double>> mainSamplesOutputValuesPredictions;
+    std::vector<std::vector<double>> mainSamplesPredictionScores;
     std::unique_ptr<DataSetFid> testDatas;
     bool hasTrueClasses;
     if (!params->isStringSet(TEST_PRED_FILE)) { // If we have only one test data file with data, pred and class
       testDatas.reset(new DataSetFid("testDatas from Fidex", mainSamplesDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
       mainSamplesValues = testDatas->getDatas();
       mainSamplesPreds = testDatas->getPredictions();
-      mainSamplesOutputValuesPredictions = testDatas->getOutputValuesPredictions();
+      mainSamplesPredictionScores = testDatas->getPredictionScores();
       hasTrueClasses = testDatas->getHasClasses();
       if (hasTrueClasses) {
         mainSamplesTrueClass = testDatas->getClasses();
@@ -328,7 +328,7 @@ int fidex(const std::string &command) {
       }
       mainSamplesValues = testDatas->getDatas();
       mainSamplesPreds = testDatas->getPredictions();
-      mainSamplesOutputValuesPredictions = testDatas->getOutputValuesPredictions();
+      mainSamplesPredictionScores = testDatas->getPredictionScores();
 
       // Classes :
       if (params->isStringSet(TEST_CLASS_FILE)) {
@@ -431,13 +431,7 @@ int fidex(const std::string &command) {
 
       std::vector<double> mainSampleValues = mainSamplesValues[currentSample];
       int mainSamplePred = mainSamplesPreds[currentSample];
-      double mainSamplePredValue = mainSamplesOutputValuesPredictions[currentSample][mainSamplePred];
-      int mainSampleClass;
-      if (hasTrueClasses) {
-        mainSampleClass = mainSamplesTrueClass[currentSample];
-      } else {
-        mainSampleClass = -1;
-      }
+      double mainSamplePredValue = mainSamplesPredictionScores[currentSample][mainSamplePred];
 
       lines.push_back("Rule for sample " + std::to_string(currentSample) + " :\n");
 

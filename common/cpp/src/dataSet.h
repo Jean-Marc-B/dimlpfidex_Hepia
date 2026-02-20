@@ -8,9 +8,9 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <vector>
-#include <limits>
 
 /**
  * @brief The DataSetFid class handles the loading, parsing, and storage of datasets including data, predictions, and classes.
@@ -18,16 +18,16 @@
 class DataSetFid {
 
 private:
-  std::string datasetName;                                  ///< Name of the dataset.
-  std::vector<std::vector<double>> datas;                   ///< Data samples.
-  std::vector<int> trueClasses;                             ///< True class labels for the data samples.
-  std::vector<int> predictions;                             ///< Predictions for the data samples.
-  std::vector<std::vector<double>> outputValuesPredictions; ///< Raw prediction values for the data samples.
-  std::vector<std::vector<std::vector<double>>> weights;    ///< Weights for the dataset.
-  bool hasDatas = false;                                    ///< Flag indicating if data is loaded.
-  bool hasPreds = false;                                    ///< Flag indicating if predictions are loaded.
-  bool hasClasses = false;                                  ///< Flag indicating if classes are loaded.
-  bool hasWeights = false;                                  ///< Flag indicating if weights are loaded.
+  std::string datasetName;                               ///< Name of the dataset.
+  std::vector<std::vector<double>> datas;                ///< Data samples.
+  std::vector<int> trueClasses;                          ///< True class labels for the data samples.
+  std::vector<int> predictions;                          ///< Predictions for the data samples.
+  std::vector<std::vector<double>> predictionScores;     ///< Raw prediction scores for the data samples.
+  std::vector<std::vector<std::vector<double>>> weights; ///< Weights for the dataset.
+  bool hasDatas = false;                                 ///< Flag indicating if data is loaded.
+  bool hasPreds = false;                                 ///< Flag indicating if predictions are loaded.
+  bool hasClasses = false;                               ///< Flag indicating if classes are loaded.
+  bool hasWeights = false;                               ///< Flag indicating if weights are loaded.
 
   std::string classFormat = ""; ///< Format of the class representation (one-hot, id, one-hot_combined, id_combined).
 
@@ -162,7 +162,7 @@ public:
   /**
    * @brief Return the prediction output values of the samples.
    */
-  std::vector<std::vector<double>> &getOutputValuesPredictions();
+  std::vector<std::vector<double>> &getPredictionScores();
 
   /**
    * @brief Return the number of classes in the dataset.

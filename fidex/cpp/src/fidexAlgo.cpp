@@ -48,7 +48,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   std::vector<int> &trainPreds = _trainDataset->getPredictions();
   std::vector<int> &trainTrueClass = _trainDataset->getClasses();
   std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();
-  std::vector<std::vector<double>> &trainOutputValuesPredictions = _trainDataset->getOutputValuesPredictions();
+  std::vector<std::vector<double>> &trainPredictionScores = _trainDataset->getPredictionScores();
   auto nbInputs = static_cast<int>(hyperspace->getHyperLocus().size());
   int maxIterations = _parameters->getInt(MAX_ITERATIONS);
   double dropoutDim = _parameters->getFloat(DROPOUT_DIM);
@@ -201,7 +201,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
   double ruleAccuracy = std::accumulate(accuracyChanges.begin(), accuracyChanges.end(), 0.0);
 
   double ruleConfidence;
-  ruleConfidence = hyperspace->computeRuleConfidence(trainOutputValuesPredictions, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples
+  ruleConfidence = hyperspace->computeRuleConfidence(trainPredictionScores, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples
 
   // Extract rules
   if (_parameters->isDoubleVectorSet(MUS)) {
