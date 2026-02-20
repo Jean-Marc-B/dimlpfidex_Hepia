@@ -317,7 +317,7 @@ int fidexGloStats(const std::string &command) {
     std::vector<int> &testPreds = testDatas->getPredictions();
     std::vector<int> &testTrueClasses = testDatas->getClasses();
 
-    std::vector<std::vector<double>> &testOutputValuesPredictions = testDatas->getOutputValuesPredictions();
+    std::vector<std::vector<double>> &testPredictionScores = testDatas->getPredictionScores();
     int nbTestData = testDatas->getNbSamples();
 
     // Get attributes
@@ -602,7 +602,7 @@ int fidexGloStats(const std::string &command) {
             for (int sampleId : coveredSamples) {
               int samplePred = testPreds[sampleId];
               int trueClass = testTrueClasses[sampleId];
-              double outputScore = testOutputValuesPredictions[sampleId][rulePred];
+              double outputScore = testPredictionScores[sampleId][rulePred];
 
               if (samplePred == rulePred)
                 fidelity += 1;
@@ -686,7 +686,7 @@ int fidexGloStats(const std::string &command) {
               for (int sampleId : coveredSamples) {
                 int samplePred = testPreds[sampleId];
                 int trueClass = testTrueClasses[sampleId];
-                double outputScore = testOutputValuesPredictions[sampleId][rulePred];
+                double outputScore = testPredictionScores[sampleId][rulePred];
 
                 if (samplePred == rulePred)
                   fidelity += 1;

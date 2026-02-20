@@ -51,7 +51,7 @@ public:
   /**
    * @brief Computes the confidence of the rule with respect to the main sample prediction and training output values of the covered samples.
    */
-  double computeRuleConfidence(std::vector<std::vector<double>> &trainOutputValuesPredictions, const int mainSamplePred, double mainSamplePredValue = -1.0) const;
+  double computeRuleConfidence(std::vector<std::vector<double>> &trainPredictionScores, const int mainSamplePred, double mainSamplePredValue = -1.0) const;
 };
 
 #endif // HYPERSPACEGLO_H

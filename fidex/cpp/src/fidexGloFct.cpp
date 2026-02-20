@@ -354,7 +354,7 @@ int fidexGlo(const std::string &command) {
     }
     std::vector<std::vector<double>> testSamplesValues = testDatas->getDatas();
     std::vector<int> testSamplesPreds = testDatas->getPredictions();
-    std::vector<std::vector<double>> testSamplesOutputValuesPredictions = testDatas->getOutputValuesPredictions();
+    std::vector<std::vector<double>> testSamplesPredictionScores = testDatas->getPredictionScores();
 
     int nbSamples = testDatas->getNbSamples();
 
@@ -559,8 +559,8 @@ int fidexGlo(const std::string &command) {
       } else {
         currentPred = std::to_string(currentPredId);
       }
-      lines.emplace_back("The model predicts class " + currentPred + " with probability " + std::to_string(testSamplesOutputValuesPredictions[currentSample][currentPredId]) + "\n");
-      std::cout << "The model predicts class " << currentPred << " with probability " << std::to_string(testSamplesOutputValuesPredictions[currentSample][currentPredId]) << std::endl
+      lines.emplace_back("The model predicts class " + currentPred + " with probability " + std::to_string(testSamplesPredictionScores[currentSample][currentPredId]) + "\n");
+      std::cout << "The model predicts class " << currentPred << " with probability " << std::to_string(testSamplesPredictionScores[currentSample][currentPredId]) << std::endl
                 << std::endl;
       // Find rules activated by this sample
       std::vector<int> activatedRules;
@@ -675,7 +675,7 @@ int fidexGlo(const std::string &command) {
         Hyperspace hyperspace(matHypLocus);
         std::vector<double> mainSampleValues = testSamplesValues[currentSample];
         int mainSamplePred = testSamplesPreds[currentSample];
-        double mainSamplePredValue = testSamplesOutputValuesPredictions[currentSample][mainSamplePred];
+        double mainSamplePredValue = testSamplesPredictionScores[currentSample][mainSamplePred];
         executeFidex(lines, currentRules, trainDataset, *params, hyperspace, mainSampleValues, mainSamplePred, mainSamplePredValue, attributeNames, classNames);
       }
       rulesPerSamples[currentSample] = currentRules;
