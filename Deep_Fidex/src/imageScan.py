@@ -24,12 +24,11 @@ if not os.environ.get(_MARK): # relaunch the script in a clean environment
         env.pop(v, None)
     env[_MARK] = "1"
     os.execve(sys.executable, [sys.executable] + sys.argv, env)
-
 # GPU arguments
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1" # Change this to select the GPU to use, -1 to use CPU only
+os.environ["CUDA_VISIBLE_DEVICES"] = "2" # Change this to select the GPU to use, -1 to use CPU only
 
 import tensorflow as tf
 # from tensorflow.keras.mixed_precision import set_global_policy
