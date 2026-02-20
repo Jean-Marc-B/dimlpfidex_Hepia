@@ -100,11 +100,10 @@ void showFidexGloParams() {
  * @param mainSampleValues Reference to a vector of double values representing the main sample's attributes.
  * @param mainSamplePred Integer representing the predicted class of the main sample.
  * @param mainSamplePredValue Double representing the prediction value for the main sample.
- * @param mainSampleClass Integer representing the true class of the main sample (or -1 if not available).
  * @param attributeNames Reference to a vector of strings containing the attribute names.
  * @param classNames Reference to a vector of strings containing the class names.
  */
-void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredValue, int mainSampleClass, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames) {
+void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredValue, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames) {
   int nbFidexRules = p.getInt(NB_FIDEX_RULES);
   if (nbFidexRules == 1) {
     std::cout << "\nWe launch Fidex." << std::endl;
@@ -123,7 +122,7 @@ void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRul
 
     // Launch fidexAlgo
     fidex.setMainSamplePredValue(mainSamplePredValue);
-    fidex.launchFidex(rule, mainSampleValues, mainSamplePred, mainSampleClass);
+    fidex.launchFidex(rule, mainSampleValues, mainSamplePred);
     rules.push_back(rule);
   }
   if (nbFidexRules == 1) {
@@ -677,13 +676,7 @@ int fidexGlo(const std::string &command) {
         std::vector<double> mainSampleValues = testSamplesValues[currentSample];
         int mainSamplePred = testSamplesPreds[currentSample];
         double mainSamplePredValue = testSamplesOutputValuesPredictions[currentSample][mainSamplePred];
-        int mainSampleClass;
-        if (hasTrueClasses) {
-          mainSampleClass = testSamplesClasses[currentSample];
-        } else {
-          mainSampleClass = -1;
-        }
-        executeFidex(lines, currentRules, trainDataset, *params, hyperspace, mainSampleValues, mainSamplePred, mainSamplePredValue, mainSampleClass, attributeNames, classNames);
+        executeFidex(lines, currentRules, trainDataset, *params, hyperspace, mainSampleValues, mainSamplePred, mainSamplePredValue, attributeNames, classNames);
       }
       rulesPerSamples[currentSample] = currentRules;
 
