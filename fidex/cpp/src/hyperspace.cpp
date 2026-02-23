@@ -15,7 +15,7 @@ Hyperspace::Hyperspace(const std::vector<std::vector<double>> &matHypLocus) : hy
  *
  * @return 2D vector of doubles representing all the possible hyperplanes.
  */
-std::vector<std::vector<double>> Hyperspace::getHyperLocus() const {
+const std::vector<std::vector<double>> &Hyperspace::getHyperLocus() const {
   return hyperLocus;
 }
 
@@ -40,7 +40,7 @@ std::shared_ptr<Hyperbox> Hyperspace::getHyperbox() const {
  * @param normalizationIndices Indices for the denormalization of the rule values (optional).
  * @return A Rule object representing the extracted rule.
  */
-Rule Hyperspace::ruleExtraction(std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus, const std::vector<double> &sigmas, const std::vector<int> &normalizationIndices) {
+Rule Hyperspace::ruleExtraction(const std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus, const std::vector<double> &sigmas, const std::vector<int> &normalizationIndices) {
 
   bool denormalizing = false;
   // Check if we need to denormalize
