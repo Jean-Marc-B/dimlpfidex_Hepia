@@ -41,12 +41,12 @@ public:
   /**
    * @brief Gets the matrix of possible hyperplanes in the hyperspace.
    */
-  std::vector<std::vector<double>> getHyperLocus() const;
+  const std::vector<std::vector<double>> &getHyperLocus() const;
 
   /**
    * @brief Extracts a rule from the hyperspace based on the main sample data and its prediction.
    */
-  Rule ruleExtraction(std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus = std::vector<double>(), const std::vector<double> &sigmas = std::vector<double>(), const std::vector<int> &normalizationIndices = std::vector<int>());
+  Rule ruleExtraction(const std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus = std::vector<double>(), const std::vector<double> &sigmas = std::vector<double>(), const std::vector<int> &normalizationIndices = std::vector<int>());
 
   /**
    * @brief Computes the confidence of the rule with respect to the main sample prediction and training output values of the covered samples.

@@ -50,23 +50,23 @@ private:
   /**
    * @brief Attempts to compute a rule with Fidex algorithm based on given parameters and updates the rule object if successful.
    */
-  bool tryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose, bool detailedVerbose = false, bool foundRule = false);
+  bool tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose, bool detailedVerbose = false, bool foundRule = false);
 
   /**
    * @brief Performs a dichotomic (binary) search to find a rule with the best covering that meets the minimum fidelity criteria.
    */
-  int dichotomicSearch(Rule &bestRule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int left, int right, bool verbose);
+  int dichotomicSearch(Rule &bestRule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int left, int right, bool verbose);
 
   /**
    * @brief Attempts to compute a rule multiple times up to a maximum number of failed attempts, adjusting fidelity if necessary.
    */
-  bool retryComputeFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose);
+  bool retryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose);
 
   /**
    * @brief Attepts to filter unnecessary attributes in a rule.
    *
    */
-  bool optimizeRule(std::vector<double> &mainSampleValues, int mainSamplePred);
+  bool optimizeRule(const std::vector<double> &mainSampleValues, int mainSamplePred);
 
 public:
   /**
@@ -83,7 +83,7 @@ public:
   /**
    * @brief Executes the Fidex algorithm to compute an explaining rule for the given sample based on the training samples and hyperlocus and directed by the given parameters.
    */
-  bool compute(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
+  bool compute(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
 
   // SETTERS
 
@@ -148,7 +148,7 @@ public:
   /**
    * @brief Launches the Fidex algorithm with specified parameters to attempt creating a rule for the given sample that meets given minimum covering and minimum fidelity criteria.
    */
-  bool launchFidex(Rule &rule, std::vector<double> &mainSampleValues, int mainSamplePred, bool verbose = false);
+  bool launchFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, bool verbose = false);
 };
 
 #endif // FIDEXALGO_H
