@@ -67,7 +67,7 @@ public:
   /**
    * @brief Computes the fidelity of the samples covered by the hyperbox with respect to the model's prediction.
    */
-  void computeFidelity(const int mainsamplePred, std::vector<int> &trainPreds);
+  void computeFidelity(const int mainsamplePred, const std::vector<int> &trainPreds);
 
   /**
    * @brief Gets the fidelity of the samples covered by the hyperbox.
@@ -118,7 +118,7 @@ public:
    * @brief remove an accuracy change stat based on its array position.
    */
   void removeAccuracyChange(int index);
-  
+
   /**
    * @brief Sets the accuracy changes list.
    */
@@ -164,7 +164,7 @@ public:
    */
   void addDiscriminativeHyperplan(int dimVal, int hypValIndex);
 
-  double computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass) const;
+  double computeRuleAccuracy(const int mainsamplePred, const std::vector<int> &trainTrueClass) const;
 
   Hyperbox deepCopy();
 };

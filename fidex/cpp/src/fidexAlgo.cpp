@@ -185,7 +185,7 @@ bool Fidex::compute(Rule &rule, std::vector<double> &mainSampleValues, int mainS
 
   // Compute rule accuracy and confidence
   std::vector<double> accuracyChanges = hyperspace->getHyperbox()->getAccuracyChanges();
-  double ruleAccuracy = std::accumulate(accuracyChanges.begin(), accuracyChanges.end(), 0.0);
+  double ruleAccuracy = hyperspace->getHyperbox()->computeRuleAccuracy(mainSamplePred, trainTrueClass);
 
   double ruleConfidence;
   ruleConfidence = hyperspace->computeRuleConfidence(trainPredictionScores, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples

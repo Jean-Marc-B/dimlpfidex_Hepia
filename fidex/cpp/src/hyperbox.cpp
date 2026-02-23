@@ -156,16 +156,19 @@ void Hyperbox::resetCoveringSizesWithNewAntecedent() {
  * @param mainsamplePred Prediction of the sample of interest.
  * @param trainPreds Vector of predictions of the training data.
  */
-void Hyperbox::computeFidelity(const int mainsamplePred, std::vector<int> &trainPreds) {
+void Hyperbox::computeFidelity(const int mainsamplePred, const std::vector<int> &trainPreds) {
+  if (coveredSamples.empty()) {
+    fidelity = 0.0; // Invalid fidelity when no samples are covered
+    return;
+  }
   int coveredTrueClass = 0;                       // Number of samples covered by the hyperbox and of same class as the example
-  size_t nbCovered = coveredSamples.size();       // Number of samples covered by the hyperbox
   for (int idSample : coveredSamples) {           // Loop on all covered samples
     if (mainsamplePred == trainPreds[idSample]) { // Check if sample is of right class (class predicted by dimlp network for our main sample)
       coveredTrueClass += 1;
     }
   }
 
-  fidelity = (double)coveredTrueClass / (double)nbCovered;
+  fidelity = static_cast<double>(coveredTrueClass) / static_cast<double>(coveredSamples.size());
 }
 
 /**
@@ -305,7 +308,6 @@ Hyperbox Hyperbox::deepCopy() {
   return copy;
 }
 
-
 /**
  * @brief Computes the accuracy of the rule with respect to the rule prediction and true classes of the covered samples.
  *
@@ -313,11 +315,13 @@ Hyperbox Hyperbox::deepCopy() {
  * @param trainTrueClass True classes of the training data.
  * @return The accuracy of the rule.
  */
-double Hyperbox::computeRuleAccuracy(const int mainsamplePred, std::vector<int> &trainTrueClass) const { // Percentage of correct rule predictions on samples covered by the rule
+double Hyperbox::computeRuleAccuracy(const int mainsamplePred, const std::vector<int> &trainTrueClass) const { // Percentage of correct rule predictions on samples covered by the rule
+
+  if (coveredSamples.empty()) { // Invalif accuracy when no samples are covered
+    return 0.0;
+  }
 
   int total = 0; // Number of indexes predicted good
-  int autretotal = 0;
-
   for (int idSample : coveredSamples) {
     if (mainsamplePred == trainTrueClass[idSample]) {
       total += 1;
