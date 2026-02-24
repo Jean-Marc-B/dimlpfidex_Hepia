@@ -132,7 +132,7 @@ public:
   /**
    * @brief Gets the covered samples of the hyperbox.
    */
-  std::vector<int> getCoveredSamples() const;
+  const std::vector<int> &getCoveredSamples() const;
 
   /**
    * @brief Gets the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.

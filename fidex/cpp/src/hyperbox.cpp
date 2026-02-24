@@ -98,7 +98,7 @@ void Hyperbox::computeCoveredSamples(const std::vector<int> &ancienCoveredSample
  *
  * @return Vector of integers representing the covered samples.
  */
-std::vector<int> Hyperbox::getCoveredSamples() const {
+const std::vector<int> &Hyperbox::getCoveredSamples() const {
   return coveredSamples;
 }
 

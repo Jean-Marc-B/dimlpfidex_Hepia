@@ -105,6 +105,8 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   while (hyperbox->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough, we try to add a new discriminative hyperplane (antecedent in the rule)
     Hyperbox bestCandidateHyperbox;                                       // best hyperbox to choose for next step
     Hyperbox candidateHyperbox;
+    const auto &ruleCoveredSamples = hyperbox->getCoveredSamples();
+    const size_t ruleCoverSize = ruleCoveredSamples.size();
     double mainSampleValue;
     int attribute;
     int dimension;
@@ -141,14 +143,17 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
         }
 
         double hypValue = hyperLocus[dimension][k];
-        bool mainSampleGreater = hypValue <= mainSampleValue;                                                                      // Check if main sample value is on the right of the hyperplane
-        candidateHyperbox.computeCoveredSamples(hyperbox->getCoveredSamples(), attribute, trainData, mainSampleGreater, hypValue); // Compute new cover samples
-        candidateHyperbox.computeFidelity(mainSamplePred, trainPreds);                                                             // Compute fidelity
+        bool mainSampleGreater = hypValue <= mainSampleValue;                                                           // Check if main sample value is on the right of the hyperplane
+        candidateHyperbox.computeCoveredSamples(ruleCoveredSamples, attribute, trainData, mainSampleGreater, hypValue); // Compute new cover samples
+        candidateHyperbox.computeFidelity(mainSamplePred, trainPreds);                                                  // Compute fidelity
+        const auto &candidateCoveredSamples = candidateHyperbox.getCoveredSamples();
+        const size_t candidateCoverSize = candidateCoveredSamples.size();
+        const size_t bestCandidateCoverSize = bestCandidateHyperbox.getCoveredSamples().size();
 
         // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover and, if allowNoFidChange is set to true, not if covering size is equal or greater than the rule covering size (we accept lower covering for a same fidelity)
-        if (candidateHyperbox.getCoveredSamples().size() >= minNbCover && (!allowNoFidChange || candidateHyperbox.getCoveredSamples().size() < hyperbox->getCoveredSamples().size()) && (candidateHyperbox.getFidelity() > bestCandidateHyperbox.getFidelity() || (candidateHyperbox.getFidelity() == bestCandidateHyperbox.getFidelity() && candidateHyperbox.getCoveredSamples().size() > bestCandidateHyperbox.getCoveredSamples().size()))) {
+        if (candidateCoverSize >= static_cast<size_t>(minNbCover) && (!allowNoFidChange || candidateCoverSize < ruleCoverSize) && (candidateHyperbox.getFidelity() > bestCandidateHyperbox.getFidelity() || (candidateHyperbox.getFidelity() == bestCandidateHyperbox.getFidelity() && candidateCoverSize > bestCandidateCoverSize))) {
           bestCandidateHyperbox.setFidelity(candidateHyperbox.getFidelity()); // Update best hyperbox
-          bestCandidateHyperbox.setCoveredSamples(candidateHyperbox.getCoveredSamples());
+          bestCandidateHyperbox.setCoveredSamples(candidateCoveredSamples);
           indexBestHyp = k;
           bestDimension = dimension;
         }
@@ -160,13 +165,15 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
 
     // Modification of our hyperbox with the best at this iteration and modify discriminative hyperplanes
     if (indexBestHyp != -1 && bestDimension != -1) { // If we found any good dimension with good hyperplane (with enough covering)
+      const auto &bestCandidateCoveredSamples = bestCandidateHyperbox.getCoveredSamples();
+      const size_t bestCandidateCoverSize = bestCandidateCoveredSamples.size();
       // The antecedent is not added if fidelity did not increase or, if allowNoFidChange is set to true, if fidelity is stable with lower covering (to avoid XOR problems and find a way through)
-      if (bestCandidateHyperbox.getFidelity() > hyperbox->getFidelity() || (allowNoFidChange && bestCandidateHyperbox.getFidelity() == hyperbox->getFidelity() && bestCandidateHyperbox.getCoveredSamples().size() < hyperbox->getCoveredSamples().size())) {
+      if (bestCandidateHyperbox.getFidelity() > hyperbox->getFidelity() || (allowNoFidChange && bestCandidateHyperbox.getFidelity() == hyperbox->getFidelity() && bestCandidateCoverSize < ruleCoverSize)) {
 
         hyperbox->setFidelity(bestCandidateHyperbox.getFidelity());
         hyperbox->addIncreasedFidelity(bestCandidateHyperbox.getFidelity());
-        hyperbox->setCoveredSamples(bestCandidateHyperbox.getCoveredSamples());
-        hyperbox->addCoveringSizesWithNewAntecedent(bestCandidateHyperbox.getCoveredSamples().size());
+        hyperbox->setCoveredSamples(bestCandidateCoveredSamples);
+        hyperbox->addCoveringSizesWithNewAntecedent(bestCandidateCoverSize);
         hyperbox->addDiscriminativeHyperplan(bestDimension, indexBestHyp);
 
         double ruleAccuracy;
