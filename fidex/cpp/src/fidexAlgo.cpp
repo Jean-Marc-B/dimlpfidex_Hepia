@@ -26,15 +26,16 @@ Fidex::Fidex(DataSetFid &trainDataset, Parameters &parameters, Hyperspace &hyper
  * Fidex builds a rule that meets the specified fidelity and covering criteria. It is driven by
  * a few other parameters, including dropout and the maximum number of iterations allowed.
  * It works by identifying hyperplanes in the feature space that discriminate between different classes of samples and constructing
- * a rule based on these hyperplanes. It updates the provided rule object with the computed rule. It returns True if successful.
+ * a rule based on these hyperplanes. It updates the provided rule object with the computed rule even if the rule doesn't meet the
+ * criteria (minimum covering and minimum fidelity). It returns True if we found a rule metting the criteria.
  *
  * @param rule Reference to the Rule object to be updated by the computation.
  * @param mainSampleValues A vector of double values representing the main sample values.
  * @param mainSamplePred An integer representing the predicted class of the main sample.
  * @param minFidelity A double representing the minimum fidelity threshold for rule creation.
  * @param minNbCover An integer representing the minimum number of samples a rule must cover.
- * @return True if a rule meeting the criteria is successfully computed.
- * @return False if no rule meeting the criteria can be computed.
+ * @return True if a rule meeting the criteria is found.
+ * @return False if no rule meeting the criteria is found.
  */
 bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover) {
 
@@ -51,7 +52,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   std::vector<std::vector<double>> &trainPredictionScores = _trainDataset->getPredictionScores();
   const auto &hyperLocus = hyperspace->getHyperLocus();
   auto hyperbox = hyperspace->getHyperbox();
-  auto nbInputs = static_cast<int>(hyperLocus.size()); // number of features
+  auto nbDimensions = static_cast<int>(hyperLocus.size()); // number of features
   int maxIterations = _parameters->getInt(MAX_ITERATIONS);
   double dropoutDim = _parameters->getFloat(DROPOUT_DIM);
   double dropoutHyp = _parameters->getFloat(DROPOUT_HYP);
@@ -100,7 +101,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   }
 
   int nbIt = 0;
-  std::vector<int> dimensions(nbInputs); // Vector of all features
+  std::vector<int> dimensions(nbDimensions); // Vector of all features
 
   while (hyperbox->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough, we try to add a new discriminative hyperplane (antecedent in the rule)
     Hyperbox bestCandidateHyperbox;                                       // best hyperbox to choose for next step
@@ -117,7 +118,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
     iota(begin(dimensions), end(dimensions), 0); // Vector from 0 to nbIn-1
     shuffle(begin(dimensions), end(dimensions), _rnd);
 
-    for (int d = 0; d < nbInputs; d++) { // Loop on all dimensions
+    for (int d = 0; d < nbDimensions; d++) { // Loop on all dimensions
       if (bestCandidateHyperbox.getFidelity() >= minFidelity) {
         break;
       }
@@ -150,8 +151,18 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
         const size_t candidateCoverSize = candidateCoveredSamples.size();
         const size_t bestCandidateCoverSize = bestCandidateHyperbox.getCoveredSamples().size();
 
-        // If the fidelity is better or is same with better covering but not if covering size is lower than minNbCover and, if allowNoFidChange is set to true, not if covering size is equal or greater than the rule covering size (we accept lower covering for a same fidelity)
-        if (candidateCoverSize >= static_cast<size_t>(minNbCover) && (!allowNoFidChange || candidateCoverSize < ruleCoverSize) && (candidateHyperbox.getFidelity() > bestCandidateHyperbox.getFidelity() || (candidateHyperbox.getFidelity() == bestCandidateHyperbox.getFidelity() && candidateCoverSize > bestCandidateCoverSize))) {
+        // Candidate selection for this iteration:
+        // 1) It must satisfy the minimum covering constraint
+        // 2) The covering size has to decrease (otherwise the antecedant is useless)
+        // 2) Among valid candidates, prefer higher fidelity; if fidelity is equal, prefer larger covering
+        const bool hasEnoughCover = candidateCoverSize >= static_cast<size_t>(minNbCover); // Candidate must satisfy the minimum covering constraint
+        // const bool respectsNoFidChangeCoverConstraint = !allowNoFidChange || candidateCoverSize < ruleCoverSize; // When allowNoFidChange is enabled, same-fidelity path is only valid with strictly lower covering than current rule
+        const bool reducesCurrentRuleCover = candidateCoverSize < ruleCoverSize;                                                                                        // Candidate must reduce the covering size compared to current rule (otherwise the new antecedent is useless and we would never progress)
+        const bool improvesBestCandidateFidelity = candidateHyperbox.getFidelity() > bestCandidateHyperbox.getFidelity();                                               // Primary ranking criterion: higher fidelity is always better
+        const bool sameFidelityWithBetterCover = candidateHyperbox.getFidelity() == bestCandidateHyperbox.getFidelity() && candidateCoverSize > bestCandidateCoverSize; // Tie-breaker: with equal fidelity, prefer the candidate covering more samples
+        const bool isBetterCandidate = improvesBestCandidateFidelity || sameFidelityWithBetterCover;                                                                    // Combined ranking criterion used for this iteration
+
+        if (hasEnoughCover && reducesCurrentRuleCover && isBetterCandidate) {
           bestCandidateHyperbox.setFidelity(candidateHyperbox.getFidelity()); // Update best hyperbox
           bestCandidateHyperbox.setCoveredSamples(candidateCoveredSamples);
           indexBestHyp = k;
@@ -167,8 +178,13 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
     if (indexBestHyp != -1 && bestDimension != -1) { // If we found any good dimension with good hyperplane (with enough covering)
       const auto &bestCandidateCoveredSamples = bestCandidateHyperbox.getCoveredSamples();
       const size_t bestCandidateCoverSize = bestCandidateCoveredSamples.size();
-      // The antecedent is not added if fidelity did not increase or, if allowNoFidChange is set to true, if fidelity is stable with lower covering (to avoid XOR problems and find a way through)
-      if (bestCandidateHyperbox.getFidelity() > hyperbox->getFidelity() || (allowNoFidChange && bestCandidateHyperbox.getFidelity() == hyperbox->getFidelity() && bestCandidateCoverSize < ruleCoverSize)) {
+      // Candidate acceptance (after selection above):
+      // 1) accept if it improves the current rule fidelity
+      // 2) otherwise, accept only if same fidelity is explicitly allowed (XOR workaround / progression path)
+      const bool improvesCurrentRuleFidelity = bestCandidateHyperbox.getFidelity() > hyperbox->getFidelity();                 // Standard case: adding the antecedent strictly increases fidelity
+      const bool sameFidelityAndAllowed = allowNoFidChange && bestCandidateHyperbox.getFidelity() == hyperbox->getFidelity(); // Candidate keeps the same fidelity as the current rule and this is allowed by the parameter
+
+      if (improvesCurrentRuleFidelity || sameFidelityAndAllowed) {
 
         hyperbox->setFidelity(bestCandidateHyperbox.getFidelity());
         hyperbox->addIncreasedFidelity(bestCandidateHyperbox.getFidelity());
@@ -177,7 +193,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
         hyperbox->addDiscriminativeHyperplan(bestDimension, indexBestHyp);
 
         double ruleAccuracy;
-        ruleAccuracy = hyperbox->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of correct model prediction on samples covered by the rule
+        ruleAccuracy = hyperbox->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of covered samples whose true class matches the rule prediction
         hyperbox->addAccuracyChanges(ruleAccuracy);
       }
     }
@@ -189,11 +205,8 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
     ;
 
   // Compute rule accuracy and confidence
-  std::vector<double> accuracyChanges = hyperbox->getAccuracyChanges();
   double ruleAccuracy = hyperbox->computeRuleAccuracy(mainSamplePred, trainTrueClass);
-
-  double ruleConfidence;
-  ruleConfidence = hyperspace->computeRuleConfidence(trainPredictionScores, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples
+  double ruleConfidence = hyperspace->computeRuleConfidence(trainPredictionScores, mainSamplePred, mainSamplePredValue); // Mean output value of prediction of class chosen by the rule for the covered samples
 
   // Extract rules
   if (_parameters->isDoubleVectorSet(MUS)) {

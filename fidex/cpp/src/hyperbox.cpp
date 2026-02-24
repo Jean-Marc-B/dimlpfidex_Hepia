@@ -317,7 +317,7 @@ Hyperbox Hyperbox::deepCopy() {
  */
 double Hyperbox::computeRuleAccuracy(const int mainsamplePred, const std::vector<int> &trainTrueClass) const { // Percentage of correct rule predictions on samples covered by the rule
 
-  if (coveredSamples.empty()) { // Invalif accuracy when no samples are covered
+  if (coveredSamples.empty()) { // Invalid accuracy when no samples are covered
     return 0.0;
   }
 
