@@ -33,7 +33,7 @@ public:
    */
   struct currentExecutionSpecs {
     bool showInitialFidelity = false;  ///< Flag to indicate if the initial fidelity should be shown.
-    double mainSamplePredValue = -1.0; ///< The predicted value of the sample of interest.
+    double mainSamplePredScore = -1.0; ///< The prediction score of the sample of interest.
     int nbIt = 0;                      ///< The number of iterations of the algorithm.
   };
 
@@ -101,8 +101,8 @@ public:
    *
    * @param value Double value representing the predicted value.
    */
-  void setMainSamplePredValue(double value) {
-    specs.mainSamplePredValue = value;
+  void setMainSamplePredScore(double value) {
+    specs.mainSamplePredScore = value;
   }
 
   /**
@@ -130,8 +130,8 @@ public:
    *
    * @return Double value representing the predicted value.
    */
-  double getMainSamplePredValue() const {
-    return specs.mainSamplePredValue;
+  double getMainSamplePredScore() const {
+    return specs.mainSamplePredScore;
   }
 
   /**
