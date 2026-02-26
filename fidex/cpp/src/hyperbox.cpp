@@ -28,7 +28,7 @@ void Hyperbox::setCoveredSamples(const std::vector<int> &m_coveredSamples) {
  *
  * @return Vector of (attribute index, hyperplane value) pairs representing the discriminative hyperplanes.
  */
-std::vector<std::pair<int, int>> Hyperbox::getDiscriminativeHyperplans() const {
+const std::vector<std::pair<int, int>> &Hyperbox::getDiscriminativeHyperplans() const {
   return discriminativeHyperplans;
 }
 
@@ -69,7 +69,7 @@ void Hyperbox::resetDiscriminativeHyperplans() {
  * @param newDiscriminativeHyperplan Vector of (attribute index, hyperplane value) pairs representing discriminative hyperplanes to be set.
  */
 void Hyperbox::setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newDiscriminativeHyperplan) {
-  discriminativeHyperplans = newDiscriminativeHyperplan;
+  discriminativeHyperplans = std::move(newDiscriminativeHyperplan);
 }
 
 /**
@@ -81,16 +81,47 @@ void Hyperbox::setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newD
  * @param mainSampleGreater Boolean indicating if the sample of interest is greater than the hyperplane value.
  * @param hypValue Value of the hyperplane.
  */
-void Hyperbox::computeCoveredSamples(const std::vector<int> &ancienCoveredSamples, int attribut, std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue) {
+void Hyperbox::computeCoveredSamples(const std::vector<int> &ancienCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue) {
   std::vector<int> newCoveredSamples;
+  newCoveredSamples.reserve(ancienCoveredSamples.size());
   for (int idCoveredSample : ancienCoveredSamples) { // We check all already covered samples
-    double sampleValue = trainData[idCoveredSample][attribut];
-    bool sampleGreater = hypValue <= sampleValue;
+    bool sampleGreater = hypValue <= trainData[idCoveredSample][attribut];
     if (mainSampleGreater == sampleGreater) {       // If both samples are on same side of hyperplane
       newCoveredSamples.push_back(idCoveredSample); // This sample is covered again
     }
   }
-  coveredSamples = newCoveredSamples;
+  coveredSamples = std::move(newCoveredSamples);
+}
+
+/**
+ * @brief Computes the new covered samples and their fidelity in a single pass.
+ *
+ * @param ancienCoveredSamples Vector of previously covered sample IDs.
+ * @param attribut Index of the attribute (dimension) used for the hyperplane.
+ * @param trainData Training data matrix.
+ * @param mainSampleGreater Boolean indicating if the sample of interest is greater than the hyperplane value.
+ * @param hypValue Value of the hyperplane.
+ * @param mainsamplePred Prediction of the sample of interest.
+ * @param trainPreds Vector of predictions of the training data.
+ */
+void Hyperbox::computeCoveredSamplesAndFidelity(const std::vector<int> &ancienCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainsamplePred, const std::vector<int> &trainPreds) {
+  std::vector<int> newCoveredSamples;
+  newCoveredSamples.reserve(ancienCoveredSamples.size());
+
+  size_t coveredTrueClass = 0;
+  for (int idCoveredSample : ancienCoveredSamples) { // We check all already covered samples
+    bool sampleGreater = hypValue <= trainData[idCoveredSample][attribut];
+    if (mainSampleGreater == sampleGreater) { // If both samples are on same side of hyperplane
+      newCoveredSamples.push_back(idCoveredSample);
+      if (mainsamplePred == trainPreds[idCoveredSample]) {
+        coveredTrueClass += 1;
+      }
+    }
+  }
+
+  const size_t nbCovered = newCoveredSamples.size();
+  coveredSamples = std::move(newCoveredSamples);
+  fidelity = (nbCovered == 0) ? 0.0 : static_cast<double>(coveredTrueClass) / static_cast<double>(nbCovered);
 }
 
 /**
@@ -107,7 +138,7 @@ const std::vector<int> &Hyperbox::getCoveredSamples() const {
  *
  * @return Vector of integers representing the covering sizes.
  */
-std::vector<int> Hyperbox::getCoveringSizesWithNewAntecedent() const {
+const std::vector<int> &Hyperbox::getCoveringSizesWithNewAntecedent() const {
   return coveringSizesWithNewAntecedent;
 }
 
@@ -117,7 +148,7 @@ std::vector<int> Hyperbox::getCoveringSizesWithNewAntecedent() const {
  * @param newCoveringSizesWithNewAntecedents Covering sizes to set.
  */
 void Hyperbox::setCoveringSizesWithNewAntecedent(std::vector<int> newCoveringSizesWithNewAntecedents) {
-  coveringSizesWithNewAntecedent = newCoveringSizesWithNewAntecedents;
+  coveringSizesWithNewAntecedent = std::move(newCoveringSizesWithNewAntecedents);
 }
 
 /**
@@ -157,18 +188,19 @@ void Hyperbox::resetCoveringSizesWithNewAntecedent() {
  * @param trainPreds Vector of predictions of the training data.
  */
 void Hyperbox::computeFidelity(const int mainsamplePred, const std::vector<int> &trainPreds) {
-  if (coveredSamples.empty()) {
+  const size_t nbCovered = coveredSamples.size();
+  if (nbCovered == 0) {
     fidelity = 0.0; // Invalid fidelity when no samples are covered
     return;
   }
-  int coveredTrueClass = 0;                       // Number of samples covered by the hyperbox and of same class as the example
+  size_t coveredTrueClass = 0;                    // Number of samples covered by the hyperbox and of same class as the example
   for (int idSample : coveredSamples) {           // Loop on all covered samples
     if (mainsamplePred == trainPreds[idSample]) { // Check if sample is of right class (class predicted by dimlp network for our main sample)
       coveredTrueClass += 1;
     }
   }
 
-  fidelity = static_cast<double>(coveredTrueClass) / static_cast<double>(coveredSamples.size());
+  fidelity = static_cast<double>(coveredTrueClass) / static_cast<double>(nbCovered);
 }
 
 /**
@@ -194,7 +226,7 @@ void Hyperbox::setFidelity(double x) {
  *
  * @return Vector of the increased fidelity for each new antecedent.
  */
-std::vector<double> Hyperbox::getIncreasedFidelity() const {
+const std::vector<double> &Hyperbox::getIncreasedFidelity() const {
   return increasedFidelity;
 }
 
@@ -204,7 +236,7 @@ std::vector<double> Hyperbox::getIncreasedFidelity() const {
  * @param newIncreasedFidelities New increased fidelities to set.
  */
 void Hyperbox::setIncreasedFidelity(std::vector<double> newIncreasedFidelities) {
-  increasedFidelity = newIncreasedFidelities;
+  increasedFidelity = std::move(newIncreasedFidelities);
 }
 
 /**
@@ -247,7 +279,7 @@ void Hyperbox::resetIncreasedFidelity() {
  *
  * @return Vector of the accuracy changes for each new antecedent.
  */
-std::vector<double> Hyperbox::getAccuracyChanges() const {
+const std::vector<double> &Hyperbox::getAccuracyChanges() const {
   return accuracyChanges;
 }
 
@@ -257,7 +289,7 @@ std::vector<double> Hyperbox::getAccuracyChanges() const {
  * @param accuracyChanges New accuracy changes to set.
  */
 void Hyperbox::setAccuracyChanges(std::vector<double> newAccuracyChanges) {
-  accuracyChanges = newAccuracyChanges;
+  accuracyChanges = std::move(newAccuracyChanges);
 }
 
 /**
@@ -317,16 +349,17 @@ Hyperbox Hyperbox::deepCopy() {
  */
 double Hyperbox::computeRuleAccuracy(const int mainsamplePred, const std::vector<int> &trainTrueClass) const { // Percentage of correct rule predictions on samples covered by the rule
 
-  if (coveredSamples.empty()) { // Invalid accuracy when no samples are covered
+  const size_t nbCovered = coveredSamples.size();
+  if (nbCovered == 0) { // Invalid accuracy when no samples are covered
     return 0.0;
   }
 
-  int total = 0; // Number of indexes predicted good
+  size_t nbCorrect = 0;
   for (int idSample : coveredSamples) {
     if (mainsamplePred == trainTrueClass[idSample]) {
-      total += 1;
+      nbCorrect += 1;
     }
   }
 
-  return static_cast<double>(total) / static_cast<double>(coveredSamples.size());
+  return static_cast<double>(nbCorrect) / static_cast<double>(nbCovered);
 }

@@ -431,7 +431,7 @@ int fidex(const std::string &command) {
 
       std::vector<double> mainSampleValues = mainSamplesValues[currentSample];
       int mainSamplePred = mainSamplesPreds[currentSample];
-      double mainSamplePredValue = mainSamplesPredictionScores[currentSample][mainSamplePred];
+      double mainSamplePredScore = mainSamplesPredictionScores[currentSample][mainSamplePred];
 
       lines.push_back("Rule for sample " + std::to_string(currentSample) + " :\n");
 
@@ -445,7 +445,7 @@ int fidex(const std::string &command) {
       }
 
       // Launch fidexAlgo
-      fidex.setMainSamplePredValue(mainSamplePredValue);
+      fidex.setMainSamplePredScore(mainSamplePredScore);
       fidex.launchFidex(rule, mainSampleValues, mainSamplePred, true);
 
       meanFidelity += rule.getFidelity();

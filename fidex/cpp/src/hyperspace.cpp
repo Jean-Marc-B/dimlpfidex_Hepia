@@ -52,30 +52,28 @@ Rule Hyperspace::ruleExtraction(const std::vector<double> &mainSampleData, const
   } else if (!mus.empty() || !sigmas.empty() || !normalizationIndices.empty()) {
     throw InternalError("Error during rule extraction : Means, standard deviations, and normalization indices must either all be specified or none at all.");
   }
+  if (mainSampleData.empty()) {
+    throw InternalError("Error during rule extraction : Main sample data cannot be empty.");
+  }
 
-  double hypValue;
-  int attribut;
-  bool inequalityBool;
+  const int nbAttributes = static_cast<int>(mainSampleData.size());
+  const auto &discrHyperplanes = hyperbox->getDiscriminativeHyperplans();
   std::vector<Antecedent> antecedents;
+  antecedents.reserve(discrHyperplanes.size());
 
-  for (int k = 0; k < hyperbox->getDiscriminativeHyperplans().size(); k++) {
+  for (size_t k = 0; k < discrHyperplanes.size(); k++) {
 
-    attribut = hyperbox->getDiscriminativeHyperplans()[k].first % mainSampleData.size();
-    hypValue = hyperLocus[hyperbox->getDiscriminativeHyperplans()[k].first][hyperbox->getDiscriminativeHyperplans()[k].second];
-    double mainSampleValue = mainSampleData[attribut];
-
-    if (hypValue <= mainSampleValue) {
-      inequalityBool = true;
-    } else {
-      inequalityBool = false;
-    }
+    const int attribute = discrHyperplanes[k].first % nbAttributes;
+    double hypValue = hyperLocus[discrHyperplanes[k].first][discrHyperplanes[k].second];
+    const double mainSampleValue = mainSampleData[attribute];
+    const bool inequalityBool = (hypValue <= mainSampleValue);
 
     // Denormalization of values in case it was previously normalized
     if (denormalizing) {
-      // Check if the attribute needs to be denormalized
+      // Check if the attributee needs to be denormalized
       int index = -1;
       for (size_t i = 0; i < normalizationIndices.size(); ++i) {
-        if (normalizationIndices[i] == attribut) {
+        if (normalizationIndices[i] == attribute) {
           index = static_cast<int>(i);
           break;
         }
@@ -85,34 +83,43 @@ Rule Hyperspace::ruleExtraction(const std::vector<double> &mainSampleData, const
       }
     }
 
-    antecedents.push_back(Antecedent(attribut, inequalityBool, hypValue));
+    antecedents.emplace_back(Antecedent(attribute, inequalityBool, hypValue));
   }
   return Rule(antecedents, hyperbox->getCoveredSamples(), hyperbox->getCoveringSizesWithNewAntecedent(), mainSamplePred, hyperbox->getFidelity(), hyperbox->getIncreasedFidelity(), ruleAccuracy, hyperbox->getAccuracyChanges(), ruleConfidence);
 }
 
 /**
- * @brief Computes the confidence of the rule with respect to the main sample prediction and training output values of the covered samples.
+ * @brief Computes the rule confidence as the mean model score on the rule class over covered samples.
  *
- * @param trainPredictionScores Train data predictions scores.
- * @param rulePred Prediction of the rule.
- * @param mainSamplePredValueOnRulePred Output value of the main sample prediction (optional).
- * @return The confidence of the rule.
+ * In Fidex, the rule is built to explain the main sample, so the rule prediction is the same
+ * as the main sample prediction. Therefore, `mainSamplePred` is also the rule class used here.
+ *
+ * @param trainPredictionScores Model prediction scores for training samples.
+ * @param mainSamplePred Predicted class of the main sample (also the rule prediction).
+ * @param mainSamplePredScore Optional score of the main sample on `mainSamplePred`, included in the mean.
+ * @return Mean model score on the rule class over covered samples (and optionally the main sample).
  */
-double Hyperspace::computeRuleConfidence(std::vector<std::vector<double>> &trainPredictionScores, const int rulePred, double mainSamplePredValueOnRulePred) const { // Mean output value of prediction of class chosen by the rule(which is the main sample prediction) for the covered samples
+double Hyperspace::computeRuleConfidence(const std::vector<std::vector<double>> &trainPredictionScores, const int mainSamplePred, double mainSamplePredScore) const {
 
-  double total = 0; // Number of indexes predicted good
+  double total = 0.0; // Sum of prediction scores on the rule class for covered samples
 
-  std::vector<int> coveredSamples = hyperbox->getCoveredSamples();
-  // Value of output prediction for class mainSamplePred(rule class)
+  const auto &coveredSamples = hyperbox->getCoveredSamples();
+  size_t nbCovered = coveredSamples.size();
+  const bool hasMainSampleScore = (mainSamplePredScore != -1.0);
+
+  // Sum prediction scores on the rule class (same as mainSamplePred in Fidex) over covered training samples
   for (int idSample : coveredSamples) {
-    total += trainPredictionScores[idSample][rulePred]; // Value of output prediction for class rulePred(rule class)
+    total += trainPredictionScores[idSample][mainSamplePred];
   }
 
-  size_t nbCovered = coveredSamples.size();
-
-  if (mainSamplePredValueOnRulePred != -1.0) { // If we compute Fidex with a test sample
-    total += mainSamplePredValueOnRulePred;    // Add test sample prediction value on rule prediction (which is the same as his own prediction)
+  if (hasMainSampleScore) { // Include the main/test sample score when provided
+    total += mainSamplePredScore;
     nbCovered += 1;
   }
+
+  if (nbCovered == 0) {
+    return 0.0;
+  }
+
   return total / static_cast<double>(nbCovered);
 }

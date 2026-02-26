@@ -42,7 +42,7 @@ public:
   /**
    * @brief Gets the discriminative hyperplanes of the hyperbox.
    */
-  std::vector<std::pair<int, int>> getDiscriminativeHyperplans() const;
+  const std::vector<std::pair<int, int>> &getDiscriminativeHyperplans() const;
 
   /**
    * @brief Sets the discriminative hyperplanes of the hyperbox.
@@ -62,7 +62,12 @@ public:
   /**
    * @brief Computes the new covered samples with a new discriminative hyperplane.
    */
-  void computeCoveredSamples(const std::vector<int> &ancienCoveredSamples, int attribut, std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue);
+  void computeCoveredSamples(const std::vector<int> &ancienCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue);
+
+  /**
+   * @brief Computes the new covered samples and the resulting fidelity in a single pass.
+   */
+  void computeCoveredSamplesAndFidelity(const std::vector<int> &ancienCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainsamplePred, const std::vector<int> &trainPreds);
 
   /**
    * @brief Computes the fidelity of the samples covered by the hyperbox with respect to the model's prediction.
@@ -82,7 +87,7 @@ public:
   /**
    * @brief Gets the increased fidelity for each new antecedent.
    */
-  std::vector<double> getIncreasedFidelity() const;
+  const std::vector<double> &getIncreasedFidelity() const;
 
   /**
    * @brief Adds in the list the increased fidelity with the new antecedent.
@@ -107,7 +112,7 @@ public:
   /**
    * @brief Gets the accuracy changes for each new antecedent.
    */
-  std::vector<double> getAccuracyChanges() const;
+  const std::vector<double> &getAccuracyChanges() const;
 
   /**
    * @brief Adds in the list the accuracy changes with the new antecedent.
@@ -137,7 +142,7 @@ public:
   /**
    * @brief Gets the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
    */
-  std::vector<int> getCoveringSizesWithNewAntecedent() const;
+  const std::vector<int> &getCoveringSizesWithNewAntecedent() const;
 
   /**
    * @brief Adds the new covering size of the rule with the new antecedant in the list.
@@ -171,7 +176,7 @@ public:
 
 inline std::ostream &operator<<(std::ostream &stream, const Hyperbox &hyperbox) {
   stream << "Discriminative hyperplans:        ";
-  for (auto discHyp : hyperbox.getDiscriminativeHyperplans()) {
+  for (const auto &discHyp : hyperbox.getDiscriminativeHyperplans()) {
     stream << "[" << discHyp.first << "," << discHyp.second << "], ";
   }
   stream << std::endl;

@@ -49,9 +49,9 @@ public:
   Rule ruleExtraction(const std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus = std::vector<double>(), const std::vector<double> &sigmas = std::vector<double>(), const std::vector<int> &normalizationIndices = std::vector<int>());
 
   /**
-   * @brief Computes the confidence of the rule with respect to the main sample prediction and training output values of the covered samples.
+   * @brief Computes the confidence of the rule with respect to the main sample prediction (rule prediction) and training output values of the covered samples.
    */
-  double computeRuleConfidence(std::vector<std::vector<double>> &trainPredictionScores, const int mainSamplePred, double mainSamplePredValue = -1.0) const;
+  double computeRuleConfidence(const std::vector<std::vector<double>> &trainPredictionScores, const int mainSamplePred, double mainSamplePredScore = -1.0) const;
 };
 
 #endif // HYPERSPACEGLO_H
