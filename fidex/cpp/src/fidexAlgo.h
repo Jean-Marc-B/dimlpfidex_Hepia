@@ -50,17 +50,17 @@ private:
   /**
    * @brief Attempts to compute a rule with Fidex algorithm based on given parameters and updates the rule object if successful.
    */
-  bool tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose, bool detailedVerbose = false, bool foundRule = false);
+  bool tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover, bool verbose, bool detailedVerbose = false, bool foundRule = false);
 
   /**
    * @brief Performs a dichotomic (binary) search to find a rule with the best covering that meets the minimum fidelity criteria.
    */
-  int dichotomicSearch(Rule &bestRule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int left, int right, bool verbose);
+  int dichotomicSearch(Rule &bestRule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int left, int right, bool verbose);
 
   /**
    * @brief Attempts to compute a rule multiple times up to a maximum number of failed attempts, adjusting fidelity if necessary.
    */
-  bool retryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minNbCover, bool verbose);
+  bool retryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover, bool verbose);
 
   /**
    * @brief Attepts to filter unnecessary attributes in a rule.

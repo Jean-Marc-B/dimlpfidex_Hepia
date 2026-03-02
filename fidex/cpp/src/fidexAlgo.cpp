@@ -266,7 +266,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
  * @param rule Reference to the Rule object to be potentially updated by the computation.
  * @param mainSampleValues A vector of double values representing the main sample values.
  * @param mainSamplePred An integer representing the predicted class of the main sample.
- * @param minFidelity A float representing the minimum fidelity threshold for rule creation.
+ * @param minFidelity A double representing the minimum fidelity threshold for rule creation.
  * @param minCoverSize An integer representing the minimum number of samples a rule must cover.
  * @param verbose A boolean flag for detailed verbose output.
  * @param detailedVerbose A boolean flag for detailed verbose output. Default is false.
@@ -274,7 +274,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
  * @return True if a rule meeting the criteria is successfully computed.
  * @return False if no rule meeting the criteria can be computed.
  */
-bool Fidex::tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minCoverSize, bool verbose, bool detailedVerbose, bool foundRule) {
+bool Fidex::tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minCoverSize, bool verbose, bool detailedVerbose, bool foundRule) {
   if (detailedVerbose && verbose) {
     if (foundRule) {
       std::cout << "A rule has been found. ";
@@ -284,7 +284,7 @@ bool Fidex::tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleVal
     std::cout << "Restarting fidex with a minimum covering of " << minCoverSize << " and a minimum accepted fidelity of " << minFidelity << "." << std::endl;
   }
 
-  bool ruleCreated = compute(rule, mainSampleValues, mainSamplePred, minFidelity, minCoverSize);
+  const bool ruleCreated = compute(rule, mainSampleValues, mainSamplePred, minFidelity, minCoverSize);
   if (verbose) {
     std::cout << "Final fidelity : " << rule.getFidelity() << std::endl;
   }
@@ -300,22 +300,21 @@ bool Fidex::tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleVal
  * @param bestRule Reference to the Rule object to store the best rule found during the search.
  * @param mainSampleValues A vector of double values representing the main sample values.
  * @param mainSamplePred An integer representing the predicted class of the main sample.
- * @param minFidelity A float representing the minimum fidelity threshold for rule creation.
+ * @param minFidelity A double representing the minimum fidelity threshold for rule creation.
  * @param left The starting point of the search range.
  * @param right The ending point of the search range.
  * @param verbose A boolean flag for detailed verbose output.
  * @return The best covering found that meets the minimum fidelity criteria. Returns -1 if no such covering is found.
  */
-int Fidex::dichotomicSearch(Rule &bestRule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int left, int right, bool verbose) {
+int Fidex::dichotomicSearch(Rule &bestRule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int left, int right, bool verbose) {
   int bestCovering = -1;
-  int currentMinCoverSize = right + 1;
   bool foundRule = false;
-  while (currentMinCoverSize != ceil((right + left) / 2.0) && left <= right) {
-    currentMinCoverSize = static_cast<int>(ceil((right + left) / 2.0));
+  while (left <= right) {
+    const int currentMinCoverSize = left + (right - left + 1) / 2; // Upper mid to search the largest feasible covering
     Rule tempRule;
     if (tryComputeFidex(tempRule, mainSampleValues, mainSamplePred, minFidelity, currentMinCoverSize, verbose, true, foundRule)) {
       bestCovering = currentMinCoverSize;
-      bestRule = tempRule;
+      bestRule = std::move(tempRule);
       left = currentMinCoverSize + 1;
       foundRule = true;
     } else {
@@ -332,13 +331,13 @@ int Fidex::dichotomicSearch(Rule &bestRule, const std::vector<double> &mainSampl
  * @param rule Reference to the Rule object to be potentially updated by the computation.
  * @param mainSampleValues A vector of double values representing the main sample values.
  * @param mainSamplePred An integer representing the predicted class of the main sample.
- * @param minFidelity A reference to a float representing the current minimum fidelity threshold for rule creation. May be adjusted.
+ * @param minFidelity A double representing the current minimum fidelity threshold for rule creation.
  * @param minCoverSize An integer representing the minimum number of samples a rule must cover.
  * @param verbose A boolean flag for detailed verbose output.
  * @return True if a rule meeting the criteria is successfully computed within the maximum number of attempts.
  * @return False if no rule meeting the criteria can be computed within the maximum number of attempts.
  */
-bool Fidex::retryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, float minFidelity, int minCoverSize, bool verbose) {
+bool Fidex::retryComputeFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minCoverSize, bool verbose) {
   int counterFailed = 0; // Number of times we failed to find a rule with maximal fidexlity when minCoverSize is 1
   int maxFailedAttempts = _parameters->getInt(MAX_FAILED_ATTEMPTS);
   bool allowNoFidChange = _parameters->getBool(ALLOW_NO_FID_CHANGE);
@@ -392,62 +391,66 @@ bool Fidex::retryComputeFidex(Rule &rule, const std::vector<double> &mainSampleV
 bool Fidex::launchFidex(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, bool verbose) {
 
   int minCoverSize = _parameters->getInt(MIN_COVERING);
-  float minFidelity = _parameters->getFloat(MIN_FIDELITY);
-  bool ruleCreated = false;
-  bool foundRule = true;
+  double minFidelity = _parameters->getFloat(MIN_FIDELITY);
+  const bool coveringStrategy = _parameters->getBool(COVERING_STRATEGY);
+  const double lowestMinFidelity = _parameters->getFloat(LOWEST_MIN_FIDELITY);
 
   if (verbose) {
     setShowInitialFidelity(true);
   }
 
-  // Try to find a rule
-  if (!tryComputeFidex(rule, mainSampleValues, mainSamplePred, minFidelity, minCoverSize, verbose)) {
-    // If no rule is found
+  // First attempt with requested fidelity/covering
+  if (tryComputeFidex(rule, mainSampleValues, mainSamplePred, minFidelity, minCoverSize, verbose)) {
+    return true;
+  }
 
-    // With covering strategy
-    if (_parameters->getBool(COVERING_STRATEGY)) {
-      int right = minCoverSize - 1;
-      int bestCovering = -1;
-      Rule bestRule;
-
-      // Dichotomic search to find a rule with best covering
-      if (right > 0) {
-        bestCovering = dichotomicSearch(bestRule, mainSampleValues, mainSamplePred, minFidelity, 1, right, verbose);
-      }
-
-      // Coundn't find a rule with minimal fidelity 1, we search for a lower minimal fidelity
-      if (bestCovering == -1) {
-        float currentMinFidelity = minFidelity;
-        while (!ruleCreated && currentMinFidelity > _parameters->getFloat(LOWEST_MIN_FIDELITY)) {
-          currentMinFidelity -= 0.05f;
-          ruleCreated = tryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, verbose, true);
-        }
-        // Coundn't find a rule, we retry maxFailedAttempts times
-        if (!ruleCreated) {
-          foundRule = retryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, verbose);
-        }
-
-      } else { // If we found a correct rule during dichotomic search
-        rule = bestRule;
-      }
-      if (verbose) {
-        std::cout << std::endl;
-      }
-      // Without covering strategy
-    } else if (verbose) {
+  // Without covering strategy, stop after the first failure
+  if (!coveringStrategy) {
+    if (verbose) {
       std::cout << "\nWARNING Fidelity is too low! You may want to try again." << std::endl;
       std::cout << "If you can't find a rule with the wanted fidelity, try a lowest minimal covering or a lower fidelity" << std::endl;
       std::cout << "You can also try to use the min cover strategy (--covering_strategy)" << std::endl;
       std::cout << "If this is not enough, put the min covering to 1 and do not use dropout." << std::endl;
       std::cout << "You may also want to allow to add a new antecedant without changing the fidelity by setting allow_no_fid_change to true.\n"
                 << std::endl;
-      foundRule = false;
     }
-  }
-  if (!foundRule) {
     return false;
   }
-  return true;
+
+  // Covering strategy: search for the best feasible covering below the requested minimum
+  int right = minCoverSize - 1;
+  int bestCovering = -1;
+  Rule bestRule;
+
+  if (right > 0) {
+    bestCovering = dichotomicSearch(bestRule, mainSampleValues, mainSamplePred, minFidelity, 1, right, verbose);
+  }
+
+  if (bestCovering != -1) { // A valid rule was found during dichotomic search
+    rule = std::move(bestRule);
+    if (verbose) {
+      std::cout << std::endl;
+    }
+    return true;
+  }
+
+  // Couldn't find a rule with the current minimum fidelity: progressively lower the target.
+  bool ruleCreated = false;
+  double currentMinFidelity = minFidelity;
+  while (!ruleCreated && currentMinFidelity > lowestMinFidelity) {
+    currentMinFidelity = std::max(lowestMinFidelity, currentMinFidelity - 0.05);
+    ruleCreated = tryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, verbose, true);
+  }
+
+  // Still no rule: retry several times at the current lowered fidelity.
+  if (!ruleCreated) {
+    ruleCreated = retryComputeFidex(rule, mainSampleValues, mainSamplePred, currentMinFidelity, 1, verbose);
+  }
+
+  if (verbose) {
+    std::cout << std::endl;
+  }
+  return ruleCreated;
 }
 
 /**
@@ -461,25 +464,24 @@ bool Fidex::optimizeRule(const std::vector<double> &mainSampleValues, int mainSa
   std::shared_ptr<Hyperbox> originalHyperbox = _hyperspace->getHyperbox();
   const auto &originalDiscrHyperplans = originalHyperbox->getDiscriminativeHyperplans();
   const size_t nbAntecedents = originalDiscrHyperplans.size();
-  std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();
-  std::vector<int> &trainPreds = _trainDataset->getPredictions();
-  std::vector<int> &trainTrueClass = _trainDataset->getClasses();
+  const auto &trainData = _trainDataset->getDatas();
+  const auto &trainPreds = _trainDataset->getPredictions();
+  const auto &trainTrueClass = _trainDataset->getClasses();
   const auto &hyperLocus = _hyperspace->getHyperLocus();
   std::vector<int> coveredSamples(trainData.size()); // Samples covered by the hyperbox
   Hyperbox bestHyperbox = originalHyperbox->deepCopy();
   iota(begin(coveredSamples), end(coveredSamples), 0); // Vector from 0 to len(coveredSamples)-1
   int nbAttributes = _trainDataset->getNbAttributes();
-  int antededantIndex = -1;
   bool hasBeenOptimized = false;
 
   for (size_t i = 0; i < nbAntecedents; i++) {
     std::vector<std::pair<int, int>> copyDiscrHyperplans(originalDiscrHyperplans); // create original's copy
-    Hyperbox copyHyperbox = Hyperbox();
+    Hyperbox copyHyperbox;
     copyDiscrHyperplans.erase(copyDiscrHyperplans.begin() + i); // hide an antecedant
     copyHyperbox.setDiscriminativeHyperplans(copyDiscrHyperplans);
     copyHyperbox.setCoveredSamples(coveredSamples);
 
-    for (auto antecedant : copyDiscrHyperplans) {
+    for (const auto &antecedant : copyDiscrHyperplans) {
       int dimension = antecedant.first;
       int hypIndex = antecedant.second;
       int feature = dimension % nbAttributes;
@@ -494,12 +496,15 @@ bool Fidex::optimizeRule(const std::vector<double> &mainSampleValues, int mainSa
       copyHyperbox.addAccuracyChanges(copyHyperbox.computeRuleAccuracy(mainSamplePred, trainTrueClass));
     }
 
-    copyHyperbox.computeFidelity(mainSamplePred, trainPreds);
+    // If the original rule had a single antecedent, removing it leaves an empty rule:
+    // no inner iteration ran, so fidelity still needs to be computed once on full covering.
+    if (nbAntecedents == 1) {
+      copyHyperbox.computeFidelity(mainSamplePred, trainPreds);
+    }
 
     if (copyHyperbox.getFidelity() >= bestHyperbox.getFidelity()) {
       hasBeenOptimized = true;
-      antededantIndex = static_cast<int>(i);
-      bestHyperbox = copyHyperbox;
+      bestHyperbox = std::move(copyHyperbox);
     }
   }
 

@@ -1,11 +1,8 @@
 #ifndef HYPERBOX_H
 #define HYPERBOX_H
 
-#include <cstring>
-#include <fstream>
 #include <iostream>
 #include <numeric>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -62,17 +59,17 @@ public:
   /**
    * @brief Computes the new covered samples with a new discriminative hyperplane.
    */
-  void computeCoveredSamples(const std::vector<int> &ancienCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue);
+  void computeCoveredSamples(const std::vector<int> &ancientCoveredSamples, int attribute, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue);
 
   /**
    * @brief Computes the new covered samples and the resulting fidelity in a single pass.
    */
-  void computeCoveredSamplesAndFidelity(const std::vector<int> &ancienCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainsamplePred, const std::vector<int> &trainPreds);
+  void computeCoveredSamplesAndFidelity(const std::vector<int> &ancientCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainSamplePred, const std::vector<int> &trainPreds);
 
   /**
    * @brief Computes the fidelity of the samples covered by the hyperbox with respect to the model's prediction.
    */
-  void computeFidelity(const int mainsamplePred, const std::vector<int> &trainPreds);
+  void computeFidelity(const int mainSamplePred, const std::vector<int> &trainPreds);
 
   /**
    * @brief Gets the fidelity of the samples covered by the hyperbox.
@@ -140,12 +137,12 @@ public:
   const std::vector<int> &getCoveredSamples() const;
 
   /**
-   * @brief Gets the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
+   * @brief Gets the covering sizes for each new antecedent(discriminative hyperplan) in the hyperbox.
    */
   const std::vector<int> &getCoveringSizesWithNewAntecedent() const;
 
   /**
-   * @brief Adds the new covering size of the rule with the new antecedant in the list.
+   * @brief Adds the new covering size of the rule with the new antecedent in the list.
    */
   void addCoveringSizesWithNewAntecedent(int covSize);
 
@@ -160,7 +157,7 @@ public:
   void setCoveringSizesWithNewAntecedent(std::vector<int> coveringSizesWithNewAntecedents);
 
   /**
-   * @brief Reset the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
+   * @brief Reset the covering sizes for each new antecedent(discriminative hyperplan) in the hyperbox.
    */
   void resetCoveringSizesWithNewAntecedent();
 
@@ -169,7 +166,7 @@ public:
    */
   void addDiscriminativeHyperplan(int dimVal, int hypValIndex);
 
-  double computeRuleAccuracy(const int mainsamplePred, const std::vector<int> &trainTrueClass) const;
+  double computeRuleAccuracy(const int mainSamplePred, const std::vector<int> &trainTrueClass) const;
 
   Hyperbox deepCopy();
 };
@@ -187,14 +184,14 @@ inline std::ostream &operator<<(std::ostream &stream, const Hyperbox &hyperbox) 
   }
   stream << std::endl;
 
-  stream << "Covering size w/ new antecedant:  ";
+  stream << "Covering size w/ new antecedent:  ";
   for (auto coveringSize : hyperbox.getCoveringSizesWithNewAntecedent()) {
     stream << coveringSize << ",";
   }
   stream << std::endl;
 
   stream << "Covered samples:                  ";
-  for (int i = 0; i < 5; i++) {
+  for (size_t i = 0; i < hyperbox.getCoveredSamples().size() && i < 5; i++) {
     stream << hyperbox.getCoveredSamples()[i] << ",";
   }
   stream << "... (size=" << hyperbox.getCoveredSamples().size() << ")" << std::endl;
