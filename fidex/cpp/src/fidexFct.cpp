@@ -1,5 +1,40 @@
 #include "fidexFct.h"
 
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/dataSet.h"
+#include "../../../common/cpp/src/errorHandler.h"
+#include "../../../common/cpp/src/parameters.h"
+#include "fidexAlgo.h"
+#include "hyperLocus.h"
+#include "hyperspace.h"
+
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <tuple>
+#include <vector>
+
+// Local helper used to temporarily redirect std::cout, then restore its original buffer automatically when leaving fidex().
+namespace {
+struct CoutBufferGuard {
+  explicit CoutBufferGuard(std::ostream &stream) : stream(stream), originalBuffer(stream.rdbuf()) {
+  }
+
+  void redirect(std::streambuf *newBuffer) {
+    stream.rdbuf(newBuffer);
+  }
+
+  ~CoutBufferGuard() {
+    stream.rdbuf(originalBuffer);
+  }
+
+  std::ostream &stream;
+  std::streambuf *originalBuffer;
+};
+} // namespace
+
 /**
  * @brief Displays the parameters for fidex.
  */
@@ -115,7 +150,7 @@ void checkFidexParametersLogicValues(Parameters &p) {
  * classes of samples and constructing a rule for each test sample based on these hyperplanes covering this sample
  * and as many other samples as possible.
  *
- * The %Fidex algorithm is computed until a rule is created or until the max failed attempts limit is reached.<br>
+ * The Fidex algorithm is computed until a rule is created or until the max failed attempts limit is reached.<br>
  * - First attempt to generate a rule with a covering greater or equal to 'min_covering' and a fidelity greater or equal to 'min_fidelity'.<br>
  * - If the attempt failed and the 'covering_strategy' is on, Fidex is computed to find a rule with the max possible minimal covering that can be lower than 'min_covering'.<br>
  * - If all attempts failed, the targeted fidelity is gradually lowered until it succeed or 'lowest_min_fidelity' is reached.<br>
@@ -183,7 +218,7 @@ int fidex(const std::string &command) {
 
   // Save buffer where we output results
   std::ofstream ofs;
-  std::streambuf *cout_buff = std::cout.rdbuf(); // Save old buf
+  CoutBufferGuard coutGuard(std::cout);
 
   try {
 
@@ -241,8 +276,12 @@ int fidex(const std::string &command) {
 
     // Get console results to file
     if (params->isStringSet(CONSOLE_FILE)) {
-      ofs.open(params->getString(CONSOLE_FILE));
-      std::cout.rdbuf(ofs.rdbuf()); // redirect cout to file
+      const std::string consoleFile = params->getString(CONSOLE_FILE);
+      ofs.open(consoleFile);
+      if (!ofs.is_open()) {
+        throw CannotOpenFileError("Error : Couldn't open console output file " + consoleFile + ".");
+      }
+      coutGuard.redirect(ofs.rdbuf()); // redirect cout to file
     }
 
     // Show chosen parameters
@@ -303,21 +342,9 @@ int fidex(const std::string &command) {
     }
 
     // Get test data
-    std::vector<int> mainSamplesPreds;
-    std::vector<int> mainSamplesTrueClass;
-    std::vector<std::vector<double>> mainSamplesValues;
-    std::vector<std::vector<double>> mainSamplesPredictionScores;
     std::unique_ptr<DataSetFid> testDatas;
-    bool hasTrueClasses;
     if (!params->isStringSet(TEST_PRED_FILE)) { // If we have only one test data file with data, pred and class
       testDatas.reset(new DataSetFid("testDatas from Fidex", mainSamplesDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
-      mainSamplesValues = testDatas->getDatas();
-      mainSamplesPreds = testDatas->getPredictions();
-      mainSamplesPredictionScores = testDatas->getPredictionScores();
-      hasTrueClasses = testDatas->getHasClasses();
-      if (hasTrueClasses) {
-        mainSamplesTrueClass = testDatas->getClasses();
-      }
 
     } else { // We have different files for test predictions and test classes
 
@@ -326,20 +353,15 @@ int fidex(const std::string &command) {
       } else {
         testDatas.reset(new DataSetFid("testDatas from Fidex", mainSamplesDataFile, params->getString(TEST_PRED_FILE), nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
       }
-      mainSamplesValues = testDatas->getDatas();
-      mainSamplesPreds = testDatas->getPredictions();
-      mainSamplesPredictionScores = testDatas->getPredictionScores();
-
-      // Classes :
-      if (params->isStringSet(TEST_CLASS_FILE)) {
-        hasTrueClasses = true;
-        mainSamplesTrueClass = testDatas->getClasses();
-      } else {
-        hasTrueClasses = false;
-      }
     }
+    const auto &mainSamplesValues = testDatas->getDatas();
+    const auto &mainSamplesPreds = testDatas->getPredictions();
+    const auto &mainSamplesPredictionScores = testDatas->getPredictionScores();
 
     int nbTestSamples = testDatas->getNbSamples();
+    if (nbTestSamples == 0) {
+      throw CommandArgumentException("Error : the test dataset is empty, at least one test sample is required.");
+    }
 
     // Get attributes
     std::vector<std::string> attributeNames;
@@ -386,6 +408,7 @@ int fidex(const std::string &command) {
     d1 = clock();
 
     std::vector<std::string> lines;
+    lines.reserve(static_cast<size_t>(nbTestSamples) * (nbTestSamples > 1 ? 3u : 2u));
     // compute hyperspace
     std::cout << "Creation of hyperspace..." << std::endl;
 
@@ -424,12 +447,13 @@ int fidex(const std::string &command) {
     double meanNbAntecedentsPerRule = 0;
     double meanAccuracy = 0;
     std::vector<Rule> rules;
+    rules.reserve(nbTestSamples);
 
     // We compute rule for each test sample
     for (int currentSample = 0; currentSample < nbTestSamples; currentSample++) {
       Rule rule;
 
-      std::vector<double> mainSampleValues = mainSamplesValues[currentSample];
+      const auto &mainSampleValues = mainSamplesValues[currentSample];
       int mainSamplePred = mainSamplesPreds[currentSample];
       double mainSamplePredScore = mainSamplesPredictionScores[currentSample][mainSamplePred];
 
@@ -446,7 +470,8 @@ int fidex(const std::string &command) {
 
       // Launch fidexAlgo
       fidex.setMainSamplePredScore(mainSamplePredScore);
-      fidex.launchFidex(rule, mainSampleValues, mainSamplePred, true);
+      const bool ruleMeetsTarget = fidex.launchFidex(rule, mainSampleValues, mainSamplePred, true);
+      // `rule` is still usable even when ruleMeetsTarget is false: it contains the best rule found.
 
       meanFidelity += rule.getFidelity();
       meanAccuracy += rule.getAccuracy();
@@ -459,12 +484,12 @@ int fidex(const std::string &command) {
                   << std::endl;
       }
 
-      std::stringstream stream;
-      lines.push_back(rule.toString(attributeNames, classNames));
+      const std::string ruleText = rule.toString(attributeNames, classNames);
+      lines.push_back(ruleText);
       rules.push_back(rule);
       std::cout << std::endl;
       std::cout << "Extracted rule :" << std::endl;
-      std::cout << rule.toString(attributeNames, classNames) << std::endl;
+      std::cout << ruleText << std::endl;
 
       if (rule.getCoveringSize() < minNbCover) {
         std::cout << "The minimum covering of " << minNbCover << " is not achieved." << std::endl;
@@ -494,10 +519,10 @@ int fidex(const std::string &command) {
         outputStatsFile << "Statistics with a test set of " << nbTestSamples << " samples :\n"
                         << std::endl;
 
-        if (params->getFloat(DECISION_THRESHOLD) < 0.0) {
+        if (decisionThreshold < 0.0f) {
           outputStatsFile << "No decision threshold is used.\n";
         } else {
-          outputStatsFile << "Using a decision threshold of " << params->getFloat(DECISION_THRESHOLD) << " for class " << params->getInt(POSITIVE_CLASS_INDEX) << "\n";
+          outputStatsFile << "Using a decision threshold of " << decisionThreshold << " for class " << positiveClassIndex << "\n";
         }
 
         outputStatsFile << "The mean covering size per rule is : " << meanCovSize << "" << std::endl;
@@ -512,15 +537,15 @@ int fidex(const std::string &command) {
     }
 
     if (ruleFile.substr(ruleFile.find_last_of('.') + 1) == "json") {
-      Rule::toJsonFile(ruleFile, rules, params->getFloat(DECISION_THRESHOLD), params->getInt(POSITIVE_CLASS_INDEX));
+      Rule::toJsonFile(ruleFile, rules, decisionThreshold, positiveClassIndex);
     } else {
       std::ofstream outputFile(ruleFile);
 
       if (outputFile.is_open()) {
-        if (params->getFloat(DECISION_THRESHOLD) < 0.0) {
+        if (decisionThreshold < 0.0f) {
           outputFile << "No decision threshold is used.\n";
         } else {
-          outputFile << "Using a decision threshold of " << params->getFloat(DECISION_THRESHOLD) << " for class " << params->getInt(POSITIVE_CLASS_INDEX) << "\n";
+          outputFile << "Using a decision threshold of " << decisionThreshold << " for class " << positiveClassIndex << "\n";
         }
 
         outputFile << std::endl;
@@ -542,11 +567,7 @@ int fidex(const std::string &command) {
     t2 = clock();
     temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
-
-    std::cout.rdbuf(cout_buff); // reset to standard output again
-
   } catch (const ErrorHandler &e) {
-    std::cout.rdbuf(cout_buff); // reset to standard output again
     std::cerr << e.what() << std::endl;
     return -1;
   }
