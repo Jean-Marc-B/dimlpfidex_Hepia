@@ -1,22 +1,16 @@
 #ifndef HYPERSPACEGLO_H
 #define HYPERSPACEGLO_H
 
-#include "../../../common/cpp/src/errorHandler.h"
 #include "../../../common/cpp/src/rule.h"
 #include "hyperbox.h"
-#include <cstring>
-#include <fstream>
-#include <iostream>
 #include <memory>
-#include <sstream>
-#include <tuple>
 #include <vector>
 
 /**
  * @brief Represents a hyperspace composed of all the possible hyperplanes in this space and that manages a hyperbox and its associated discriminative hyperplanes.
  *
- * This class encapsulates the attributes and methods needed to handle a hyperspace which includes a hyperbox
- * and the possible hyperplanes in the feature space that discriminate between different classes of samples.
+ * This class encapsulates the attributes and methods needed to handle a hyperspace, including
+ * a hyperbox and the possible hyperplanes in the feature space that discriminate between classes.
  */
 class Hyperspace {
   std::vector<std::vector<double>> hyperLocus; ///< Matrix representing all the possible hyperplanes.
@@ -36,7 +30,7 @@ public:
   /**
    * @brief Gets the hyperbox associated with the hyperspace.
    */
-  std::shared_ptr<Hyperbox> getHyperbox() const;
+  const std::shared_ptr<Hyperbox> &getHyperbox() const;
 
   /**
    * @brief Gets the matrix of possible hyperplanes in the hyperspace.
