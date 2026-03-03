@@ -16,20 +16,23 @@
 #include <tuple>
 #include <vector>
 
-// Local helper used to temporarily redirect std::cout, then restore its original buffer automatically when leaving fidex().
+// Local helper that opens a console output file, redirects std::cout to it,
+// then restores the original buffer automatically when leaving fidex().
 namespace {
-struct CoutBufferGuard {
-  explicit CoutBufferGuard(std::ostream &stream) : stream(stream), originalBuffer(stream.rdbuf()) {
+struct ScopedCoutRedirect {
+  explicit ScopedCoutRedirect(const std::string &filename) : stream(std::cout), originalBuffer(std::cout.rdbuf()) {
+    output.open(filename);
+    if (!output.is_open()) {
+      throw CannotOpenFileError("Error : Couldn't open console output file " + filename + ".");
+    }
+    stream.rdbuf(output.rdbuf());
   }
 
-  void redirect(std::streambuf *newBuffer) {
-    stream.rdbuf(newBuffer);
-  }
-
-  ~CoutBufferGuard() {
+  ~ScopedCoutRedirect() {
     stream.rdbuf(originalBuffer);
   }
 
+  std::ofstream output;
   std::ostream &stream;
   std::streambuf *originalBuffer;
 };
@@ -216,10 +219,6 @@ void checkFidexParametersLogicValues(Parameters &p) {
 
 int fidex(const std::string &command) {
 
-  // Save buffer where we output results
-  std::ofstream ofs;
-  CoutBufferGuard coutGuard(std::cout);
-
   try {
 
     float temps;
@@ -275,13 +274,9 @@ int fidex(const std::string &command) {
     checkFidexParametersLogicValues(*params);
 
     // Get console results to file
+    std::unique_ptr<ScopedCoutRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      const std::string consoleFile = params->getString(CONSOLE_FILE);
-      ofs.open(consoleFile);
-      if (!ofs.is_open()) {
-        throw CannotOpenFileError("Error : Couldn't open console output file " + consoleFile + ".");
-      }
-      coutGuard.redirect(ofs.rdbuf()); // redirect cout to file
+      coutRedirect.reset(new ScopedCoutRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters

@@ -44,6 +44,11 @@ public:
   const std::vector<std::vector<double>> &getHyperLocus() const;
 
   /**
+   * @brief Resets the hyperbox to an empty state while keeping the same hyperlocus.
+   */
+  void resetHyperbox();
+
+  /**
    * @brief Extracts a rule from the hyperspace based on the main sample data and its prediction.
    */
   Rule ruleExtraction(const std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus = std::vector<double>(), const std::vector<double> &sigmas = std::vector<double>(), const std::vector<int> &normalizationIndices = std::vector<int>());
