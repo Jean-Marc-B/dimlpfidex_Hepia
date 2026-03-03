@@ -359,7 +359,7 @@ std::tuple<double, double> writeRulesFile(const std::string &filename, const std
 /**
  * @brief Get the indices of the rules activated by a test sample.
  */
-void getActivatedRules(std::vector<int> &activatedRules, std::vector<Rule> &rules, std::vector<double> &testValues);
+void getActivatedRules(std::vector<int> &activatedRules, const std::vector<Rule> &rules, const std::vector<double> &testValues);
 
 /**
  * @brief Extract the decision threshold and the index of the positive class from a rules file.

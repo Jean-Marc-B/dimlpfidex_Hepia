@@ -1,5 +1,43 @@
 #include "fidexGloFct.h"
 
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/dataSet.h"
+#include "../../../common/cpp/src/errorHandler.h"
+#include "../../../common/cpp/src/parameters.h"
+#include "fidexAlgo.h"
+#include "hyperLocus.h"
+#include "hyperspace.h"
+
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <tuple>
+#include <vector>
+
+// Local helper that opens a console output file, redirects std::cout to it,
+// then restores the original buffer automatically when leaving fidexGlo().
+namespace {
+struct ScopedCoutRedirect {
+  explicit ScopedCoutRedirect(const std::string &filename) : stream(std::cout), originalBuffer(std::cout.rdbuf()) {
+    output.open(filename);
+    if (!output.is_open()) {
+      throw CannotOpenFileError("Error : Couldn't open console output file " + filename + ".");
+    }
+    stream.rdbuf(output.rdbuf());
+  }
+
+  ~ScopedCoutRedirect() {
+    stream.rdbuf(originalBuffer);
+  }
+
+  std::ofstream output;
+  std::ostream &stream;
+  std::streambuf *originalBuffer;
+};
+} // namespace
+
 /**
  * @brief Displays the parameters for fidexGlo.
  */
@@ -103,7 +141,7 @@ void showFidexGloParams() {
  * @param attributeNames Reference to a vector of strings containing the attribute names.
  * @param classNames Reference to a vector of strings containing the class names.
  */
-void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredScore, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames) {
+void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, const std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredScore, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames) {
   int nbFidexRules = p.getInt(NB_FIDEX_RULES);
   if (nbFidexRules == 1) {
     std::cout << "\nWe launch Fidex." << std::endl;
@@ -114,6 +152,7 @@ void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRul
   }
 
   std::vector<Rule> rules;
+  rules.reserve(nbFidexRules);
 
   auto fidex = Fidex(trainDataset, p, hyperspace, true);
 
@@ -122,8 +161,9 @@ void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRul
 
     // Launch fidexAlgo
     fidex.setMainSamplePredScore(mainSamplePredScore);
-    fidex.launchFidex(rule, mainSampleValues, mainSamplePred);
-    rules.push_back(rule);
+    const bool ruleMeetsTarget = fidex.launchFidex(rule, mainSampleValues, mainSamplePred);
+    // `rule` is still usable even when ruleMeetsTarget is false: it contains the best rule found.
+    rules.push_back(std::move(rule));
   }
   if (nbFidexRules == 1) {
     std::cout << "\nLocal rule :" << std::endl;
@@ -132,10 +172,11 @@ void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRul
     std::cout << "\nLocal rules :" << std::endl;
     lines.emplace_back("Local rules :\n");
   }
-  for (Rule rule : rules) {
+  for (const Rule &rule : rules) {
     currentRules.push_back(rule);
-    std::cout << rule.toString(attributeNames, classNames) << std::endl;
-    lines.emplace_back(rule.toString(attributeNames, classNames) + "\n");
+    const std::string ruleText = rule.toString(attributeNames, classNames);
+    std::cout << ruleText << std::endl;
+    lines.emplace_back(ruleText + "\n");
   }
 }
 
@@ -261,9 +302,6 @@ void checkParametersLogicValues(Parameters &p) {
  * @return Returns 0 for successful execution, -1 for errors encountered during the process.
  */
 int fidexGlo(const std::string &command) {
-  // Save buffer where we output results
-  std::ofstream ofs;
-  std::streambuf *cout_buff = std::cout.rdbuf(); // Save old buf
   try {
 
     float temps;
@@ -317,10 +355,9 @@ int fidexGlo(const std::string &command) {
     checkParametersLogicValues(*params);
 
     // Get console results to file
+    std::unique_ptr<ScopedCoutRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      std::string consoleFile = params->getString(CONSOLE_FILE);
-      ofs.open(consoleFile);
-      std::cout.rdbuf(ofs.rdbuf()); // redirect std::cout to file
+      coutRedirect.reset(new ScopedCoutRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
@@ -352,9 +389,9 @@ int fidexGlo(const std::string &command) {
     } else { // We have a different file for test predictions
       testDatas.reset(new DataSetFid("testDatas from FidexGlo", testSamplesDataFile, params->getString(TEST_PRED_FILE), nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
     }
-    std::vector<std::vector<double>> testSamplesValues = testDatas->getDatas();
-    std::vector<int> testSamplesPreds = testDatas->getPredictions();
-    std::vector<std::vector<double>> testSamplesPredictionScores = testDatas->getPredictionScores();
+    const auto &testSamplesValues = testDatas->getDatas();
+    const auto &testSamplesPreds = testDatas->getPredictions();
+    const auto &testSamplesPredictionScores = testDatas->getPredictionScores();
 
     int nbSamples = testDatas->getNbSamples();
 
@@ -372,10 +409,9 @@ int fidexGlo(const std::string &command) {
     }
 
     // If we use Fidex
-    std::vector<int> testSamplesClasses;
     std::unique_ptr<DataSetFid> trainDatas;
     std::vector<std::vector<double>> matHypLocus;
-    bool hasTrueClasses;
+    std::unique_ptr<Hyperspace> fidexHyperspace;
     if (withFidex) {
 
       std::vector<int> normalizationIndices;
@@ -396,17 +432,9 @@ int fidexGlo(const std::string &command) {
       // Import files for Fidex
       std::cout << "Importing files for Fidex..." << std::endl;
 
-      // Get test class data :
-      hasTrueClasses = true;
-      if (!params->isStringSet(TEST_CLASS_FILE)) {
-        if (!testDatas->getHasClasses()) {
-          hasTrueClasses = false;
-        }
-      } else {
+      // Load test classes only when they are provided in a dedicated file.
+      if (params->isStringSet(TEST_CLASS_FILE)) {
         testDatas->setClassFromFile(params->getString(TEST_CLASS_FILE), nbClasses);
-      }
-      if (hasTrueClasses) {
-        testSamplesClasses = testDatas->getClasses();
       }
 
       if (!params->isStringSet(TRAIN_CLASS_FILE)) {
@@ -472,6 +500,8 @@ int fidexGlo(const std::string &command) {
         throw InternalError("Error : the size of hyperLocus - " + std::to_string(nbIn) + " is not a multiple of the number of attributes - " + std::to_string(nbAttributes));
       }
 
+      fidexHyperspace.reset(new Hyperspace(matHypLocus));
+
       std::cout << "Hyperspace created." << std::endl
                 << std::endl;
     }
@@ -491,7 +521,11 @@ int fidexGlo(const std::string &command) {
       double meanNbAntecedentsPerRule = 0;
       auto nbRules = static_cast<int>(rules.size());
 
-      for (Rule r : rules) {
+      if (nbRules == 0) {
+        throw FileContentError("Error : global rules JSON file " + rulesFile + " does not contain any rule.");
+      }
+
+      for (const Rule &r : rules) {
         meanCovering += static_cast<double>(r.getCoveredSamples().size());
         meanNbAntecedentsPerRule += static_cast<double>(r.getAntecedents().size());
       }
@@ -543,7 +577,7 @@ int fidexGlo(const std::string &command) {
     }
     int nb_fidex = 0; // Number of times Fidex is used
     bool launchingFidex;
-    std::vector<std::vector<Rule>> rulesPerSamples(nbSamples, std::vector<Rule>(0));
+    std::vector<std::vector<Rule>> rulesPerSamples(nbSamples);
     for (int currentSample = 0; currentSample < nbSamples; currentSample++) {
       launchingFidex = false;
       std::vector<Rule> currentRules;
@@ -612,10 +646,11 @@ int fidexGlo(const std::string &command) {
               std::cout << "We didn't find any rule with the same prediction as the model (class " << std::to_string(testSamplesPreds[currentSample]) << "), but we found 1 rule with class " << std::to_string(ancientClass) << " :" << std::endl
                         << std::endl;
             }
-            for (int v = 0; v < activatedRules.size(); v++) {
+            for (size_t v = 0; v < activatedRules.size(); v++) {
               currentRules.push_back(rules[activatedRules[v]]); // add a rule for a given sample
-              lines.emplace_back("R" + std::to_string(v + 1) + ": " + rules[activatedRules[v]].toString(attributeNames, classNames));
-              std::cout << "R" << std::to_string(v + 1) << ": " << rules[activatedRules[v]].toString(attributeNames, classNames) << std::endl;
+              const std::string ruleText = rules[activatedRules[v]].toString(attributeNames, classNames);
+              lines.emplace_back("R" + std::to_string(v + 1) + ": " + ruleText);
+              std::cout << "R" << std::to_string(v + 1) << ": " << ruleText << std::endl;
             }
           } else { // If minimalVersion or uncorrected rules are not all same class (only if we don't have correct rules)
             if (minimalVersion) {
@@ -646,10 +681,11 @@ int fidexGlo(const std::string &command) {
             std::cout << "We have found 1 global rule explaining the model prediction :" << std::endl
                       << std::endl; // There is no explanation, we choose the model decision
           }
-          for (int c = 0; c < correctRules.size(); c++) {
+          for (size_t c = 0; c < correctRules.size(); c++) {
             currentRules.push_back(rules[correctRules[c]]); // add a rule for a given sample
-            lines.emplace_back("R" + std::to_string(c + 1) + ": " + rules[correctRules[c]].toString(attributeNames, classNames));
-            std::cout << "R" << std::to_string(c + 1) << ": " << rules[correctRules[c]].toString(attributeNames, classNames) << std::endl;
+            const std::string ruleText = rules[correctRules[c]].toString(attributeNames, classNames);
+            lines.emplace_back("R" + std::to_string(c + 1) + ": " + ruleText);
+            std::cout << "R" << std::to_string(c + 1) << ": " << ruleText << std::endl;
           }
         }
       }
@@ -660,9 +696,10 @@ int fidexGlo(const std::string &command) {
         if (!notCorrectRules.empty()) {
           lines.emplace_back("\nActivated rules without correct decision class :");
           std::cout << "\nActivated rules without correct decision class :" << std::endl;
-          for (int n = 0; n < notCorrectRules.size(); n++) {
-            lines.emplace_back("F" + std::to_string(n + 1) + ": " + rules[notCorrectRules[n]].toString(attributeNames, classNames));
-            std::cout << "F" << std::to_string(n + 1) + ": " << rules[notCorrectRules[n]].toString(attributeNames, classNames) << std::endl;
+          for (size_t n = 0; n < notCorrectRules.size(); n++) {
+            const std::string ruleText = rules[notCorrectRules[n]].toString(attributeNames, classNames);
+            lines.emplace_back("F" + std::to_string(n + 1) + ": " + ruleText);
+            std::cout << "F" << std::to_string(n + 1) << ": " << ruleText << std::endl;
           }
         } else {
           lines.emplace_back("\nThere are no incorrect rules.");
@@ -671,12 +708,12 @@ int fidexGlo(const std::string &command) {
       }
 
       if (launchingFidex) {
-        auto trainDataset = *trainDatas.get();
-        Hyperspace hyperspace(matHypLocus);
-        std::vector<double> mainSampleValues = testSamplesValues[currentSample];
+        auto &trainDataset = *trainDatas;
+        fidexHyperspace->resetHyperbox();
+        const auto &mainSampleValues = testSamplesValues[currentSample];
         int mainSamplePred = testSamplesPreds[currentSample];
         double mainSamplePredScore = testSamplesPredictionScores[currentSample][mainSamplePred];
-        executeFidex(lines, currentRules, trainDataset, *params, hyperspace, mainSampleValues, mainSamplePred, mainSamplePredScore, attributeNames, classNames);
+        executeFidex(lines, currentRules, trainDataset, *params, *fidexHyperspace, mainSampleValues, mainSamplePred, mainSamplePredScore, attributeNames, classNames);
       }
       rulesPerSamples[currentSample] = currentRules;
 
@@ -726,10 +763,7 @@ int fidexGlo(const std::string &command) {
     temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
-    std::cout.rdbuf(cout_buff); // reset to standard output again
-
   } catch (const ErrorHandler &e) {
-    std::cout.rdbuf(cout_buff); // reset to standard output again
     std::cerr << e.what() << std::endl;
     return -1;
   }

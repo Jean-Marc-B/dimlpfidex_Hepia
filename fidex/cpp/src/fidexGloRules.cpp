@@ -16,12 +16,12 @@
 int main(int nbParam, char **param)
 
 {
-  std::string command = "";
-  if (nbParam >= 1) {
-    for (int p = 1; p < nbParam; p++) {
-      command += " ";
-      command += param[p];
+  std::string command;
+  for (int p = 1; p < nbParam; p++) {
+    if (!command.empty()) {
+      command += ' ';
     }
+    command += param[p];
   }
   return fidexGloRules(command);
 }

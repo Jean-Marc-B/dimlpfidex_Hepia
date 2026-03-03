@@ -20,6 +20,14 @@ const std::vector<std::vector<double>> &Hyperspace::getHyperLocus() const {
 }
 
 /**
+ * @brief Resets the hyperbox to an empty state while keeping the same hyperlocus.
+ */
+void Hyperspace::resetHyperbox() {
+  std::vector<std::pair<int, int>> discriminativeHyperplans;
+  hyperbox = std::make_shared<Hyperbox>(discriminativeHyperplans);
+}
+
+/**
  * @brief Gets the hyperbox associated with the hyperspace.
  *
  * @return Shared pointer to the Hyperbox object.

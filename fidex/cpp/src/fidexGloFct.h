@@ -1,22 +1,13 @@
 #ifndef FIDEXGLOFCT_H
 #define FIDEXGLOFCT_H
 
-#include "../../../common/cpp/src/dataSet.h"
-#include "../../../common/cpp/src/errorHandler.h"
-#include "../../../common/cpp/src/parameters.h"
 #include "../../../common/cpp/src/rule.h"
-#include "fidexAlgo.h"
-#include "hyperLocus.h"
-#include <algorithm>
-#include <fstream>
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <string.h>
-#include <time.h>
-#include <tuple>
-#include <unordered_map>
+#include <string>
 #include <vector>
+
+class DataSetFid;
+class Parameters;
+class Hyperspace;
 
 /**
  * @brief Displays the parameters for fidexGlo.
@@ -31,7 +22,7 @@ void checkParametersLogicValues(Parameters &p);
 /**
  * @brief Executes the Fidex algorithm to extract an explanation rule for a given sample.
  */
-void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &generatedRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredScore, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames);
+void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &generatedRules, DataSetFid &trainDataset, Parameters &p, Hyperspace &hyperspace, const std::vector<double> &mainSampleValues, int mainSamplePred, double mainSamplePredScore, const std::vector<std::string> &attributeNames, const std::vector<std::string> &classNames);
 
 /**
  * @brief Executes the FidexGlo algorithm with specified parameters to extract explanation rules for each test sample.

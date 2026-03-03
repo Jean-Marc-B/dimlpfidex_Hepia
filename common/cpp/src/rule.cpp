@@ -555,7 +555,7 @@ void getRules(std::vector<Rule> &rules, const std::string &rulesFile, DataSetFid
     while (getline(rulesData, line)) {
       Rule rule;
       bool isRule = stringToRule(rule, line, attributePattern, classPattern, !attributeIdsInFile, !classeIdsInFile, dataset);
-      
+
       if (isRule) {
         getline(rulesData, line); // Cov size
         rule.setCoveringSize(stoi(splitString(line, " ")[4]));
@@ -678,7 +678,7 @@ std::tuple<double, double> writeRulesFile(const std::string &filename, const std
  * @param rules Vector of rules to check.
  * @param testValues Values of the test sample for which we search activated rules.
  */
-void getActivatedRules(std::vector<int> &activatedRules, std::vector<Rule> &rules, std::vector<double> &testValues) {
+void getActivatedRules(std::vector<int> &activatedRules, const std::vector<Rule> &rules, const std::vector<double> &testValues) {
   int attr;
   bool ineq;
   double val;
