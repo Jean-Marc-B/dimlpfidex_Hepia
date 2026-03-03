@@ -23,8 +23,7 @@ const std::vector<std::vector<double>> &Hyperspace::getHyperLocus() const {
  * @brief Resets the hyperbox to an empty state while keeping the same hyperlocus.
  */
 void Hyperspace::resetHyperbox() {
-  std::vector<std::pair<int, int>> discriminativeHyperplans;
-  hyperbox = std::make_shared<Hyperbox>(discriminativeHyperplans);
+  hyperbox = std::make_shared<Hyperbox>();
 }
 
 /**
@@ -32,7 +31,7 @@ void Hyperspace::resetHyperbox() {
  *
  * @return Shared pointer to the Hyperbox object.
  */
-std::shared_ptr<Hyperbox> Hyperspace::getHyperbox() const {
+const std::shared_ptr<Hyperbox> &Hyperspace::getHyperbox() const {
   return hyperbox;
 }
 
@@ -78,7 +77,7 @@ Rule Hyperspace::ruleExtraction(const std::vector<double> &mainSampleData, const
 
     // Denormalization of values in case it was previously normalized
     if (denormalizing) {
-      // Check if the attributee needs to be denormalized
+      // Check if the attribute needs to be denormalized
       int index = -1;
       for (size_t i = 0; i < normalizationIndices.size(); ++i) {
         if (normalizationIndices[i] == attribute) {
@@ -91,7 +90,7 @@ Rule Hyperspace::ruleExtraction(const std::vector<double> &mainSampleData, const
       }
     }
 
-    antecedents.emplace_back(Antecedent(attribute, inequalityBool, hypValue));
+    antecedents.emplace_back(attribute, inequalityBool, hypValue);
   }
   return Rule(antecedents, hyperbox->getCoveredSamples(), hyperbox->getCoveringSizesWithNewAntecedent(), mainSamplePred, hyperbox->getFidelity(), hyperbox->getIncreasedFidelity(), ruleAccuracy, hyperbox->getAccuracyChanges(), ruleConfidence);
 }

@@ -2,8 +2,6 @@
 #define HYPERBOX_H
 
 #include <iostream>
-#include <numeric>
-#include <string>
 #include <vector>
 
 /**
@@ -47,7 +45,7 @@ public:
   void setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newDiscriminativehyperplan);
 
   /**
-   * @brief remove a discriminative hyperplan based on its array position.
+   * @brief Removes a discriminative hyperplane based on its array position.
    */
   void removeDiscriminativehyperplan(int index);
 
@@ -64,7 +62,7 @@ public:
   /**
    * @brief Computes the new covered samples and the resulting fidelity in a single pass.
    */
-  void computeCoveredSamplesAndFidelity(const std::vector<int> &ancientCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainSamplePred, const std::vector<int> &trainPreds);
+  void computeCoveredSamplesAndFidelity(const std::vector<int> &ancientCoveredSamples, int attribute, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainSamplePred, const std::vector<int> &trainPreds);
 
   /**
    * @brief Computes the fidelity of the samples covered by the hyperbox with respect to the model's prediction.
@@ -92,7 +90,7 @@ public:
   void addIncreasedFidelity(double incrFidelity);
 
   /**
-   * @brief remove a increased fidelity stat based on its array position.
+   * @brief Removes an increased fidelity stat based on its array position.
    */
   void removeIncreasedFidelity(int index);
 
@@ -117,7 +115,7 @@ public:
   void addAccuracyChanges(double incrFidelity);
 
   /**
-   * @brief remove an accuracy change stat based on its array position.
+   * @brief Removes an accuracy change stat based on its array position.
    */
   void removeAccuracyChange(int index);
 
@@ -147,7 +145,7 @@ public:
   void addCoveringSizesWithNewAntecedent(int covSize);
 
   /**
-   * @brief remove a covering sizes with new antecedent stat based on its array position.
+   * @brief Removes a covering-size-with-new-antecedent stat based on its array position.
    */
   void removeCoveringSizesWithNewAntecedent(int index);
 
@@ -172,32 +170,38 @@ public:
 };
 
 inline std::ostream &operator<<(std::ostream &stream, const Hyperbox &hyperbox) {
+  const auto &discriminativeHyperplans = hyperbox.getDiscriminativeHyperplans();
+  const auto &increasedFidelities = hyperbox.getIncreasedFidelity();
+  const auto &coveringSizes = hyperbox.getCoveringSizesWithNewAntecedent();
+  const auto &coveredSamples = hyperbox.getCoveredSamples();
+  const auto &accuracyChanges = hyperbox.getAccuracyChanges();
+
   stream << "Discriminative hyperplans:        ";
-  for (const auto &discHyp : hyperbox.getDiscriminativeHyperplans()) {
+  for (const auto &discHyp : discriminativeHyperplans) {
     stream << "[" << discHyp.first << "," << discHyp.second << "], ";
   }
   stream << std::endl;
 
-  stream << "Increased fidelity by antededant: ";
-  for (auto increasedFidelity : hyperbox.getIncreasedFidelity()) {
+  stream << "Increased fidelity by antecedent: ";
+  for (double increasedFidelity : increasedFidelities) {
     stream << increasedFidelity << ",";
   }
   stream << std::endl;
 
   stream << "Covering size w/ new antecedent:  ";
-  for (auto coveringSize : hyperbox.getCoveringSizesWithNewAntecedent()) {
+  for (int coveringSize : coveringSizes) {
     stream << coveringSize << ",";
   }
   stream << std::endl;
 
   stream << "Covered samples:                  ";
-  for (size_t i = 0; i < hyperbox.getCoveredSamples().size() && i < 5; i++) {
-    stream << hyperbox.getCoveredSamples()[i] << ",";
+  for (size_t i = 0; i < coveredSamples.size() && i < 5; ++i) {
+    stream << coveredSamples[i] << ",";
   }
-  stream << "... (size=" << hyperbox.getCoveredSamples().size() << ")" << std::endl;
+  stream << "... (size=" << coveredSamples.size() << ")" << std::endl;
 
   stream << "Accuracy Changes:                 ";
-  for (auto accuracyChange : hyperbox.getAccuracyChanges()) {
+  for (double accuracyChange : accuracyChanges) {
     stream << accuracyChange << ",";
   }
   stream << std::endl;

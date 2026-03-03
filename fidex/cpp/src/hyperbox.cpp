@@ -1,5 +1,7 @@
 #include "hyperbox.h"
 
+#include <numeric>
+
 /**
  * @brief Constructs a Hyperbox object with specified discriminative hyperplanes.
  *
@@ -39,11 +41,11 @@ const std::vector<std::pair<int, int>> &Hyperbox::getDiscriminativeHyperplans() 
  * @param hypVal Hyperplane value.
  */
 void Hyperbox::addDiscriminativeHyperplan(int dimVal, int hypValIndex) {
-  discriminativeHyperplans.emplace_back(std::make_pair(dimVal, hypValIndex));
+  discriminativeHyperplans.emplace_back(dimVal, hypValIndex);
 }
 
 /**
- * @brief remove a discriminative hyperplan based on its array position.
+ * @brief Removes a discriminative hyperplane based on its array position.
  *
  * @param index item index to remove.
  */
@@ -75,7 +77,7 @@ void Hyperbox::setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newD
  * @brief Computes the new covered samples with a new discriminative hyperplane.
  *
  * @param ancientCoveredSamples Vector of previously covered sample IDs.
- * @param attribut Index of the attribute (dimension) used for the hyperplane.
+ * @param attribute Index of the attribute (dimension) used for the hyperplane.
  * @param trainData Training data matrix.
  * @param mainSampleGreater Boolean indicating if the sample of interest is greater than the hyperplane value.
  * @param hypValue Value of the hyperplane.
@@ -103,13 +105,13 @@ void Hyperbox::computeCoveredSamples(const std::vector<int> &ancientCoveredSampl
  * @param mainSamplePred Prediction of the sample of interest.
  * @param trainPreds Vector of predictions of the training data.
  */
-void Hyperbox::computeCoveredSamplesAndFidelity(const std::vector<int> &ancientCoveredSamples, int attribut, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainSamplePred, const std::vector<int> &trainPreds) {
+void Hyperbox::computeCoveredSamplesAndFidelity(const std::vector<int> &ancientCoveredSamples, int attribute, const std::vector<std::vector<double>> &trainData, bool mainSampleGreater, double hypValue, const int mainSamplePred, const std::vector<int> &trainPreds) {
   std::vector<int> newCoveredSamples;
   newCoveredSamples.reserve(ancientCoveredSamples.size());
 
   size_t coveredTrueClass = 0;
   for (int idCoveredSample : ancientCoveredSamples) { // We check all already covered samples
-    bool sampleGreater = hypValue <= trainData[idCoveredSample][attribut];
+    bool sampleGreater = hypValue <= trainData[idCoveredSample][attribute];
     if (mainSampleGreater == sampleGreater) { // If both samples are on same side of hyperplane
       newCoveredSamples.push_back(idCoveredSample);
       if (mainSamplePred == trainPreds[idCoveredSample]) {
@@ -252,7 +254,7 @@ void Hyperbox::addIncreasedFidelity(double newFidelity) {
 }
 
 /**
- * @brief remove a increased fidelity stat based on its array position.
+ * @brief Removes an increased fidelity stat based on its array position.
  *
  * @param index item index to remove.
  */
@@ -304,7 +306,7 @@ void Hyperbox::addAccuracyChanges(double newAccuracy) {
 }
 
 /**
- * @brief remove an accuracy change stat based on its array position.
+ * @brief Removes an accuracy change stat based on its array position.
  *
  * @param index item index to remove.
  */

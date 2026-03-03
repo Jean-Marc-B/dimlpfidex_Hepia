@@ -53,7 +53,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();
   std::vector<std::vector<double>> &trainPredictionScores = _trainDataset->getPredictionScores();
   const auto &hyperLocus = hyperspace->getHyperLocus();    // Matrix of all possible hyperplanes for each dimension
-  auto hyperbox = hyperspace->getHyperbox();               // Main hyperbox of the rule
+  const auto &hyperbox = hyperspace->getHyperbox();        // Main hyperbox of the rule
   auto nbDimensions = static_cast<int>(hyperLocus.size()); // Number of dimensions in the hyperlocus (must be a multiple of the number of attributes)
   int maxIterations = _parameters->getInt(MAX_ITERATIONS); // Max number of antecedents in the rule
   double dropoutDim = _parameters->getFloat(DROPOUT_DIM);
@@ -461,7 +461,7 @@ bool Fidex::launchFidex(Rule &rule, const std::vector<double> &mainSampleValues,
  * @return wether an optimisation has been done or not.
  */
 bool Fidex::optimizeRule(const std::vector<double> &mainSampleValues, int mainSamplePred) {
-  std::shared_ptr<Hyperbox> originalHyperbox = _hyperspace->getHyperbox();
+  const auto &originalHyperbox = _hyperspace->getHyperbox();
   const auto &originalDiscrHyperplans = originalHyperbox->getDiscriminativeHyperplans();
   const size_t nbAntecedents = originalDiscrHyperplans.size();
   const auto &trainData = _trainDataset->getDatas();
