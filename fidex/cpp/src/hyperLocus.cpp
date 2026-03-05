@@ -1,4 +1,15 @@
 #include "hyperLocus.h"
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/dataSet.h"
+#include "../../../common/cpp/src/errorHandler.h"
+#include "../../../common/cpp/src/rule.h"
+#include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <regex>
+#include <set>
 
 /**
  * @brief Calculates the hyperlocus matrix containing all possible hyperplanes in the feature space that discriminate between different classes of samples, based on the weights training file.
@@ -12,6 +23,7 @@
  * @return Matrix representing the hyperlocus.
  */
 std::vector<std::vector<double>> calcHypLocus(DataSetFid &dataset, int nbQuantLevels, double hiKnot) {
+  const double minAbsWeight = 1e-6;
   double lowKnot = -hiKnot;
   double dist = hiKnot - lowKnot;         // Size of the interval
   double binWidth = dist / nbQuantLevels; // Width of a box between 2 separations
@@ -30,9 +42,11 @@ std::vector<std::vector<double>> calcHypLocus(DataSetFid &dataset, int nbQuantLe
     std::vector<double> weights = dataset.getInputWeights(n);
 
     for (int i = 0; i < nbFeatures; i++) { // Loop on dimension
-      for (int j = n * nbKnots; j < n * nbKnots + nbKnots; j++) {
-        double knot = lowKnot + binWidth * j;
-        double barrier = (knot - bias[i]) / weights[i];
+      const double safeWeight = (std::abs(weights[i]) < minAbsWeight) ? (weights[i] < 0.0 ? -minAbsWeight : minAbsWeight) : weights[i];
+      for (int k = 0; k < nbKnots; ++k) {
+        int j = n * nbKnots + k; // Index on the hyperlocus
+        double knot = lowKnot + binWidth * k;
+        double barrier = (knot - bias[i]) / safeWeight;
         hyperlocus[i][j] = barrier; // Placement of the hyperplan
       }
     }
@@ -55,10 +69,13 @@ std::vector<std::vector<double>> calcHypLocus(DataSetFid &dataset, int nbQuantLe
  * @param barriers Vector of barriers.
  * @param scores Vector of barriers scores.
  * @return true If the data has found an enclosing barrier.
- * @return false If the data remains unenclosed (should never happen).
+ * @return false If barriers/scores are invalid or if no enclosing interval is found (should never happen).
  */
-bool searchBarriers(double data, std::vector<double> &barriers, std::vector<int> &scores) {
-  int nbBarriers = barriers.size();
+bool searchBarriers(double data, const std::vector<double> &barriers, std::vector<int> &scores) {
+  const size_t nbBarriers = barriers.size();
+  if (nbBarriers == 0 || scores.size() != nbBarriers) {
+    return false;
+  }
 
   // if below lowest barrier
   if (data < barriers[0]) {
@@ -73,7 +90,7 @@ bool searchBarriers(double data, std::vector<double> &barriers, std::vector<int>
   }
 
   // if between some barriers
-  for (int bId = 1; bId < nbBarriers; bId++) {
+  for (size_t bId = 1; bId < nbBarriers; ++bId) {
     if (data >= barriers[bId - 1] && data < barriers[bId]) {
       scores[bId - 1]++;
       scores[bId]++;
@@ -93,9 +110,8 @@ bool searchBarriers(double data, std::vector<double> &barriers, std::vector<int>
  * vector in place and processes gaps from left to right.
  *
  * @param scores Vector of barrier scores (0 indicates a dead barrier).
- * @return std::vector<int> The modified vector after revival.
  */
-std::vector<int> reviveBarriersScore(std::vector<int> &scores) {
+void reviveBarriersScore(std::vector<int> &scores) {
   int gap = 0;
   int low_id = 0;
   bool counting = false;
@@ -136,8 +152,6 @@ std::vector<int> reviveBarriersScore(std::vector<int> &scores) {
   //   std::cout << score << ",";
   // }
   // std::cout << "\n\n";
-
-  return scores;
 }
 
 /**
@@ -147,7 +161,7 @@ std::vector<int> reviveBarriersScore(std::vector<int> &scores) {
  * @param scores Vector with the number of contained datas per barrier.
  * @return std::vector<double> The filtered vector of barrier.
  */
-std::vector<double> filterBarriers(std::vector<double> &barriers, std::vector<int> &scores) {
+std::vector<double> filterBarriers(const std::vector<double> &barriers, const std::vector<int> &scores) {
   std::vector<double> filteredBarriers;
 
   for (int i = 0; i < barriers.size(); i++) {
@@ -165,10 +179,10 @@ std::vector<double> filterBarriers(std::vector<double> &barriers, std::vector<in
  * @return int The number of elements.
  */
 template <typename T>
-int sizeOf2DVector(std::vector<std::vector<T>> vec) {
+int sizeOf2DVector(const std::vector<std::vector<T>> &vec) {
   int sum = 0;
 
-  for (std::vector<T> line : vec) {
+  for (const auto &line : vec) {
     sum += line.size();
   }
 
@@ -184,21 +198,33 @@ int sizeOf2DVector(std::vector<std::vector<T>> vec) {
  * @param datas dataset used to filter the barriers.
  */
 void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds, bool enableRevive) {
-  std::vector<std::vector<double>> datas = ds.getDatas();
+  if (originalHypLocus.empty()) {
+    std::cout << "Hyperlocus optimization skipped: no dimensions.\n";
+    return;
+  }
 
-  if (sizeOf2DVector(datas) < 1) {
-    throw InternalError("Connot optimize Hyperlocus. The given dataset does not contain any sample.");
+  const auto &datas = ds.getDatas();
+  if (datas.empty()) {
+    std::cout << "Hyperlocus optimization skipped: no samples.\n";
+    return;
   }
 
   int nbNets = ds.getNbNets();
+  if (nbNets <= 0) {
+    std::cout << "Hyperlocus optimization skipped: invalid number of networks.\n";
+    return;
+  }
   int hyperlocusSize = originalHypLocus.size();
-  int nbSamples = ds.getDatas().size();
+  int nbSamples = static_cast<int>(datas.size());
   int barriers_per_net = originalHypLocus[0].size() / nbNets;
   int totalNbHyperplans = sizeOf2DVector(originalHypLocus);
   std::cout << "original hyperlocus dimensions: " << nbNets << "*" << hyperlocusSize << "*" << barriers_per_net << "=" << totalNbHyperplans << "\n";
 
   for (int hlId = 0; hlId < hyperlocusSize; hlId++) {
     std::vector<double> &currentBarriers = originalHypLocus[hlId];
+    if (currentBarriers.empty()) {
+      continue;
+    }
     int nbBarriers = currentBarriers.size();
     std::vector<int> currentBarriersScores(nbBarriers);
 
@@ -207,17 +233,15 @@ void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSe
       searchBarriers(currentData, currentBarriers, currentBarriersScores);
     }
 
-
-
     if (enableRevive) {
-      currentBarriersScores = reviveBarriersScore(currentBarriersScores); // TODO test
+      reviveBarriersScore(currentBarriersScores); // TODO test
     }
 
     originalHypLocus[hlId] = filterBarriers(currentBarriers, currentBarriersScores);
   }
 
   int remainingNbHyperplans = sizeOf2DVector(originalHypLocus);
-  double remainingPercent = remainingNbHyperplans * 100.0 / (double)totalNbHyperplans;
+  double remainingPercent = totalNbHyperplans > 0 ? remainingNbHyperplans * 100.0 / (double)totalNbHyperplans : 0.0;
 
   std::streamsize defaultPrecision = std::cout.precision();
   std::cout << "Optimization done. " << remainingNbHyperplans << "/" << totalNbHyperplans << " hyperplan(s) remaining (" << std::setprecision(3) << remainingPercent << std::setprecision(defaultPrecision) << "%).\n";
@@ -259,7 +283,7 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &rulesFile, Data
     if (line.find("Rule") == 0) { // If line begins with "Rule"
       Rule rule;
       if (stringToRule(rule, line, attributePattern, classPattern, !attributeIdsInFile, false, dataset)) {
-        for (Antecedent ant : rule.getAntecedents()) {
+        for (const Antecedent &ant : rule.getAntecedents()) {
           thresholds[ant.getAttribute()].insert(ant.getValue());
         }
       }
