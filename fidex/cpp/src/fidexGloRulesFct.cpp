@@ -1,7 +1,56 @@
 #include "fidexGloRulesFct.h"
 
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/dataSet.h"
+#include "../../../common/cpp/src/errorHandler.h"
+#include "../../../common/cpp/src/parameters.h"
+#include "../../../common/cpp/src/rule.h"
+#include "fidexAlgo.h"
+#include "hyperLocus.h"
+
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <climits>
+#include <fstream>
+#include <iostream>
 #include <map>
+#include <memory>
+#include <numeric>
+#include <random>
+#include <sstream>
+#include <sys/stat.h>
+#include <unordered_set>
+
+#ifdef _WIN32
+#include "../../../dirent/include/dirent.h"
+#else
+#include <dirent.h>
+#endif
+
+#include <omp.h>
+
+// Local helper that opens a console output file, redirects std::cout to it,
+// then restores the original buffer automatically when leaving fidexGloRules().
+namespace {
+struct ScopedCoutRedirect {
+  explicit ScopedCoutRedirect(const std::string &filename) : stream(std::cout), originalBuffer(std::cout.rdbuf()) {
+    output.open(filename);
+    if (!output.is_open()) {
+      throw CannotOpenFileError("Error : Couldn't open console output file " + filename + ".");
+    }
+    stream.rdbuf(output.rdbuf());
+  }
+
+  ~ScopedCoutRedirect() {
+    stream.rdbuf(originalBuffer);
+  }
+
+  std::ofstream output;
+  std::ostream &stream;
+  std::streambuf *originalBuffer;
+};
+} // namespace
 
 /**
  * @brief Displays the parameters for fidexGloRules.
@@ -380,7 +429,9 @@ void readRuleFiles(std::vector<Rule> &rules, Parameters &p, DataSetFid &dataset)
     std::vector<Rule> subset;
     std::string rulesFileAbspath = dirPath + getOSSeparator() + entry->d_name;
 
-    stat(rulesFileAbspath.c_str(), &info);
+    if (stat(rulesFileAbspath.c_str(), &info) != 0) {
+      throw FileNotFoundError("Cannot access file '" + rulesFileAbspath + "' in aggregate folder.");
+    }
 
     if (S_ISREG(info.st_mode)) {
       std::cout << "  -> Reading " << rulesFileAbspath << std::endl;
@@ -418,6 +469,7 @@ std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples
     generateRules(rules, notCoveredSamples, trainDataset, p, hyperlocus);
   }
 
+  // sort rules by covering
   sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
     return r1.getCoveringSize() > r2.getCoveringSize();
   });
@@ -425,7 +477,7 @@ std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples
   return rules;
 }
 
-int computeGlobalRulesCoveredSamples(int nbDatas, int nbClasses, std::vector<std::vector<int>> coveredSamplesSumByClass) {
+int computeGlobalRulesCoveredSamples(int nbDatas, int nbClasses, const std::vector<std::vector<int>> &coveredSamplesSumByClass) {
   int notCoveredSamples = 0;
 
   for (int i = 0; i < nbDatas; i++) {
@@ -446,26 +498,27 @@ int computeGlobalRulesCoveredSamples(int nbDatas, int nbClasses, std::vector<std
   return notCoveredSamples;
 }
 
-std::vector<Rule> ruleSelection(int nbDatas, int nbClasses, std::vector<Rule> rules) {
+std::vector<Rule> ruleSelection(int nbDatas, int nbClasses, const std::vector<Rule> &rules) {
   std::vector<Rule> chosenRules;
   std::vector<std::vector<int>> coveredSamplesSumByClass(nbClasses, std::vector<int>(nbDatas, 0));
   int deletedRules = 0;
 
   std::cout << "Running rule selection optimization...." << std::endl;
-  for (int i = rules.size() - 1; i >= 0; i--) {
-    Rule currentRule = rules[i];
+  for (int i = static_cast<int>(rules.size()) - 1; i >= 0; i--) {
+    const Rule &currentRule = rules[i];
     int currentRuleClass = currentRule.getOutputClass();
+    const std::vector<int> &currentRuleSamples = currentRule.getCoveredSamples();
 
-    for (int sample : currentRule.getCoveredSamples()) {
+    for (int sample : currentRuleSamples) {
       coveredSamplesSumByClass[currentRuleClass][sample] += 1;
     }
-
-    for (int ruleId = 0; ruleId < chosenRules.size(); ruleId++) {
-      Rule rule = chosenRules[ruleId];
+    for (int ruleId = 0; ruleId < static_cast<int>(chosenRules.size()); ruleId++) {
+      const Rule &rule = chosenRules[ruleId];
       int ruleClass = rule.getOutputClass();
       bool usefull = false;
+      const std::vector<int> &ruleCoveredSamples = rule.getCoveredSamples();
 
-      for (int sample : rule.getCoveredSamples()) {
+      for (int sample : ruleCoveredSamples) {
         if (coveredSamplesSumByClass[ruleClass][sample] == 1) {
           usefull = true;
           break;
@@ -473,12 +526,14 @@ std::vector<Rule> ruleSelection(int nbDatas, int nbClasses, std::vector<Rule> ru
       }
 
       if (!usefull) {
-        for (int sample : rule.getCoveredSamples()) {
+        for (int sample : ruleCoveredSamples) {
           coveredSamplesSumByClass[ruleClass][sample] -= 1;
         }
 
         chosenRules.erase(chosenRules.begin() + ruleId);
         deletedRules += 1;
+        // Re-evaluate the element that shifted into the current index.
+        ruleId -= 1;
       }
     }
 
@@ -534,7 +589,6 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
 
   // While there are some not covered samples
   std::vector<int>::iterator iterator;
-  std::vector<int> currentRuleSamples;
 
   while (!notCoveredSamples.empty() && !rules.empty()) {
     Rule bestRule;
@@ -543,10 +597,12 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
     std::vector<int> remainingSamples;
     std::vector<int> difference(notCoveredSamples.size());
 
-    for (int i = 0; i < rules.size(); i++) {
+    for (int i = 0; i < static_cast<int>(rules.size()); i++) {
+      // Restore max writable size before each set_difference call.
+      difference.resize(notCoveredSamples.size());
       // ! WARNING: in case of rules being loaded with the AGGREGATE option:
       // ! this cannot work properly with txt format as it does not store covered samples
-      currentRuleSamples = rules[i].getCoveredSamples();
+      const std::vector<int> &currentRuleSamples = rules[i].getCoveredSamples();
 
       iterator = set_difference(notCoveredSamples.begin(),
                                 notCoveredSamples.end(),
@@ -600,7 +656,7 @@ std::vector<Rule> heuristic_2(DataSetFid &trainDataset, Parameters &p, const std
 
   // sort rules by covering
   sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
-    return r1.getCoveredSamples().size() > r2.getCoveredSamples().size();
+    return r1.getCoveringSize() > r2.getCoveringSize();
   });
 
   // remove duplicates
@@ -609,11 +665,10 @@ std::vector<Rule> heuristic_2(DataSetFid &trainDataset, Parameters &p, const std
   // While there are some not covered samples
   int i = 0;
   std::vector<int>::iterator ite;
-  std::vector<int> currentRuleSamples;
 
-  while (!notCoveredSamples.empty()) {
+  while (!notCoveredSamples.empty() && i < static_cast<int>(rules.size())) {
     std::vector<int> difference(notCoveredSamples.size());
-    currentRuleSamples = rules[i].getCoveredSamples();
+    const std::vector<int> &currentRuleSamples = rules[i].getCoveredSamples();
 
     // Delete covered samples
     ite = set_difference(notCoveredSamples.begin(),
@@ -630,6 +685,10 @@ std::vector<Rule> heuristic_2(DataSetFid &trainDataset, Parameters &p, const std
     }
     notCoveredSamples = difference;
     i += 1;
+  }
+
+  if (!notCoveredSamples.empty()) {
+    std::cout << "Warning: " << notCoveredSamples.size() << " sample(s) remain uncovered after heuristic_2 (ran out of candidate rules)." << std::endl;
   }
 
   std::cout << chosenRules.size() << " rules selected." << std::endl;
@@ -656,7 +715,6 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
   int nbRulesNotFound = 0;
   std::vector<Rule> chosenRules;
   int seed = p.getInt(SEED);
-  std::vector<int> chosenRuleSamples;
   Hyperspace hyperspace(hyperlocus);
   int minNbCover = p.getInt(MIN_COVERING);
   auto nbDatas = static_cast<int>(trainDataset.getDatas().size());
@@ -706,14 +764,13 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
 
     if (ruleCreated) {
       chosenRules.push_back(rule); // We add the new rule
-      chosenRuleSamples = rule.getCoveredSamples();
+      const std::vector<int> &chosenRuleSamples = rule.getCoveredSamples();
+      std::unordered_set<int> coveredSamplesSet(chosenRuleSamples.begin(), chosenRuleSamples.end());
 
       // Remove samples covered by this rule
       notCoveredSamples.erase(
-          remove_if(notCoveredSamples.begin(), notCoveredSamples.end(), [&chosenRuleSamples](int sample) {
-            return find(chosenRuleSamples.begin(), chosenRuleSamples.end(), sample) != chosenRuleSamples.end();
-            // find index of coveredSamples which is "sample" ("sample" is element of notCoveredSamples), find returns last if "sample" not found
-            // -> Removes "sample" if it appears on coveredSamples (found before the end of coveredSamples)
+          remove_if(notCoveredSamples.begin(), notCoveredSamples.end(), [&coveredSamplesSet](int sample) {
+            return coveredSamplesSet.find(sample) != coveredSamplesSet.end();
           }),
           notCoveredSamples.end());
     } else {
@@ -746,7 +803,6 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultInt(NB_THREADS, 1);
   p.setDefaultInt(START_INDEX, 0);
   p.setDefaultInt(END_INDEX, -1);
-  p.setDefaultInt(NB_THREADS, 1);
   p.setDefaultBool(AGGREGATE_RULES, false);
   p.setDefaultBool(NO_SIMPLIFICATION, false);
   p.setDefaultBool(HYPERPLAN_OPTI, true);
@@ -767,8 +823,14 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.assertStringExists(GLOBAL_RULES_OUTFILE);
   p.assertIntExists(HEURISTIC);
 
+  const bool batchRequested = (p.getInt(START_INDEX) != 0 || p.getInt(END_INDEX) != -1);
+
   // manage the bached execution
-  if (p.getInt(START_INDEX) != 0 || p.getInt(END_INDEX) != -1) {
+  if (batchRequested) {
+    if (p.getInt(HEURISTIC) != 1) {
+      throw CommandArgumentException("Error : start_index/end_index are currently supported only with heuristic 1.");
+    }
+
     std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
     std::string filenameWithoutExtension = globalRulesOutfile.substr(0, globalRulesOutfile.find_last_of("."));
     std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
@@ -778,25 +840,25 @@ void checkRulesParametersLogicValues(Parameters &p) {
       p.setString(GLOBAL_RULES_OUTFILE, updated_file);
       std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
     }
-    // }
+  }
 
-    if (p.getBool(AGGREGATE_RULES)) {
-      p.assertStringExists(AGGREGATE_FOLDER);
-    }
+  // AGGREGATE_RULES logic is independent from batch slicing.
+  if (p.getBool(AGGREGATE_RULES)) {
+    p.assertStringExists(AGGREGATE_FOLDER);
+  }
 
-    // verifying logic between parameters, values range and so on...
-    p.checkParametersCommon();
-    p.checkParametersFidex();
-    p.checkParametersDecisionThreshold();
-    p.checkParametersNormalization();
+  // verifying logic between parameters, values range and so on...
+  p.checkParametersCommon();
+  p.checkParametersFidex();
+  p.checkParametersDecisionThreshold();
+  p.checkParametersNormalization();
 
-    if (p.getInt(NB_THREADS) < 1 || p.getInt(NB_THREADS) > omp_get_max_threads()) {
-      throw CommandArgumentException("Error : Number of threads must be between 1 and the number of CPU cores on your machine (which is " + std::to_string(omp_get_max_threads()) + ")");
-    }
+  if (p.getInt(NB_THREADS) < 1 || p.getInt(NB_THREADS) > omp_get_max_threads()) {
+    throw CommandArgumentException("Error : Number of threads must be between 1 and the number of CPU cores on your machine (which is " + std::to_string(omp_get_max_threads()) + ")");
+  }
 
-    if (!(p.getInt(HEURISTIC) > 0 && p.getInt(HEURISTIC) < 4)) {
-      throw CommandArgumentException("Error : Heuristic must be 1, 2, or 3.");
-    }
+  if (!(p.getInt(HEURISTIC) > 0 && p.getInt(HEURISTIC) < 4)) {
+    throw CommandArgumentException("Error : Heuristic must be 1, 2, or 3.");
   }
 }
 
@@ -864,10 +926,6 @@ void checkRulesParametersLogicValues(Parameters &p) {
  * @return Returns 0 for successful execution, -1 for errors encountered during the process.
  */
 int fidexGloRules(const std::string &command) {
-  // Save buffer where we output results
-  std::ofstream ofs;
-  std::streambuf *cout_buff = std::cout.rdbuf(); // Save old buf
-
   try {
     // Parsing the command
     std::vector<std::string> commandList = {"fidexGloRules"};
@@ -914,10 +972,9 @@ int fidexGloRules(const std::string &command) {
     // getting all program arguments from CLI
     checkRulesParametersLogicValues(*params);
 
-    // Get console results to file
+    std::unique_ptr<ScopedCoutRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      ofs.open(params->getString(CONSOLE_FILE));
-      std::cout.rdbuf(ofs.rdbuf()); // redirect cout to file
+      coutRedirect.reset(new ScopedCoutRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
@@ -997,10 +1054,6 @@ int fidexGloRules(const std::string &command) {
     if (params->isStringSet(WEIGHTS_FILE)) {
       weightsFile = params->getString(WEIGHTS_FILE);
     }
-    std::string attributesFile;
-    if (params->isStringSet(ATTRIBUTES_FILE)) {
-      attributesFile = params->getString(ATTRIBUTES_FILE);
-    }
     std::string inputRulesFile;
     if (params->isStringSet(RULES_FILE)) {
       inputRulesFile = params->getString(RULES_FILE);
@@ -1032,11 +1085,6 @@ int fidexGloRules(const std::string &command) {
     std::cout << "Hyperspace created." << std::endl
               << std::endl;
 
-    // Samples not yet covered by any rules
-    std::vector<int> notCoveredSamples(nbDatas);
-    iota(begin(notCoveredSamples), end(notCoveredSamples), 0); // Vector from 0 to nbDatas-1
-    std::vector<Rule> chosenRules;                             // antecedents, cover vector, class, rule accuracy, rule confidence
-
     //--------------------------------------------------------------------------------------------------------------------
     //--------------------------------------------------------------------------------------------------------------------
 
@@ -1044,8 +1092,8 @@ int fidexGloRules(const std::string &command) {
 
     const auto start = std::chrono::high_resolution_clock::now();
     int heuristic = params->getInt(HEURISTIC);
-    auto trainDataset = *trainDatas.get();
-    auto parameters = *params.get();
+    DataSetFid &trainDataset = *trainDatas;
+    Parameters &parameters = *params;
     std::vector<Rule> generatedRules;
 
     std::cout << "Computing fidex rules..." << std::endl
@@ -1100,10 +1148,7 @@ int fidexGloRules(const std::string &command) {
     std::chrono::duration<double> diff = end - start;
     std::cout << "\nFull execution time = " << diff.count() << " sec" << std::endl;
 
-    std::cout.rdbuf(cout_buff); // reset to standard output again
-
   } catch (const ErrorHandler &e) {
-    std::cout.rdbuf(cout_buff); // reset to standard output again
     std::cerr << e.what() << std::endl;
     return -1;
   }

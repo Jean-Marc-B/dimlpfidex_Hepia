@@ -140,9 +140,9 @@ public:
   /**
    * @brief Gets the antecedents of the rule.
    *
-   * @return The antecedents of the rule.
+   * @return Const reference to the antecedents of the rule.
    */
-  std::vector<Antecedent> getAntecedents() const { return antecedents; }
+  const std::vector<Antecedent> &getAntecedents() const { return antecedents; }
 
   /**
    * @brief Gets the number of antecedents in the rule.
@@ -154,16 +154,16 @@ public:
   /**
    * @brief Gets the covered samples of the rule.
    *
-   * @return The covered samples.
+   * @return Const reference to the covered samples.
    */
-  std::vector<int> getCoveredSamples() const { return coveredSamples; }
+  const std::vector<int> &getCoveredSamples() const { return coveredSamples; }
 
   /**
    * @brief Gets the covering sizes for each new antecedant(discriminative hypaerplan) in the hyperbox.
    *
-   * @return Vector of integers representing the covering sizes.
+   * @return Const reference to covering sizes.
    */
-  std::vector<int> getCoveringSizesWithNewAntecedent() const { return coveringSizesWithNewAntecedent; }
+  const std::vector<int> &getCoveringSizesWithNewAntecedent() const { return coveringSizesWithNewAntecedent; }
 
   /**
    * @brief Gets the covering size of the rule.
@@ -189,9 +189,9 @@ public:
   /**
    * @brief Gets the increased fidelity for each new antecedent.
    *
-   * @return Vector of the increased fidelity for each new antecedent.
+   * @return Const reference to increased fidelity values.
    */
-  std::vector<double> getIncreasedFidelity() const { return increasedFidelity; }
+  const std::vector<double> &getIncreasedFidelity() const { return increasedFidelity; }
 
   /**
    * @brief Gets the accuracy of the rule.
@@ -203,9 +203,9 @@ public:
   /**
    * @brief Gets the accuracy changes for each new antecedent.
    *
-   * @return Vector of the accuracy changes for each new antecedent.
+   * @return Const reference to accuracy changes.
    */
-  std::vector<double> getAccuracyChanges() const { return accuracyChanges; }
+  const std::vector<double> &getAccuracyChanges() const { return accuracyChanges; }
 
   /**
    * @brief Gets the confidence of the rule.
