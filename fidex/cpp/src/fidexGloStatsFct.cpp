@@ -1,5 +1,139 @@
 #include "fidexGloStatsFct.h"
 
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/dataSet.h"
+#include "../../../common/cpp/src/errorHandler.h"
+#include "../../../common/cpp/src/parameters.h"
+#include "../../../common/cpp/src/rule.h"
+#include "../../../common/cpp/src/scopedCoutFileRedirect.h"
+
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
+
+namespace {
+// ============================================================================
+// Local helpers used only by fidexGloStats.cpp
+// ============================================================================
+
+struct RuleTestStats {
+  std::vector<int> coveredSamples;
+  std::vector<int> coverSizes;
+  std::vector<double> fidelities; // Percentage of correct covered samples predictions with respect to the rule prediction
+  std::vector<double> accuracies; // Percentage of correct covered samples predictions with respect to the samples true class
+  std::vector<double> fidelityIncreases;
+  std::vector<double> accuracyChanges;
+  double finalConfidence = 0.0; // Mean output prediction score of covered samples
+};
+
+bool hasJsonExtension(const std::string &path) {
+  const size_t dotPos = path.find_last_of('.');
+  return dotPos != std::string::npos && path.substr(dotPos + 1) == "json";
+}
+
+// Validate the rule output class against the configured number of classes.
+void validateRulePredictionIndex(int rulePred, int nbClasses, size_t ruleIndex) {
+  if (rulePred < 0 || rulePred >= nbClasses) {
+    throw FileContentError("Error : rule " + std::to_string(ruleIndex + 1) + " has output class " + std::to_string(rulePred) +
+                           " which is out of valid range [0, " + std::to_string(nbClasses - 1) + "].");
+  }
+}
+
+// Compute test-time rule statistics for each antecedent step and final rule.
+RuleTestStats computeRuleTestStats(const Rule &fullRule,
+                                   const std::vector<std::vector<double>> &testData,
+                                   const std::vector<int> &testPreds,
+                                   const std::vector<int> &testTrueClasses,
+                                   const std::vector<std::vector<double>> &testPredictionScores,
+                                   size_t ruleIndex) {
+  RuleTestStats stats;
+
+  const std::vector<Antecedent> &fullAntecedents = fullRule.getAntecedents();
+  const int rulePred = fullRule.getOutputClass();
+  const size_t nbSteps = fullAntecedents.empty() ? 1 : fullAntecedents.size();
+
+  stats.coverSizes.reserve(nbSteps);
+  stats.fidelities.reserve(nbSteps);
+  stats.accuracies.reserve(nbSteps);
+
+  for (size_t step = 1; step <= nbSteps; ++step) {
+    Rule partialRule;
+    partialRule.setOutputClass(rulePred);
+
+    if (!fullAntecedents.empty()) {
+      std::vector<Antecedent> partialAntecedents(fullAntecedents.begin(), fullAntecedents.begin() + step);
+      partialRule.setAntecedents(partialAntecedents);
+    }
+
+    std::vector<int> stepCoveredSamples;
+    getCovering(stepCoveredSamples, partialRule, testData); // contains every samples if there is no antecedents in the rule
+
+    const int coverSize = static_cast<int>(stepCoveredSamples.size());
+    double fidelity = 0.0;
+    double accuracy = 0.0;
+    double confidenceSum = 0.0;
+
+    for (int sampleId : stepCoveredSamples) {
+      const int samplePred = testPreds[sampleId];
+      const int trueClass = testTrueClasses[sampleId];
+      const std::vector<double> &scores = testPredictionScores[sampleId];
+
+      if (rulePred < 0 || static_cast<size_t>(rulePred) >= scores.size()) {
+        throw FileContentError("Error : rule " + std::to_string(ruleIndex + 1) + " has output class " + std::to_string(rulePred) +
+                               " but prediction scores for sample " + std::to_string(sampleId) + " have size " + std::to_string(scores.size()) + ".");
+      }
+
+      const double outputScore = scores[rulePred];
+
+      if (samplePred == rulePred) {
+        fidelity += 1.0;
+      }
+      if (rulePred == trueClass) {
+        accuracy += 1.0;
+      }
+
+      if (step == nbSteps) {
+        confidenceSum += outputScore;
+      }
+    }
+
+    if (coverSize > 0) {
+      fidelity /= static_cast<double>(coverSize);
+      accuracy /= static_cast<double>(coverSize);
+      if (step == nbSteps) {
+        stats.finalConfidence = confidenceSum / static_cast<double>(coverSize);
+      }
+    }
+
+    stats.fidelities.push_back(fidelity);
+    stats.accuracies.push_back(accuracy);
+    stats.coverSizes.push_back(coverSize);
+
+    if (step == nbSteps) {
+      stats.coveredSamples = std::move(stepCoveredSamples);
+    }
+  }
+
+  stats.fidelityIncreases.reserve(stats.fidelities.size());
+  stats.accuracyChanges.reserve(stats.accuracies.size());
+  if (!stats.fidelities.empty()) {
+    stats.fidelityIncreases.push_back(stats.fidelities[0]);
+    stats.accuracyChanges.push_back(stats.accuracies[0]);
+
+    for (size_t i = 1; i < stats.fidelities.size(); ++i) {
+      stats.fidelityIncreases.push_back(stats.fidelities[i] - stats.fidelities[i - 1]);
+      stats.accuracyChanges.push_back(stats.accuracies[i] - stats.accuracies[i - 1]);
+    }
+  }
+
+  return stats;
+}
+
+} // namespace
+
 /**
  * @brief Displays the parameters for fidexGloStats.
  */
@@ -56,27 +190,26 @@ void showStatsParams() {
  * @param rule The rule used to determine coverage.
  * @param testValues Matrix of test sample values.
  */
-void getCovering(std::vector<int> &sampleIds, const Rule &rule, std::vector<std::vector<double>> &testValues) {
+void getCovering(std::vector<int> &sampleIds, const Rule &rule, const std::vector<std::vector<double>> &testValues) {
   // Get covering index samples
   sampleIds.clear();
   int attr;
   bool ineq;
   double val;
-  for (int id = 0; id < testValues.size(); id++) {
+  for (size_t id = 0; id < testValues.size(); ++id) {
     bool notCovered = false;
     for (const auto &antecedent : rule.getAntecedents()) { // For each antecedent
       attr = antecedent.getAttribute();
       ineq = antecedent.getInequality();
       val = antecedent.getValue();
-      if (ineq == 0 && testValues[id][attr] >= val) { // If the inequality is not verified
+      if ((ineq == 0 && testValues[id][attr] >= val) || // If the inequality is not verified
+          (ineq == 1 && testValues[id][attr] < val)) {
         notCovered = true;
-      }
-      if (ineq == 1 && testValues[id][attr] < val) {
-        notCovered = true;
+        break; // One failed antecedent is enough to reject this sample.
       }
     }
     if (!notCovered) {
-      sampleIds.push_back(id);
+      sampleIds.push_back(static_cast<int>(id));
     }
   }
 }
@@ -128,12 +261,15 @@ void checkStatsParametersLogicValues(Parameters &p) {
 
   // verifying logic between parameters, values range and so on...
   p.checkAttributeAndClassCounts();
-  if (p.getInt(POSITIVE_CLASS_INDEX) < 0 && p.getInt(POSITIVE_CLASS_INDEX) != -1) {
+  const int positiveClassIndex = p.getInt(POSITIVE_CLASS_INDEX);
+  const int nbClasses = p.getInt(NB_CLASSES);
+
+  if (positiveClassIndex < -1) {
     throw CommandArgumentException("Error : Positive class index must be positive (>=0)");
   }
 
-  if (p.getInt(POSITIVE_CLASS_INDEX) >= p.getInt(NB_CLASSES)) {
-    throw CommandArgumentException("Error : The index of positive class cannot be greater or equal to the number of classes (" + std::to_string(p.getInt(NB_CLASSES)) + ").");
+  if (positiveClassIndex >= nbClasses) {
+    throw CommandArgumentException("Error : The index of positive class cannot be greater or equal to the number of classes (" + std::to_string(nbClasses) + ").");
   }
 }
 
@@ -151,7 +287,7 @@ void checkStatsParametersLogicValues(Parameters &p) {
  * - The model test accuracy when rules and model agree.
  * - The model test accuracy when activated rules and model agree.
  *
- * If there is a positive class, additional statistics are computed with both the model decision and the rules decision:
+ * If there is a positive class, additional statistics are computed with both the model decision and the rules decision (ruleset or Fidex rule if ruleset cannot decide):
  * - The number of true positive test samples.
  * - The number of false positive test samples.
  * - The number of true negative test samples.
@@ -211,10 +347,11 @@ void checkStatsParametersLogicValues(Parameters &p) {
  * @return Returns 0 for successful execution, -1 for errors encountered during the process.
  */
 int fidexGloStats(const std::string &command) {
-  // Save buffer where we output results
-  std::ofstream ofs;
-  std::streambuf *cout_buff = std::cout.rdbuf(); // Save old buf
   try {
+
+    // =========================================================================
+    // 1) Initialization and command parsing
+    // =========================================================================
 
     float temps;
     clock_t t1;
@@ -235,6 +372,10 @@ int fidexGloStats(const std::string &command) {
       showStatsParams();
       return 0;
     }
+
+    // =========================================================================
+    // 2) Parameter loading and validation
+    // =========================================================================
 
     // Import parameters
     std::unique_ptr<Parameters> params;
@@ -263,17 +404,17 @@ int fidexGloStats(const std::string &command) {
     // getting all program arguments from CLI
     checkStatsParametersLogicValues(*params);
 
-    // Get console results to file
+    // =========================================================================
+    // 3) Optional console redirection and runtime parameter resolution
+    // =========================================================================
+
+    std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      std::string consoleFile = params->getString(CONSOLE_FILE);
-      ofs.open(consoleFile);
-      std::cout.rdbuf(ofs.rdbuf()); // redirect std::cout to file
+      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
     std::cout << *params;
-
-    // ----------------------------------------------------------------------
 
     // Get parameters values
 
@@ -295,8 +436,11 @@ int fidexGloStats(const std::string &command) {
       }
       positiveClassIndex = positiveClassIndexParam;
     }
+    const bool hasPositiveClass = positiveClassIndex != -1;
 
-    // ----------------------------------------------------------------------
+    // =========================================================================
+    // 4) Input data loading (test set, predictions, optional attributes)
+    // =========================================================================
 
     std::cout << "Importing files..." << std::endl
               << std::endl;
@@ -333,6 +477,10 @@ int fidexGloStats(const std::string &command) {
       }
     }
 
+    // =========================================================================
+    // 5) Rule loading and first statistics line retrieval
+    // =========================================================================
+
     // Get rules
     std::vector<std::string> lines;                             // Lines for the output stats
     lines.emplace_back("Global statistics of the rule set : "); // Lines for the output stats
@@ -342,19 +490,21 @@ int fidexGloStats(const std::string &command) {
     std::fstream rulesData;
     std::vector<Rule> rules;
 
-    if (rulesFile.substr(rulesFile.find_last_of(".") + 1) == "json") {
+    if (hasJsonExtension(rulesFile)) {
       rules = Rule::fromJsonFile(rulesFile, decisionThreshold, positiveClassIndex);
 
       double meanCovering = 0;
       double meanNbAntecedentsPerRule = 0;
       auto nbRules = static_cast<int>(rules.size());
 
-      for (Rule r : rules) {
+      for (const Rule &r : rules) {
         meanCovering += static_cast<double>(r.getCoveredSamples().size());
         meanNbAntecedentsPerRule += static_cast<double>(r.getAntecedents().size());
       }
-      meanCovering /= nbRules;
-      meanNbAntecedentsPerRule /= nbRules;
+      if (nbRules > 0) {
+        meanCovering /= nbRules;
+        meanNbAntecedentsPerRule /= nbRules;
+      }
 
       statsLine += "Number of rules : " + std::to_string(nbRules);
       statsLine += ", mean sample covering number per rule : ";
@@ -375,6 +525,10 @@ int fidexGloStats(const std::string &command) {
     std::cout << "Data imported." << std::endl
               << std::endl;
 
+    // =========================================================================
+    // 6) Global statistics computation on test set
+    // =========================================================================
+
     // Compute global statistics on test set
 
     std::cout << "Compute statistics..." << std::endl
@@ -388,10 +542,9 @@ int fidexGloStats(const std::string &command) {
     double meanNbWrongActivatedRules = 0;   // Mean number of wrong activated rules per sample
     int nbActivatedRulesAndModelAgree = 0;
     double accuracyWhenActivatedRulesAndModelAgree = 0; // Model accuracy when activated rules and model agree (sample has correct activated rules or no activated rules, then percentage of good predictions on them by the model)
-    int nbFidelRules = 0;
-    double accuracyWhenRulesAndModelAgree = 0; // Model accuracy when activated rules and model agree (sample has correct activated rules, then percentage of good predictions on them by the model)
+    int nbFidelRules = 0;                               // When the model and rule agree on the sample or when no rule is activated
+    double accuracyWhenRulesAndModelAgree = 0;          // Model accuracy when activated rules and model agree (sample has correct activated rules, then percentage of good predictions on them by the model)
     double modelAccuracy = 0;
-    std::vector<double> testValues;
     int testPred;
     int testTrueClass;
 
@@ -408,10 +561,10 @@ int fidexGloStats(const std::string &command) {
     int nbFalseNegativeRules = 0; // Wrong negative rule prediction
 
     for (int t = 0; t < nbTestData; t++) { // For each test value
-      testValues = testData[t];
+      const std::vector<double> &testValues = testData[t];
       testPred = testPreds[t];
       testTrueClass = testTrueClasses[t];
-      if (positiveClassIndex != -1) {
+      if (hasPositiveClass) {
         if (testTrueClass == positiveClassIndex) {
           nbPositive += 1;
         } else {
@@ -422,7 +575,7 @@ int fidexGloStats(const std::string &command) {
       if (testPred == testTrueClass) {
         modelAccuracy++;
       }
-      if (positiveClassIndex != -1) {
+      if (hasPositiveClass) {
         computeTFPN(testPred, positiveClassIndex, testTrueClass, nbTruePositive, nbFalsePositive, nbTrueNegative, nbFalseNegative);
       }
 
@@ -431,7 +584,7 @@ int fidexGloStats(const std::string &command) {
       std::vector<int> activatedRules;
       getActivatedRules(activatedRules, rules, testValues);
 
-      // Check which rules are correct
+      // Check which rules are correct (same prediction as the model's on the sample for activated rules)
       std::vector<int> correctRules;
       if (activatedRules.empty()) { // If there is no activated rule -> we would launch Fidex and so it will be fidel
         defaultRuleRate++;
@@ -464,9 +617,9 @@ int fidexGloStats(const std::string &command) {
             if (decision == testTrueClass) { // If those decisions are the true class, this is accurate
               accuracy++;
             }
-            // The rules' decision is different from the model's
+            // The rules' decision is different from the model's (And we don't call Fidex on this sample)
             noCorrectRuleWithAllSameClass = true;
-            if (positiveClassIndex != -1) {
+            if (hasPositiveClass) {
               computeTFPN(decision, positiveClassIndex, testTrueClass, nbTruePositiveRules, nbFalsePositiveRules, nbTrueNegativeRules, nbFalseNegativeRules);
             }
           }
@@ -487,20 +640,41 @@ int fidexGloStats(const std::string &command) {
         }
       }
 
-      if (!noCorrectRuleWithAllSameClass && positiveClassIndex != -1) { // The rules' decision is the same as the model's, if we can find a correct rule or if we need to compute Fidex
+      if (!noCorrectRuleWithAllSameClass && hasPositiveClass) { // The rules' decision is the same as the model's, which is the case if we can find a correct rule or if we need to compute Fidex because no decision can be made by the ruleset
         computeTFPN(testPred, positiveClassIndex, testTrueClass, nbTruePositiveRules, nbFalsePositiveRules, nbTrueNegativeRules, nbFalseNegativeRules);
       }
     }
 
-    fidelity /= nbTestData;
-    accuracy /= nbTestData;
-    explainabilityRate = explainabilityTotal / nbTestData;
-    defaultRuleRate /= nbTestData;
-    meanNbCorrectActivatedRules /= nbTestData;
-    meanNbWrongActivatedRules /= nbTestData;
-    modelAccuracy /= nbTestData;
-    accuracyWhenRulesAndModelAgree /= nbFidelRules;
-    accuracyWhenActivatedRulesAndModelAgree /= nbActivatedRulesAndModelAgree;
+    const bool hasTestSamples = nbTestData > 0;
+    const bool hasFidelRules = nbFidelRules > 0;
+    const bool hasActivatedRulesAgreement = nbActivatedRulesAndModelAgree > 0;
+
+    if (hasTestSamples) {
+      fidelity /= nbTestData;
+      accuracy /= nbTestData;
+      explainabilityRate = explainabilityTotal / nbTestData;
+      defaultRuleRate /= nbTestData;
+      meanNbCorrectActivatedRules /= nbTestData;
+      meanNbWrongActivatedRules /= nbTestData;
+      modelAccuracy /= nbTestData;
+    } else {
+      explainabilityRate = 0.0;
+    }
+
+    if (hasFidelRules) {
+      accuracyWhenRulesAndModelAgree /= nbFidelRules;
+    }
+    if (hasActivatedRulesAgreement) {
+      accuracyWhenActivatedRulesAndModelAgree /= nbActivatedRulesAndModelAgree;
+    }
+
+    auto metricOrNA = [](double value, bool isDefined) {
+      return isDefined ? std::to_string(value) : std::string("N/A");
+    };
+
+    // =========================================================================
+    // 7) Build global report lines
+    // =========================================================================
 
     lines.push_back("Statistics with a test set of " + std::to_string(nbTestData) + " samples :\n");
     if (decisionThreshold < 0.0) {
@@ -514,44 +688,45 @@ int fidexGloStats(const std::string &command) {
       lines.push_back("Using a decision threshold of " + std::to_string(decisionThreshold) + " for class " + std::to_string(positiveClassIndex));
     }
 
-    lines.push_back("The global rule fidelity rate is : " + std::to_string(fidelity));
-    lines.push_back("The global rule accuracy is : " + std::to_string(accuracy));
-    lines.push_back("The explainability rate (when we can find one or more rules, either correct ones or activated ones which all agree on the same class) is : " + std::to_string(explainabilityRate));
-    lines.push_back("The default rule rate (when we can't find any rule activated for a sample) is : " + std::to_string(defaultRuleRate));
-    lines.push_back("The mean number of correct(fidel) activated rules per sample is : " + std::to_string(meanNbCorrectActivatedRules));
-    lines.push_back("The mean number of wrong(not fidel) activated rules per sample is : " + std::to_string(meanNbWrongActivatedRules));
-    lines.push_back("The model test accuracy is : " + std::to_string(modelAccuracy));
-    lines.push_back("The model test accuracy when rules and model agree is : " + std::to_string(accuracyWhenRulesAndModelAgree));
-    lines.push_back("The model test accuracy when activated rules and model agree is : " + std::to_string(accuracyWhenActivatedRulesAndModelAgree));
+    lines.push_back("The global rule fidelity rate is : " + metricOrNA(fidelity, hasTestSamples));
+    lines.push_back("The global rule accuracy is : " + metricOrNA(accuracy, hasTestSamples));
+    lines.push_back("The explainability rate (when we can find one or more rules, either correct ones or activated ones which all agree on the same class) is : " + metricOrNA(explainabilityRate, hasTestSamples));
+    lines.push_back("The default rule rate (when we can't find any rule activated for a sample) is : " + metricOrNA(defaultRuleRate, hasTestSamples));
+    lines.push_back("The mean number of correct(fidel) activated rules per sample is : " + metricOrNA(meanNbCorrectActivatedRules, hasTestSamples));
+    lines.push_back("The mean number of wrong(not fidel) activated rules per sample is : " + metricOrNA(meanNbWrongActivatedRules, hasTestSamples));
+    lines.push_back("The model test accuracy is : " + metricOrNA(modelAccuracy, hasTestSamples));
+    lines.push_back("The model test accuracy when rules and model agree is : " + metricOrNA(accuracyWhenRulesAndModelAgree, hasFidelRules));
+    lines.push_back("The model test accuracy when activated rules and model agree is : " + metricOrNA(accuracyWhenActivatedRulesAndModelAgree, hasActivatedRulesAgreement));
 
-    if (positiveClassIndex != -1) {
+    auto appendBinaryClassMetrics = [&](int truePositive, int falsePositive, int trueNegative, int falseNegative) {
+      lines.push_back("The number of true positive test samples is : " + std::to_string(truePositive));
+      lines.push_back("The number of false positive test samples is : " + std::to_string(falsePositive));
+      lines.push_back("The number of true negative test samples is : " + std::to_string(trueNegative));
+      lines.push_back("The number of false negative test samples is : " + std::to_string(falseNegative));
+      lines.push_back("The false positive rate is : " + ((nbNegative != 0) ? std::to_string(float(falsePositive) / static_cast<float>(nbNegative)) : "N/A"));
+      lines.push_back("The false negative rate is : " + ((nbPositive != 0) ? std::to_string(float(falseNegative) / static_cast<float>(nbPositive)) : "N/A"));
+      lines.push_back("The precision is : " + ((truePositive + falsePositive != 0) ? std::to_string(float(truePositive) / static_cast<float>(truePositive + falsePositive)) : "N/A"));
+      lines.push_back("The recall is : " + ((truePositive + falseNegative != 0) ? std::to_string(float(truePositive) / static_cast<float>(truePositive + falseNegative)) : "N/A"));
+    };
+
+    if (hasPositiveClass) {
       if (hasClassNames) {
         lines.push_back("\nWith positive class " + classNames[positiveClassIndex] + " :");
       } else {
         lines.push_back("\nWith positive class " + std::to_string(positiveClassIndex) + " :");
       }
       lines.emplace_back("\nComputation with model decision :");
-      lines.push_back("The number of true positive test samples is : " + std::to_string(nbTruePositive));
-      lines.push_back("The number of false positive test samples is : " + std::to_string(nbFalsePositive));
-      lines.push_back("The number of true negative test samples is : " + std::to_string(nbTrueNegative));
-      lines.push_back("The number of false negative test samples is : " + std::to_string(nbFalseNegative));
-      lines.push_back("The false positive rate is : " + ((nbNegative != 0) ? std::to_string(float(nbFalsePositive) / static_cast<float>(nbNegative)) : "N/A"));
-      lines.push_back("The false negative rate is : " + ((nbPositive != 0) ? std::to_string(float(nbFalseNegative) / static_cast<float>(nbPositive)) : "N/A"));
-      lines.push_back("The precision is : " + ((nbTruePositive + nbFalsePositive != 0) ? std::to_string(float(nbTruePositive) / static_cast<float>(nbTruePositive + nbFalsePositive)) : "N/A"));
-      lines.push_back("The recall is : " + ((nbTruePositive + nbFalseNegative != 0) ? std::to_string(float(nbTruePositive) / static_cast<float>(nbTruePositive + nbFalseNegative)) : "N/A"));
+      appendBinaryClassMetrics(nbTruePositive, nbFalsePositive, nbTrueNegative, nbFalseNegative);
 
-      lines.emplace_back("\nComputation with rules decision :");
-      lines.push_back("The number of true positive test samples is : " + std::to_string(nbTruePositiveRules));
-      lines.push_back("The number of false positive test samples is : " + std::to_string(nbFalsePositiveRules));
-      lines.push_back("The number of true negative test samples is : " + std::to_string(nbTrueNegativeRules));
-      lines.push_back("The number of false negative test samples is : " + std::to_string(nbFalseNegativeRules));
-      lines.push_back("The false positive rate is : " + ((nbNegative != 0) ? std::to_string(float(nbFalsePositiveRules) / static_cast<float>(nbNegative)) : "N/A"));
-      lines.push_back("The false negative rate is : " + ((nbPositive != 0) ? std::to_string(float(nbFalseNegativeRules) / static_cast<float>(nbPositive)) : "N/A"));
-      lines.push_back("The precision is : " + ((nbTruePositiveRules + nbFalsePositiveRules != 0) ? std::to_string(float(nbTruePositiveRules) / static_cast<float>(nbTruePositiveRules + nbFalsePositiveRules)) : "N/A"));
-      lines.push_back("The recall is : " + ((nbTruePositiveRules + nbFalseNegativeRules != 0) ? std::to_string(float(nbTruePositiveRules) / static_cast<float>(nbTruePositiveRules + nbFalseNegativeRules)) : "N/A"));
+      lines.emplace_back("\nComputation with rules decision (or Fidex):");
+      appendBinaryClassMetrics(nbTruePositiveRules, nbFalsePositiveRules, nbTrueNegativeRules, nbFalseNegativeRules);
     }
 
-    for (std::string l : lines) {
+    // =========================================================================
+    // 8) Print and optionally save global report
+    // =========================================================================
+
+    for (const std::string &l : lines) {
       std::cout << l << std::endl;
     }
 
@@ -560,7 +735,7 @@ int fidexGloStats(const std::string &command) {
       std::ofstream outputFile(params->getString(STATS_FILE));
       if (outputFile.is_open()) {
         for (const std::string &line : lines) {
-          outputFile << line + "" << std::endl;
+          outputFile << line << std::endl;
         }
         outputFile.close();
       } else {
@@ -568,87 +743,38 @@ int fidexGloStats(const std::string &command) {
       }
     }
 
+    // =========================================================================
+    // 9) Optional per-rule test statistics export
+    // =========================================================================
+
     // Compute rules statistics on test set
     if (params->isStringSet(GLOBAL_RULES_OUTFILE)) {
       std::string ruleFile = params->getString(GLOBAL_RULES_OUTFILE);
 
-      if (ruleFile.substr(ruleFile.find_last_of('.') + 1) == "json") {
+      if (hasJsonExtension(ruleFile)) {
+        // 9.a JSON export path
         std::vector<Rule> testRules;
 
-        for (int r = 0; r < rules.size(); r++) {
+        for (size_t r = 0; r < rules.size(); ++r) {
           const Rule &fullRule = rules[r];
-          std::vector<Antecedent> fullAntecedents = fullRule.getAntecedents();
-          int rulePred = fullRule.getOutputClass();
+          const int rulePred = fullRule.getOutputClass();
+          validateRulePredictionIndex(rulePred, nbClasses, r);
 
-          std::vector<double> fidelities; // percentage of correct covered samples predictions with respect to the rule prediction
-          std::vector<double> accuracies; // percentage of correct covered samples predictions with respect to the samples true class
-          std::vector<int> coverSizes;
-          std::vector<int> coveredSamples;
+          const RuleTestStats ruleStats = computeRuleTestStats(fullRule, testData, testPreds, testTrueClasses, testPredictionScores, r);
 
-          double finalConfidence = 0.0; // mean output prediction score of covered samples
-
-          for (size_t i = 1; i <= fullAntecedents.size(); ++i) {
-            Rule partialRule;
-            std::vector<Antecedent> partialAntecedents(fullAntecedents.begin(), fullAntecedents.begin() + i);
-            partialRule.setAntecedents(partialAntecedents);
-            partialRule.setOutputClass(rulePred);
-
-            getCovering(coveredSamples, partialRule, testData);
-
-            int coverSize = static_cast<int>(coveredSamples.size());
-            double fidelity = 0.0;
-            double accuracy = 0.0;
-
-            for (int sampleId : coveredSamples) {
-              int samplePred = testPreds[sampleId];
-              int trueClass = testTrueClasses[sampleId];
-              double outputScore = testPredictionScores[sampleId][rulePred];
-
-              if (samplePred == rulePred)
-                fidelity += 1;
-              if (samplePred == trueClass)
-                accuracy += 1;
-
-              // Confidence only for the final rule
-              if (i == fullAntecedents.size()) {
-                finalConfidence += outputScore;
-              }
-            }
-
-            if (coverSize > 0) {
-              fidelity /= static_cast<double>(coverSize);
-              accuracy /= static_cast<double>(coverSize);
-              if (i == fullAntecedents.size()) {
-                finalConfidence /= static_cast<double>(coverSize);
-              }
-            }
-
-            fidelities.push_back(fidelity);
-            accuracies.push_back(accuracy);
-            coverSizes.push_back(coverSize);
-          }
-
-          // Compute variations
-          std::vector<double> fidelityIncreases, accuracyChanges;
-          fidelityIncreases.push_back(fidelities[0]);
-          accuracyChanges.push_back(accuracies[0]);
-
-          for (size_t i = 1; i < fidelities.size(); ++i) {
-            fidelityIncreases.push_back(fidelities[i] - fidelities[i - 1]);
-            accuracyChanges.push_back(accuracies[i] - accuracies[i - 1]);
-          }
-
-          // if fidelity, accuracy and confidence are 0, ignore it in json writing
-          if (fidelities.back() != 0 || accuracies.back() != 0 || finalConfidence != 0) {
-            testRules.push_back(Rule(rules[r].getAntecedents(), coveredSamples, coverSizes, rulePred, fidelities.back(), fidelityIncreases, accuracies.back(), accuracyChanges, finalConfidence));
+          // Only keep detailed per-antecedent test stats when final test covering is non-zero.
+          if (!ruleStats.coverSizes.empty() && ruleStats.coverSizes.back() > 0) {
+            testRules.push_back(Rule(fullRule.getAntecedents(), ruleStats.coveredSamples, ruleStats.coverSizes, rulePred, ruleStats.fidelities.back(),
+                                     ruleStats.fidelityIncreases, ruleStats.accuracies.back(), ruleStats.accuracyChanges, ruleStats.finalConfidence));
           } else {
-            testRules.push_back(Rule(rules[r].getAntecedents(), {}, {}, rulePred, fidelities.back(), {}, accuracies.back(), {}, finalConfidence));
+            testRules.push_back(Rule(fullRule.getAntecedents(), {}, {}, rulePred, ruleStats.fidelities.back(), {}, ruleStats.accuracies.back(), {}, ruleStats.finalConfidence));
           }
         }
 
         Rule::toJsonStatsFile(ruleFile, rules, testRules, decisionThreshold, positiveClassIndex);
 
       } else {
+        // 9.b Text rules export path
         std::ofstream outputFile(ruleFile);
         if (outputFile.is_open()) {
           outputFile << statsLine;
@@ -659,104 +785,51 @@ int fidexGloStats(const std::string &command) {
             outputFile << "Using a decision threshold of " << decisionThreshold << " for class " << positiveClassIndex << "\n";
           }
 
-          for (int r = 0; r < rules.size(); r++) {
+          for (size_t r = 0; r < rules.size(); ++r) {
             const Rule &fullRule = rules[r];
-            std::vector<Antecedent> fullAntecedents = fullRule.getAntecedents();
-            int rulePred = fullRule.getOutputClass();
+            const int rulePred = fullRule.getOutputClass();
+            validateRulePredictionIndex(rulePred, nbClasses, r);
 
-            std::vector<double> fidelities;
-            std::vector<double> accuracies;
-            std::vector<int> coverSizes;
+            const RuleTestStats ruleStats = computeRuleTestStats(fullRule, testData, testPreds, testTrueClasses, testPredictionScores, r);
 
-            double finalConfidence = 0.0;
-
-            for (size_t i = 1; i <= fullAntecedents.size(); ++i) {
-              Rule partialRule;
-              std::vector<Antecedent> partialAntecedents(fullAntecedents.begin(), fullAntecedents.begin() + i);
-              partialRule.setAntecedents(partialAntecedents);
-              partialRule.setOutputClass(rulePred);
-
-              std::vector<int> coveredSamples;
-              getCovering(coveredSamples, partialRule, testData);
-
-              int coverSize = static_cast<int>(coveredSamples.size());
-              double fidelity = 0.0;
-              double accuracy = 0.0;
-
-              for (int sampleId : coveredSamples) {
-                int samplePred = testPreds[sampleId];
-                int trueClass = testTrueClasses[sampleId];
-                double outputScore = testPredictionScores[sampleId][rulePred];
-
-                if (samplePred == rulePred)
-                  fidelity += 1;
-                if (samplePred == trueClass)
-                  accuracy += 1;
-
-                // Confidence only for the final rule
-                if (i == fullAntecedents.size()) {
-                  finalConfidence += outputScore;
-                }
-              }
-
-              if (coverSize > 0) {
-                fidelity /= static_cast<double>(coverSize);
-                accuracy /= static_cast<double>(coverSize);
-                if (i == fullAntecedents.size()) {
-                  finalConfidence /= static_cast<double>(coverSize);
-                }
-              }
-
-              fidelities.push_back(fidelity);
-              accuracies.push_back(accuracy);
-              coverSizes.push_back(coverSize);
+            const std::vector<std::string> trainStats = splitString(fullRule.toString(attributeNames, classNames), "\n");
+            if (trainStats.size() < 8) {
+              throw FileFormatError("Error : unexpected rule format while writing test stats for rule " + std::to_string(r + 1) + ".");
             }
-
-            // Compute variations
-            std::vector<double> fidelityIncreases, accuracyChanges;
-            fidelityIncreases.push_back(fidelities[0]);
-            accuracyChanges.push_back(accuracies[0]);
-
-            for (size_t i = 1; i < fidelities.size(); ++i) {
-              fidelityIncreases.push_back(fidelities[i] - fidelities[i - 1]);
-              accuracyChanges.push_back(accuracies[i] - accuracies[i - 1]);
-            }
-
-            std::vector<std::string> trainStats = splitString(rules[r].toString(attributeNames, classNames), "\n");
             outputFile << "\n"
-                       << "Rule " << std::to_string(r + 1) << ": " << trainStats[0] << "" << std::endl;
-            outputFile << trainStats[1] << " --- Test Covering size : " << coverSizes.back() << "" << std::endl;
-            if (coverSizes.back() == 0) {
-              outputFile << trainStats[2] << "" << std::endl;
-              outputFile << trainStats[3] << "" << std::endl;
-              outputFile << trainStats[4] << "" << std::endl;
+                       << "Rule " << std::to_string(r + 1) << ": " << trainStats[0] << std::endl;
+            outputFile << trainStats[1] << " --- Test Covering size : " << ruleStats.coverSizes.back() << std::endl;
+            if (ruleStats.coverSizes.back() == 0) {
+              outputFile << trainStats[2] << std::endl;
+              outputFile << trainStats[3] << std::endl;
+              outputFile << trainStats[4] << std::endl;
               outputFile << trainStats[5] << std::endl;
               outputFile << trainStats[6] << std::endl;
               outputFile << trainStats[7] << std::endl;
-              outputFile << "" << std::endl;
+              outputFile << std::endl;
             } else {
-              outputFile << trainStats[2] << " --- Test Fidelity : " << formattingDoubleToString(fidelities.back()) << "" << std::endl;
-              outputFile << trainStats[3] << " --- Test Accuracy : " << formattingDoubleToString(accuracies.back()) << "" << std::endl;
-              outputFile << trainStats[4] << " --- Test Confidence : " << formattingDoubleToString(finalConfidence) << "" << std::endl;
+              outputFile << trainStats[2] << " --- Test Fidelity : " << formattingDoubleToString(ruleStats.fidelities.back()) << std::endl;
+              outputFile << trainStats[3] << " --- Test Accuracy : " << formattingDoubleToString(ruleStats.accuracies.back()) << std::endl;
+              outputFile << trainStats[4] << " --- Test Confidence : " << formattingDoubleToString(ruleStats.finalConfidence) << std::endl;
               outputFile << trainStats[5] << std::endl;
               outputFile << "   Test Covering size evolution with antecedents : ";
-              for (int c : coverSizes) {
+              for (int c : ruleStats.coverSizes) {
                 outputFile << c << " ";
               }
               outputFile << std::endl;
               outputFile << trainStats[6] << std::endl;
               outputFile << "   Test Fidelity increase with antecedents : ";
-              for (double f : fidelityIncreases) {
+              for (double f : ruleStats.fidelityIncreases) {
                 outputFile << formattingDoubleToString(f) << " ";
               }
               outputFile << std::endl;
               outputFile << trainStats[7] << std::endl;
               outputFile << "   Test Accuracy variation with antecedents : ";
-              for (double a : accuracyChanges) {
+              for (double a : ruleStats.accuracyChanges) {
                 outputFile << formattingDoubleToString(a) << " ";
               }
               outputFile << std::endl;
-              outputFile << "" << std::endl;
+              outputFile << std::endl;
             }
           }
           outputFile.close();
@@ -766,14 +839,15 @@ int fidexGloStats(const std::string &command) {
       }
     }
 
+    // =========================================================================
+    // 10) End-of-run timing
+    // =========================================================================
+
     t2 = clock();
     temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
-    std::cout.rdbuf(cout_buff); // reset to standard output again
-
   } catch (const ErrorHandler &e) {
-    std::cout.rdbuf(cout_buff); // reset to standard output again
     std::cerr << e.what() << std::endl;
     return -1;
   }
