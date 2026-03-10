@@ -4,6 +4,7 @@
 #include "../../../common/cpp/src/dataSet.h"
 #include "../../../common/cpp/src/errorHandler.h"
 #include "../../../common/cpp/src/parameters.h"
+#include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 #include "fidexAlgo.h"
 #include "hyperLocus.h"
 #include "hyperspace.h"
@@ -16,26 +17,44 @@
 #include <tuple>
 #include <vector>
 
-// Local helper that opens a console output file, redirects std::cout to it,
-// then restores the original buffer automatically when leaving fidex().
 namespace {
-struct ScopedCoutRedirect {
-  explicit ScopedCoutRedirect(const std::string &filename) : stream(std::cout), originalBuffer(std::cout.rdbuf()) {
-    output.open(filename);
-    if (!output.is_open()) {
-      throw CannotOpenFileError("Error : Couldn't open console output file " + filename + ".");
-    }
-    stream.rdbuf(output.rdbuf());
+
+// ============================================================================
+// Local helpers
+// ============================================================================
+
+bool hasJsonExtension(const std::string &path) {
+  const size_t dotPos = path.find_last_of('.');
+  return dotPos != std::string::npos && path.substr(dotPos + 1) == "json";
+}
+
+void writeDecisionThresholdHeader(std::ostream &output, float decisionThreshold, int positiveClassIndex) {
+  if (decisionThreshold < 0.0f) {
+    output << "No decision threshold is used.\n";
+  } else {
+    output << "Using a decision threshold of " << decisionThreshold << " for class " << positiveClassIndex << "\n";
+  }
+}
+
+std::unique_ptr<DataSetFid> createTestDataset(
+    Parameters &params,
+    const std::string &testDataFile,
+    int nbAttributes,
+    int nbClasses,
+    float decisionThreshold,
+    int positiveClassIndex) {
+  if (!params.isStringSet(TEST_PRED_FILE)) {
+    return std::unique_ptr<DataSetFid>(new DataSetFid("testDatas from Fidex", testDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
   }
 
-  ~ScopedCoutRedirect() {
-    stream.rdbuf(originalBuffer);
+  const std::string testPredFile = params.getString(TEST_PRED_FILE);
+  if (params.isStringSet(TEST_CLASS_FILE)) {
+    return std::unique_ptr<DataSetFid>(new DataSetFid("testDatas from Fidex", testDataFile, testPredFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex, params.getString(TEST_CLASS_FILE)));
   }
 
-  std::ofstream output;
-  std::ostream &stream;
-  std::streambuf *originalBuffer;
-};
+  return std::unique_ptr<DataSetFid>(new DataSetFid("testDatas from Fidex", testDataFile, testPredFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
+}
+
 } // namespace
 
 /**
@@ -221,13 +240,16 @@ int fidex(const std::string &command) {
 
   try {
 
+    // =========================================================================
+    // 1) Parse command and load parameters
+    // =========================================================================
+
     float temps;
     clock_t t1;
     clock_t t2;
 
     t1 = clock();
 
-    // Parsing the command
     std::vector<std::string> commandList = {"fidex"};
     std::string s;
     std::stringstream ss(command);
@@ -242,7 +264,7 @@ int fidex(const std::string &command) {
       return 0;
     }
 
-    // Import parameters
+    // Import parameters from JSON config file or CLI args.
     std::unique_ptr<Parameters> params;
     std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, TEST_DATA_FILE,
                                               WEIGHTS_FILE, RULES_FILE, RULES_OUTFILE, NB_ATTRIBUTES, NB_CLASSES,
@@ -270,22 +292,21 @@ int fidex(const std::string &command) {
       params = std::unique_ptr<Parameters>(new Parameters(commandList, validParams));
     }
 
-    // getting all program arguments from CLI
+    // Validate logical consistency and value ranges.
     checkFidexParametersLogicValues(*params);
 
-    // Get console results to file
-    std::unique_ptr<ScopedCoutRedirect> coutRedirect;
+    // =========================================================================
+    // 2) Configure console redirection and resolve core parameters
+    // =========================================================================
+    std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      coutRedirect.reset(new ScopedCoutRedirect(params->getString(CONSOLE_FILE)));
+      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
     std::cout << *params;
 
-    // ----------------------------------------------------------------------
-
-    // Get parameters values
-
+    // Resolve frequently used parameter values.
     int nbAttributes = params->getInt(NB_ATTRIBUTES);
     int nbClasses = params->getInt(NB_CLASSES);
     std::string trainDataFile = params->getString(TRAIN_DATA_FILE);
@@ -308,10 +329,9 @@ int fidex(const std::string &command) {
       inputRulesFile = params->getString(RULES_FILE);
     }
 
-    // ----------------------------------------------------------------------
-
-    // Import files
-
+    // =========================================================================
+    // 3) Import train/test datasets and optional names
+    // =========================================================================
     std::cout << "Import files..." << std::endl;
 
     float importTime;
@@ -337,18 +357,7 @@ int fidex(const std::string &command) {
     }
 
     // Get test data
-    std::unique_ptr<DataSetFid> testDatas;
-    if (!params->isStringSet(TEST_PRED_FILE)) { // If we have only one test data file with data, pred and class
-      testDatas.reset(new DataSetFid("testDatas from Fidex", mainSamplesDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
-
-    } else { // We have different files for test predictions and test classes
-
-      if (params->isStringSet(TEST_CLASS_FILE)) {
-        testDatas.reset(new DataSetFid("testDatas from Fidex", mainSamplesDataFile, params->getString(TEST_PRED_FILE), nbAttributes, nbClasses, decisionThreshold, positiveClassIndex, params->getString(TEST_CLASS_FILE)));
-      } else {
-        testDatas.reset(new DataSetFid("testDatas from Fidex", mainSamplesDataFile, params->getString(TEST_PRED_FILE), nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
-      }
-    }
+    std::unique_ptr<DataSetFid> testDatas = createTestDataset(*params, mainSamplesDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex);
     const auto &mainSamplesValues = testDatas->getDatas();
     const auto &mainSamplesPreds = testDatas->getPredictions();
     const auto &mainSamplesPredictionScores = testDatas->getPredictionScores();
@@ -357,6 +366,7 @@ int fidex(const std::string &command) {
     if (nbTestSamples == 0) {
       throw CommandArgumentException("Error : the test dataset is empty, at least one test sample is required.");
     }
+    const bool isSingleSample = (nbTestSamples == 1);
 
     // Get attributes
     std::vector<std::string> attributeNames;
@@ -378,7 +388,10 @@ int fidex(const std::string &command) {
     std::vector<double> mus;
     std::vector<double> sigmas;
 
-    // Get mus, sigmas and normalizationIndices from normalizationFile for denormalization :
+    // =========================================================================
+    // 4) Optional normalization metadata for denormalized rule display
+    // =========================================================================
+    // Get mus, sigmas and normalizationIndices from normalizationFile.
     if (params->isStringSet(NORMALIZATION_FILE)) {
       auto results = parseNormalizationStats(params->getString(NORMALIZATION_FILE), params->getInt(NB_ATTRIBUTES), attributeNames);
       normalizationIndices = std::get<0>(results);
@@ -403,8 +416,11 @@ int fidex(const std::string &command) {
     d1 = clock();
 
     std::vector<std::string> lines;
-    lines.reserve(static_cast<size_t>(nbTestSamples) * (nbTestSamples > 1 ? 3u : 2u));
-    // compute hyperspace
+    lines.reserve(static_cast<size_t>(nbTestSamples) * (isSingleSample ? 2u : 3u));
+
+    // =========================================================================
+    // 5) Build hyperspace from weights/rules and initialize Fidex
+    // =========================================================================
     std::cout << "Creation of hyperspace..." << std::endl;
 
     std::vector<std::vector<double>> matHypLocus;
@@ -435,7 +451,9 @@ int fidex(const std::string &command) {
 
     auto fidex = Fidex(*trainDatas, *params, hyperspace, true);
 
-    // Stats
+    // =========================================================================
+    // 6) Extract one rule per test sample and accumulate metrics
+    // =========================================================================
     double meanFidelity = 0;
     double meanConfidence = 0;
     double meanCovSize = 0;
@@ -444,7 +462,7 @@ int fidex(const std::string &command) {
     std::vector<Rule> rules;
     rules.reserve(nbTestSamples);
 
-    // We compute rule for each test sample
+    // Compute one rule for each test sample.
     for (int currentSample = 0; currentSample < nbTestSamples; currentSample++) {
       Rule rule;
 
@@ -454,12 +472,12 @@ int fidex(const std::string &command) {
 
       lines.push_back("Rule for sample " + std::to_string(currentSample) + " :\n");
 
-      if (nbTestSamples > 1) {
+      if (!isSingleSample) {
         std::cout << "Computation of rule for sample " << currentSample << " : " << std::endl
                   << std::endl;
       }
 
-      if (nbTestSamples == 1) {
+      if (isSingleSample) {
         std::cout << "Searching for discriminating hyperplans..." << std::endl;
       }
 
@@ -474,7 +492,7 @@ int fidex(const std::string &command) {
       meanCovSize += static_cast<double>(rule.getCoveringSize());
       meanNbAntecedentsPerRule += static_cast<double>(rule.getNbAntecedents());
 
-      if (nbTestSamples == 1) {
+      if (isSingleSample) {
         std::cout << "Discriminating hyperplans generated." << std::endl
                   << std::endl;
       }
@@ -494,12 +512,14 @@ int fidex(const std::string &command) {
 
       std::cout << "-------------------------------------------------" << std::endl;
 
-      if (nbTestSamples > 1) {
+      if (!isSingleSample) {
         lines.emplace_back("-------------------------------------------------\n");
       }
     }
 
-    // Stats
+    // =========================================================================
+    // 7) Compute and optionally export aggregate statistics
+    // =========================================================================
     meanFidelity /= static_cast<double>(nbTestSamples);
     meanConfidence /= static_cast<double>(nbTestSamples);
     meanCovSize /= static_cast<double>(nbTestSamples);
@@ -514,11 +534,7 @@ int fidex(const std::string &command) {
         outputStatsFile << "Statistics with a test set of " << nbTestSamples << " samples :\n"
                         << std::endl;
 
-        if (decisionThreshold < 0.0f) {
-          outputStatsFile << "No decision threshold is used.\n";
-        } else {
-          outputStatsFile << "Using a decision threshold of " << decisionThreshold << " for class " << positiveClassIndex << "\n";
-        }
+        writeDecisionThresholdHeader(outputStatsFile, decisionThreshold, positiveClassIndex);
 
         outputStatsFile << "The mean covering size per rule is : " << meanCovSize << "" << std::endl;
         outputStatsFile << "The mean number of antecedents per rule is : " << meanNbAntecedentsPerRule << "" << std::endl;
@@ -531,17 +547,16 @@ int fidex(const std::string &command) {
       }
     }
 
-    if (ruleFile.substr(ruleFile.find_last_of('.') + 1) == "json") {
+    // =========================================================================
+    // 8) Export extracted rules (JSON or text)
+    // =========================================================================
+    if (hasJsonExtension(ruleFile)) {
       Rule::toJsonFile(ruleFile, rules, decisionThreshold, positiveClassIndex);
     } else {
       std::ofstream outputFile(ruleFile);
 
       if (outputFile.is_open()) {
-        if (decisionThreshold < 0.0f) {
-          outputFile << "No decision threshold is used.\n";
-        } else {
-          outputFile << "Using a decision threshold of " << decisionThreshold << " for class " << positiveClassIndex << "\n";
-        }
+        writeDecisionThresholdHeader(outputFile, decisionThreshold, positiveClassIndex);
 
         outputFile << std::endl;
 
@@ -557,6 +572,9 @@ int fidex(const std::string &command) {
     d2 = clock();
     temps2 = (float)(d2 - d1) / CLOCKS_PER_SEC;
 
+    // =========================================================================
+    // 9) Report execution timings
+    // =========================================================================
     std::cout << "\nTime without data import = " << temps2 << " sec" << std::endl;
 
     t2 = clock();

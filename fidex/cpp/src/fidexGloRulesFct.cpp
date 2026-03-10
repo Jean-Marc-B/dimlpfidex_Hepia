@@ -5,6 +5,7 @@
 #include "../../../common/cpp/src/errorHandler.h"
 #include "../../../common/cpp/src/parameters.h"
 #include "../../../common/cpp/src/rule.h"
+#include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 #include "fidexAlgo.h"
 #include "hyperLocus.h"
 
@@ -30,26 +31,23 @@
 
 #include <omp.h>
 
-// Local helper that opens a console output file, redirects std::cout to it,
-// then restores the original buffer automatically when leaving fidexGloRules().
 namespace {
-struct ScopedCoutRedirect {
-  explicit ScopedCoutRedirect(const std::string &filename) : stream(std::cout), originalBuffer(std::cout.rdbuf()) {
-    output.open(filename);
-    if (!output.is_open()) {
-      throw CannotOpenFileError("Error : Couldn't open console output file " + filename + ".");
-    }
-    stream.rdbuf(output.rdbuf());
-  }
 
-  ~ScopedCoutRedirect() {
-    stream.rdbuf(originalBuffer);
-  }
+bool hasJsonExtension(const std::string &path) {
+  const size_t dotPos = path.find_last_of('.');
+  return dotPos != std::string::npos && path.substr(dotPos + 1) == "json";
+}
 
-  std::ofstream output;
-  std::ostream &stream;
-  std::streambuf *originalBuffer;
-};
+void sortRulesByCoveringDesc(std::vector<Rule> &rules) {
+  sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
+    return r1.getCoveringSize() > r2.getCoveringSize();
+  });
+}
+
+void removeAdjacentDuplicateRules(std::vector<Rule> &rules) {
+  rules.erase(unique(rules.begin(), rules.end()), rules.end());
+}
+
 } // namespace
 
 /**
@@ -152,7 +150,13 @@ void showRulesParams() {
  * @param p Class containing all user-defined parameters that influence the program execution.
  * @param hyperlocus 2D vector of doubles representing all the possible hyperplanes used to compute the Fidex algorithm.
  */
+// ============================================================================
+// Rule generation core (parallel sample-wise Fidex extraction)
+// ============================================================================
 void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples, DataSetFid &trainDataset, Parameters &p, const std::vector<std::vector<double>> &hyperlocus) {
+  // =========================================================================
+  // 1) Runtime setup and verbosity configuration
+  // =========================================================================
   int nbProblems = 0;
   int nbRulesNotFound = 0;
   int nbDatas = trainDataset.getNbSamples();
@@ -172,6 +176,10 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
   bool showThreadInfo = verbose >= 3;
 
   std::cout << "Selected indexes: [" << startIndex << "," << endIndex << "[ (" << (endIndex - startIndex) << " samples)" << std::endl;
+
+  // =========================================================================
+  // 2) Progress milestones preparation (shared across threads)
+  // =========================================================================
 
   // Build the list of milestones (1 sample, ~5/10 samples per thread, and every 10%) once before spawning threads.
   // Use parenthesized std::max/min to avoid Windows macros interfering during MSVC builds.
@@ -222,6 +230,10 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     return oss.str();
   };
 
+  // =========================================================================
+  // 3) Parallel rule extraction (one Fidex instance per thread)
+  // =========================================================================
+
 #pragma omp parallel num_threads(nbThreadsUsed)
   {
     Rule rule;
@@ -242,6 +254,8 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     if (p.isStringSet(CONSOLE_FILE)) {
       consoleFile = p.getString(CONSOLE_FILE);
     }
+    std::vector<int> &trainPreds = trainDataset.getPredictions();
+    std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
 
 #pragma omp critical
     {
@@ -253,8 +267,6 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     t1 = omp_get_wtime();
 #pragma omp for
     for (int idSample = startIndex; idSample < endIndex; idSample++) {
-      std::vector<int> &trainPreds = trainDataset.getPredictions();
-      std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
       std::vector<double> &mainSampleValues = trainData[idSample];
       int mainSamplePred = trainPreds[idSample];
       cnt += 1;
@@ -388,6 +400,10 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     }
   } // end of parallel section
 
+  // =========================================================================
+  // 4) Final aggregated report
+  // =========================================================================
+
   std::cout << std::endl
             << rules.size() << " rules created." << std::endl
             << "Number of samples with lower covering than " << minCovering << " is " << nbProblems << std::endl
@@ -470,13 +486,14 @@ std::vector<Rule> extractRules(Parameters &p, std::vector<int> notCoveredSamples
   }
 
   // sort rules by covering
-  sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
-    return r1.getCoveringSize() > r2.getCoveringSize();
-  });
+  sortRulesByCoveringDesc(rules);
 
   return rules;
 }
 
+// ============================================================================
+// Coverage utility helpers
+// ============================================================================
 int computeGlobalRulesCoveredSamples(int nbDatas, int nbClasses, const std::vector<std::vector<int>> &coveredSamplesSumByClass) {
   int notCoveredSamples = 0;
 
@@ -498,6 +515,9 @@ int computeGlobalRulesCoveredSamples(int nbDatas, int nbClasses, const std::vect
   return notCoveredSamples;
 }
 
+// ============================================================================
+// Rule set simplification by usefulness pruning
+// ============================================================================
 std::vector<Rule> ruleSelection(int nbDatas, int nbClasses, const std::vector<Rule> &rules) {
   std::vector<Rule> chosenRules;
   std::vector<std::vector<int>> coveredSamplesSumByClass(nbClasses, std::vector<int>(nbDatas, 0));
@@ -566,6 +586,9 @@ std::vector<Rule> ruleSelection(int nbDatas, int nbClasses, const std::vector<Ru
  * @param hyperlocus 2D vector of doubles representing all the possible hyperplanes used to compute the Fidex algorithm.
  * @return A vector containing the computed rules.
  */
+// ============================================================================
+// Heuristic #1 (slowest, best coverage quality)
+// ============================================================================
 std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std::vector<std::vector<double>> &hyperlocus) {
   std::vector<Rule> chosenRules;
   int nbDatas = trainDataset.getNbSamples();
@@ -585,7 +608,7 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
   }
 
   // remove duplicates
-  rules.erase(unique(rules.begin(), rules.end()), rules.end());
+  removeAdjacentDuplicateRules(rules);
 
   // While there are some not covered samples
   std::vector<int>::iterator iterator;
@@ -645,6 +668,9 @@ std::vector<Rule> heuristic_1(DataSetFid &trainDataset, Parameters &p, const std
  * @param hyperlocus 2D vector of doubles representing all the possible hyperplanes used to compute the Fidex algorithm.
  * @return A vector containing the computed rules.
  */
+// ============================================================================
+// Heuristic #2 (faster greedy pass on sorted rules)
+// ============================================================================
 std::vector<Rule> heuristic_2(DataSetFid &trainDataset, Parameters &p, const std::vector<std::vector<double>> &hyperlocus) {
   std::vector<Rule> chosenRules;
   int nbDatas = trainDataset.getNbSamples();
@@ -654,13 +680,9 @@ std::vector<Rule> heuristic_2(DataSetFid &trainDataset, Parameters &p, const std
   // getting rules and not covered samples
   std::vector<Rule> rules = extractRules(p, notCoveredSamples, trainDataset, hyperlocus);
 
-  // sort rules by covering
-  sort(rules.begin(), rules.end(), [](const Rule &r1, const Rule &r2) {
-    return r1.getCoveringSize() > r2.getCoveringSize();
-  });
-
-  // remove duplicates
-  rules.erase(unique(rules.begin(), rules.end()), rules.end());
+  // sort rules by covering and remove adjacent duplicates
+  sortRulesByCoveringDesc(rules);
+  removeAdjacentDuplicateRules(rules);
 
   // While there are some not covered samples
   int i = 0;
@@ -707,6 +729,9 @@ std::vector<Rule> heuristic_2(DataSetFid &trainDataset, Parameters &p, const std
  * @param hyperlocus 2D vector of doubles representing all the possible hyperplanes used to compute the Fidex algorithm.
  * @return A vector containing the computed rules.
  */
+// ============================================================================
+// Heuristic #3 (fastest random uncovered-sample strategy)
+// ============================================================================
 std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std::vector<std::vector<double>> &hyperlocus) {
   Rule rule;
   int idSample;
@@ -720,6 +745,8 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
   auto nbDatas = static_cast<int>(trainDataset.getDatas().size());
   std::vector<int> notCoveredSamples(nbDatas);
   auto fidex = Fidex(trainDataset, p, hyperspace, false);
+  std::vector<int> &trainPreds = trainDataset.getPredictions();
+  std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
   std::string consoleFile = "";
   if (p.isStringSet(CONSOLE_FILE)) {
     consoleFile = p.getString(CONSOLE_FILE);
@@ -748,8 +775,6 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
     }
 
     idSample = notCoveredSamples[0];
-    std::vector<int> &trainPreds = trainDataset.getPredictions();
-    std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
     std::vector<double> &mainSampleValues = trainData[idSample];
     int mainSamplePred = trainPreds[idSample];
 
@@ -781,7 +806,7 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
   std::cout << std::endl;
 
   // remove duplicates
-  chosenRules.erase(unique(chosenRules.begin(), chosenRules.end()), chosenRules.end());
+  removeAdjacentDuplicateRules(chosenRules);
 
   std::cout << "Number of samples with lower covering than " << minNbCover << " : " << nbProblems << std::endl
             << "Number of rules not found : " << nbRulesNotFound << std::endl
@@ -796,6 +821,10 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
  * @param p Reference to the Parameters object containing all hyperparameters.
  */
 void checkRulesParametersLogicValues(Parameters &p) {
+  // =========================================================================
+  // 1) Defaults
+  // =========================================================================
+
   // setting default values
   p.setDefaultNbQuantLevels();
   p.setDefaultDecisionThreshold();
@@ -808,6 +837,10 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.setDefaultBool(HYPERPLAN_OPTI, true);
   p.setDefaultInt(VERBOSE, 0);
   p.setDefaultBool(REVIVE_BARRIERS, false);
+
+  // =========================================================================
+  // 2) Cross-parameter logic and mandatory fields
+  // =========================================================================
 
   if (p.getInt(END_INDEX) != -1 && p.getInt(START_INDEX) > p.getInt(END_INDEX)) {
     throw CommandArgumentException("start_index cannot be greater than end_index.");
@@ -823,6 +856,10 @@ void checkRulesParametersLogicValues(Parameters &p) {
   p.assertStringExists(GLOBAL_RULES_OUTFILE);
   p.assertIntExists(HEURISTIC);
 
+  // =========================================================================
+  // 3) Batch-specific behavior
+  // =========================================================================
+
   const bool batchRequested = (p.getInt(START_INDEX) != 0 || p.getInt(END_INDEX) != -1);
 
   // manage the bached execution
@@ -832,10 +869,9 @@ void checkRulesParametersLogicValues(Parameters &p) {
     }
 
     std::string globalRulesOutfile = p.getString(GLOBAL_RULES_OUTFILE);
-    std::string filenameWithoutExtension = globalRulesOutfile.substr(0, globalRulesOutfile.find_last_of("."));
-    std::string extension = globalRulesOutfile.substr(globalRulesOutfile.find_last_of(".") + 1);
-
-    if (extension != "json") {
+    if (!hasJsonExtension(globalRulesOutfile)) {
+      const size_t dotPos = globalRulesOutfile.find_last_of('.');
+      const std::string filenameWithoutExtension = (dotPos == std::string::npos) ? globalRulesOutfile : globalRulesOutfile.substr(0, dotPos);
       std::string updated_file = filenameWithoutExtension + ".json";
       p.setString(GLOBAL_RULES_OUTFILE, updated_file);
       std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
@@ -846,6 +882,10 @@ void checkRulesParametersLogicValues(Parameters &p) {
   if (p.getBool(AGGREGATE_RULES)) {
     p.assertStringExists(AGGREGATE_FOLDER);
   }
+
+  // =========================================================================
+  // 4) Generic range checks and consistency checks
+  // =========================================================================
 
   // verifying logic between parameters, values range and so on...
   p.checkParametersCommon();
@@ -925,8 +965,15 @@ void checkRulesParametersLogicValues(Parameters &p) {
  * @param command A single string containing either the path to a JSON configuration file with all specified arguments, or all arguments for the function formatted like command-line input. This includes file paths, Fidex parameters, and options for output.
  * @return Returns 0 for successful execution, -1 for errors encountered during the process.
  */
+// ============================================================================
+// Main entrypoint
+// ============================================================================
 int fidexGloRules(const std::string &command) {
   try {
+    // =========================================================================
+    // 1) Command parsing
+    // =========================================================================
+
     // Parsing the command
     std::vector<std::string> commandList = {"fidexGloRules"};
     std::string s;
@@ -941,6 +988,10 @@ int fidexGloRules(const std::string &command) {
       showRulesParams();
       return -1;
     }
+
+    // =========================================================================
+    // 2) Parameter loading and validation
+    // =========================================================================
 
     // Import parameters
     std::unique_ptr<Parameters> params;
@@ -972,10 +1023,18 @@ int fidexGloRules(const std::string &command) {
     // getting all program arguments from CLI
     checkRulesParametersLogicValues(*params);
 
-    std::unique_ptr<ScopedCoutRedirect> coutRedirect;
+    // =========================================================================
+    // 3) Optional console redirection
+    // =========================================================================
+
+    std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      coutRedirect.reset(new ScopedCoutRedirect(params->getString(CONSOLE_FILE)));
+      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
+
+    // =========================================================================
+    // 4) Dataset import and optional metadata (attributes/normalization)
+    // =========================================================================
 
     // Show chosen parameters
     std::cout << *params;
@@ -1045,6 +1104,10 @@ int fidexGloRules(const std::string &command) {
     std::cout << "Files imported" << std::endl
               << std::endl;
 
+    // =========================================================================
+    // 5) Hyperspace construction (weights or tree rules)
+    // =========================================================================
+
     // compute hyperspace
 
     std::cout << "Creation of hyperspace..." << std::endl;
@@ -1088,6 +1151,10 @@ int fidexGloRules(const std::string &command) {
     //--------------------------------------------------------------------------------------------------------------------
     //--------------------------------------------------------------------------------------------------------------------
 
+    // =========================================================================
+    // 6) Global rules extraction with selected heuristic
+    // =========================================================================
+
     // Initialize random number generator
 
     const auto start = std::chrono::high_resolution_clock::now();
@@ -1127,12 +1194,14 @@ int fidexGloRules(const std::string &command) {
               << diff_h.count() << " sec\n"
               << std::endl;
 
+    // =========================================================================
+    // 7) Rules ordering and output file writing
+    // =========================================================================
+
     std::cout << "Rules extraction..."
               << std::endl;
 
-    sort(generatedRules.begin(), generatedRules.end(), [](const Rule &r1, const Rule &r2) {
-      return r1.getCoveringSize() > r2.getCoveringSize();
-    });
+    sortRulesByCoveringDesc(generatedRules);
 
     std::tuple<double, double> stats = writeRulesFile(params->getString(GLOBAL_RULES_OUTFILE),
                                                       generatedRules,

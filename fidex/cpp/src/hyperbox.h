@@ -166,7 +166,7 @@ public:
 
   double computeRuleAccuracy(const int mainSamplePred, const std::vector<int> &trainTrueClass) const;
 
-  Hyperbox deepCopy();
+  Hyperbox deepCopy() const;
 };
 
 inline std::ostream &operator<<(std::ostream &stream, const Hyperbox &hyperbox) {
