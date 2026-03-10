@@ -1,4 +1,5 @@
 #include "densClsFct.h"
+#include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 
 ////////////////////////////////////////////////////////////
 
@@ -149,10 +150,6 @@ void checkDensClsParametersLogicValues(Parameters &p) {
  * @return Returns 0 for successful execution, -1 for errors encountered during the process.
  */
 int densCls(const std::string &command) {
-
-  // Save buffer where we output results
-  std::ofstream ofs;
-  std::streambuf *cout_buff = std::cout.rdbuf(); // Save old buf
   try {
 
     float temps;
@@ -205,10 +202,9 @@ int densCls(const std::string &command) {
     // getting all program arguments from CLI
     checkDensClsParametersLogicValues(*params);
 
-    // Get console results to file
+    std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      ofs.open(params->getString(CONSOLE_FILE));
-      std::cout.rdbuf(ofs.rdbuf()); // redirect cout to file
+      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
@@ -493,8 +489,6 @@ int densCls(const std::string &command) {
     temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
-    std::cout.rdbuf(cout_buff); // reset to standard output again
-
     BpNN::resetInitRandomGen();
 
     Train.Del();
@@ -511,7 +505,6 @@ int densCls(const std::string &command) {
     }
 
   } catch (const ErrorHandler &e) {
-    std::cout.rdbuf(cout_buff); // reset to standard output again
     std::cerr << e.what() << std::endl;
     return -1;
   }

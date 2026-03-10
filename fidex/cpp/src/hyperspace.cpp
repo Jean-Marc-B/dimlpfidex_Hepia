@@ -6,8 +6,7 @@
  * @param matHypLocus 2D vector of doubles representing all the possible hyperplanes.
  */
 Hyperspace::Hyperspace(const std::vector<std::vector<double>> &matHypLocus) : hyperLocus(matHypLocus) {
-  std::vector<std::pair<int, int>> discriminativeHyperplans;
-  hyperbox = std::make_shared<Hyperbox>(discriminativeHyperplans);
+  hyperbox = std::make_shared<Hyperbox>();
 }
 
 /**
@@ -49,14 +48,19 @@ const std::shared_ptr<Hyperbox> &Hyperspace::getHyperbox() const {
  */
 Rule Hyperspace::ruleExtraction(const std::vector<double> &mainSampleData, const int mainSamplePred, double ruleAccuracy, double ruleConfidence, const std::vector<double> &mus, const std::vector<double> &sigmas, const std::vector<int> &normalizationIndices) {
 
-  bool denormalizing = false;
-  // Check if we need to denormalize
-  if (!mus.empty() && !sigmas.empty() && !normalizationIndices.empty()) {
-    denormalizing = true;
+  // =========================================================================
+  // 1) Validate inputs and optional normalization metadata
+  // =========================================================================
+  const bool hasMus = !mus.empty();
+  const bool hasSigmas = !sigmas.empty();
+  const bool hasNormalizationIndices = !normalizationIndices.empty();
+  const bool denormalizing = hasMus && hasSigmas && hasNormalizationIndices;
+
+  if (denormalizing) {
     if (!(mus.size() == sigmas.size() && mus.size() == normalizationIndices.size())) {
       throw InternalError("Error during rule extraction : Means, standard deviations, and normalization indices must have the same number of elements.");
     }
-  } else if (!mus.empty() || !sigmas.empty() || !normalizationIndices.empty()) {
+  } else if (hasMus || hasSigmas || hasNormalizationIndices) {
     throw InternalError("Error during rule extraction : Means, standard deviations, and normalization indices must either all be specified or none at all.");
   }
   if (mainSampleData.empty()) {
@@ -68,16 +72,19 @@ Rule Hyperspace::ruleExtraction(const std::vector<double> &mainSampleData, const
   std::vector<Antecedent> antecedents;
   antecedents.reserve(discrHyperplanes.size());
 
-  for (size_t k = 0; k < discrHyperplanes.size(); k++) {
-
-    const int attribute = discrHyperplanes[k].first % nbAttributes;
-    double hypValue = hyperLocus[discrHyperplanes[k].first][discrHyperplanes[k].second];
+  // =========================================================================
+  // 2) Build antecedents from discriminative hyperplanes
+  // =========================================================================
+  for (const auto &discrHyperplane : discrHyperplanes) {
+    const int hyperplaneDimension = discrHyperplane.first;
+    const int hyperplaneIndex = discrHyperplane.second;
+    const int attribute = hyperplaneDimension % nbAttributes;
+    double hypValue = hyperLocus[hyperplaneDimension][hyperplaneIndex];
     const double mainSampleValue = mainSampleData[attribute];
     const bool inequalityBool = (hypValue <= mainSampleValue);
 
     // Denormalization of values in case it was previously normalized
     if (denormalizing) {
-      // Check if the attribute needs to be denormalized
       int index = -1;
       for (size_t i = 0; i < normalizationIndices.size(); ++i) {
         if (normalizationIndices[i] == attribute) {

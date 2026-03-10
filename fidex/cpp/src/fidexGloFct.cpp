@@ -4,6 +4,7 @@
 #include "../../../common/cpp/src/dataSet.h"
 #include "../../../common/cpp/src/errorHandler.h"
 #include "../../../common/cpp/src/parameters.h"
+#include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 #include "fidexAlgo.h"
 #include "hyperLocus.h"
 #include "hyperspace.h"
@@ -16,26 +17,27 @@
 #include <tuple>
 #include <vector>
 
-// Local helper that opens a console output file, redirects std::cout to it,
-// then restores the original buffer automatically when leaving fidexGlo().
 namespace {
-struct ScopedCoutRedirect {
-  explicit ScopedCoutRedirect(const std::string &filename) : stream(std::cout), originalBuffer(std::cout.rdbuf()) {
-    output.open(filename);
-    if (!output.is_open()) {
-      throw CannotOpenFileError("Error : Couldn't open console output file " + filename + ".");
-    }
-    stream.rdbuf(output.rdbuf());
+
+bool hasJsonExtension(const std::string &path) {
+  const size_t dotPos = path.find_last_of('.');
+  return dotPos != std::string::npos && path.substr(dotPos + 1) == "json";
+}
+
+std::unique_ptr<DataSetFid> createTestDataset(
+    Parameters &params,
+    const std::string &testDataFile,
+    int nbAttributes,
+    int nbClasses,
+    float decisionThreshold,
+    int positiveClassIndex) {
+  if (!params.isStringSet(TEST_PRED_FILE)) {
+    return std::unique_ptr<DataSetFid>(new DataSetFid("testDatas from FidexGlo", testDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
   }
 
-  ~ScopedCoutRedirect() {
-    stream.rdbuf(originalBuffer);
-  }
+  return std::unique_ptr<DataSetFid>(new DataSetFid("testDatas from FidexGlo", testDataFile, params.getString(TEST_PRED_FILE), nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
+}
 
-  std::ofstream output;
-  std::ostream &stream;
-  std::streambuf *originalBuffer;
-};
 } // namespace
 
 /**
@@ -180,6 +182,190 @@ void executeFidex(std::vector<std::string> &lines, std::vector<Rule> &currentRul
   }
 }
 
+namespace {
+
+/**
+ * @brief Builds and logs the explanation for one sample using global rules, with optional Fidex execution.
+ *
+ * The function gets the explanation of a sample from the ruleset, appends explanation lines,
+ * fills `currentRules` with the rules selected for this sample, and optionally launches
+ * Fidex when no suitable global rule is found.
+ *
+ * @param lines Output explanation lines for the whole run.
+ * @param currentRules Rules selected for this sample.
+ * @param rules Global ruleset loaded from file.
+ * @param sampleValues Feature values of the current sample.
+ * @param samplePred Model predicted class for the current sample.
+ * @param samplePredScore Model score/probability for the predicted class.
+ * @param sampleIndex Index of the current sample.
+ * @param isSingleSample Whether the current execution contains only one sample.
+ * @param withFidex Whether Fidex fallback is enabled.
+ * @param minimalVersion Whether the minimal explanation mode is enabled.
+ * @param hasClassNames Whether class labels are available.
+ * @param classNames Class labels if available.
+ * @param attributeNames Attribute labels used when rendering rules.
+ * @param trainDataset Train dataset used by Fidex fallback (can be nullptr if withFidex=false).
+ * @param fidexHyperspace Hyperspace used by Fidex fallback (can be nullptr if withFidex=false).
+ * @param params Runtime parameters passed to Fidex fallback.
+ * @return True if Fidex fallback was launched for this sample, otherwise false.
+ */
+bool explainSample(
+    std::vector<std::string> &lines,
+    std::vector<Rule> &currentRules,
+    const std::vector<Rule> &rules,
+    const std::vector<double> &sampleValues,
+    int samplePred,
+    double samplePredScore,
+    int sampleIndex,
+    bool isSingleSample,
+    bool withFidex,
+    bool minimalVersion,
+    bool hasClassNames,
+    const std::vector<std::string> &classNames,
+    const std::vector<std::string> &attributeNames,
+    DataSetFid *trainDataset,
+    Hyperspace *fidexHyperspace,
+    Parameters &params) {
+  if (!isSingleSample) {
+    lines.push_back("Explanation for sample " + std::to_string(sampleIndex) + " :\n");
+    std::cout << "Explanation for sample " << std::to_string(sampleIndex) << " :" << std::endl
+              << std::endl;
+  }
+
+  std::string currentPred;
+  if (hasClassNames) {
+    currentPred = classNames[samplePred];
+  } else {
+    currentPred = std::to_string(samplePred);
+  }
+  lines.emplace_back("The model predicts class " + currentPred + " with probability " + std::to_string(samplePredScore) + "\n");
+  std::cout << "The model predicts class " << currentPred << " with probability " << std::to_string(samplePredScore) << std::endl
+            << std::endl;
+
+  // Find rules activated by this sample
+  std::vector<int> activatedRules;
+  getActivatedRules(activatedRules, rules, sampleValues);
+
+  // Check which rules are correct
+  std::vector<int> correctRules;
+  std::vector<int> notCorrectRules;
+  bool notShowUncorrectRules = false;
+  bool launchingFidex = false;
+
+  if (activatedRules.empty()) { // If there is no activated rule
+    std::cout << "There is no rule activated" << std::endl;
+    std::cout << "We couldn't find any global explanation for this sample." << std::endl; // There is no explanation, we choose the model decision
+    std::cout << "We choose the model prediction." << std::endl;
+    std::cout << "The predicted class is " << std::to_string(samplePred) << std::endl;
+    lines.emplace_back("We couldn't find any global explanation for this sample."); // There is no explanation, we choose the model decision
+    lines.emplace_back("We choose the model prediction.");
+    lines.emplace_back("The predicted class is " + std::to_string(samplePred));
+    if (withFidex) {
+      launchingFidex = true;
+    }
+  } else { // There are some activated rules
+    for (int v : activatedRules) {
+      if (rules[v].getOutputClass() == samplePred) { // Check if the class of the rule is the predicted one
+        correctRules.push_back(v);
+      } else {
+        notCorrectRules.push_back(v);
+      }
+    }
+
+    if (correctRules.empty()) { // If there is no correct rule
+      int ancientClass = rules[activatedRules[0]].getOutputClass();
+      bool allSameClass = true; // Check if all the rules choose the same class
+      for (int v : activatedRules) {
+        if (rules[v].getOutputClass() != ancientClass) {
+          allSameClass = false;
+          break;
+        }
+      }
+
+      if (allSameClass && !minimalVersion) {
+        notShowUncorrectRules = true;
+        if (activatedRules.size() > 1) {
+          lines.emplace_back("We didn't find any rule with the same prediction as the model (class " + std::to_string(samplePred) + "), but we found " + std::to_string(activatedRules.size()) + " rules with class " + std::to_string(ancientClass) + " :\n");
+          std::cout << "We didn't find any rule with the same prediction as the model (class " << std::to_string(samplePred) << "), but we found " << std::to_string(activatedRules.size()) << " rules with class " << std::to_string(ancientClass) << " :" << std::endl
+                    << std::endl;
+        } else {
+          lines.emplace_back("We didn't find any rule with the same prediction as the model (class " + std::to_string(samplePred) + "), but we found 1 rule with class " + std::to_string(ancientClass) + " :\n");
+          std::cout << "We didn't find any rule with the same prediction as the model (class " << std::to_string(samplePred) << "), but we found 1 rule with class " << std::to_string(ancientClass) << " :" << std::endl
+                    << std::endl;
+        }
+        for (size_t v = 0; v < activatedRules.size(); v++) {
+          currentRules.push_back(rules[activatedRules[v]]);
+          const std::string ruleText = rules[activatedRules[v]].toString(attributeNames, classNames);
+          lines.emplace_back("R" + std::to_string(v + 1) + ": " + ruleText);
+          std::cout << "R" << std::to_string(v + 1) << ": " << ruleText << std::endl;
+        }
+      } else { // If minimalVersion or uncorrected rules are not all same class (only if we don't have correct rules)
+        if (minimalVersion) {
+          std::cout << "There is no correct activated rule for this sample." << std::endl;
+        } else {
+          std::cout << "There is no correct rule for this sample." << std::endl;
+        }
+
+        std::cout << "We couldn't find any global explanation for this sample." << std::endl; // There is no explanation, we choose the model decision
+        std::cout << "We choose the model prediction." << std::endl;
+        std::cout << "The predicted class is " << std::to_string(samplePred) << std::endl;
+        lines.emplace_back("We couldn't find any global explanation for this sample."); // There is no explanation, we choose the model decision
+        lines.emplace_back("We choose the model prediction.");
+        lines.emplace_back("The predicted class is " + std::to_string(samplePred));
+        if (withFidex) {
+          launchingFidex = true;
+        }
+      }
+    } else { // There is an explanation which is caracterised by the correct rules
+      if (correctRules.size() > 1) {
+        lines.emplace_back("We have found " + std::to_string(correctRules.size()) + " global rules explaining the model prediction :\n");
+        std::cout << "We have found " << std::to_string(correctRules.size()) << " global rules explaining the model prediction :" << std::endl
+                  << std::endl;
+      } else {
+        lines.emplace_back("We have found 1 global rule explaining the model prediction :\n");
+        std::cout << "We have found 1 global rule explaining the model prediction :" << std::endl
+                  << std::endl;
+      }
+      for (size_t c = 0; c < correctRules.size(); c++) {
+        currentRules.push_back(rules[correctRules[c]]);
+        const std::string ruleText = rules[correctRules[c]].toString(attributeNames, classNames);
+        lines.emplace_back("R" + std::to_string(c + 1) + ": " + ruleText);
+        std::cout << "R" << std::to_string(c + 1) << ": " << ruleText << std::endl;
+      }
+    }
+  }
+
+  if (minimalVersion) {
+    notShowUncorrectRules = true;
+  }
+  if (!notShowUncorrectRules) {
+    if (!notCorrectRules.empty()) {
+      lines.emplace_back("\nActivated rules without correct decision class :");
+      std::cout << "\nActivated rules without correct decision class :" << std::endl;
+      for (size_t n = 0; n < notCorrectRules.size(); n++) {
+        const std::string ruleText = rules[notCorrectRules[n]].toString(attributeNames, classNames);
+        lines.emplace_back("F" + std::to_string(n + 1) + ": " + ruleText);
+        std::cout << "F" << std::to_string(n + 1) << ": " << ruleText << std::endl;
+      }
+    } else {
+      lines.emplace_back("\nThere are no incorrect rules.");
+      std::cout << "\nThere are no uncorrect rules." << std::endl;
+    }
+  }
+
+  if (launchingFidex) {
+    if (trainDataset == nullptr || fidexHyperspace == nullptr) {
+      throw InternalError("Error : Fidex fallback was requested but Fidex objects are not initialized.");
+    }
+    fidexHyperspace->resetHyperbox();
+    executeFidex(lines, currentRules, *trainDataset, params, *fidexHyperspace, sampleValues, samplePred, samplePredScore, attributeNames, classNames);
+  }
+
+  return launchingFidex;
+}
+
+} // namespace
+
 /**
  * @brief Sets default hyperparameters and checks the logic and validity of the parameters of fidexGlo.
  *
@@ -304,13 +490,16 @@ void checkParametersLogicValues(Parameters &p) {
 int fidexGlo(const std::string &command) {
   try {
 
+    // =========================================================================
+    // 1) Parse command and load parameters
+    // =========================================================================
+
     float temps;
     clock_t t1;
     clock_t t2;
 
     t1 = clock();
 
-    // Parsing the command
     std::vector<std::string> commandList = {"fidexGlo"};
     std::string s;
     std::stringstream ss(command);
@@ -351,22 +540,22 @@ int fidexGlo(const std::string &command) {
       params = std::unique_ptr<Parameters>(new Parameters(commandList, validParams));
     }
 
-    // getting all program arguments from CLI
+    // Validate logical consistency and value ranges.
     checkParametersLogicValues(*params);
 
-    // Get console results to file
-    std::unique_ptr<ScopedCoutRedirect> coutRedirect;
+    // =========================================================================
+    // 2) Configure console redirection and resolve core parameters
+    // =========================================================================
+
+    std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      coutRedirect.reset(new ScopedCoutRedirect(params->getString(CONSOLE_FILE)));
+      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
     std::cout << *params;
 
-    // ----------------------------------------------------------------------
-
-    // Get parameters values
-
+    // Resolve frequently used parameter values.
     int nbAttributes = params->getInt(NB_ATTRIBUTES);
     int nbClasses = params->getInt(NB_CLASSES);
     std::string testSamplesDataFile = params->getString(TEST_DATA_FILE);
@@ -376,24 +565,22 @@ int fidexGlo(const std::string &command) {
     int positiveClassIndex;
     getThresholdFromRulesFile(params->getString(GLOBAL_RULES_FILE), decisionThreshold, positiveClassIndex);
 
-    // ----------------------------------------------------------------------
+    // =========================================================================
+    // 3) Import test dataset and optional attribute/class names
+    // =========================================================================
 
     std::cout << "Importing files..." << std::endl
               << std::endl;
 
     // Get test data
 
-    std::unique_ptr<DataSetFid> testDatas;
-    if (!params->isStringSet(TEST_PRED_FILE)) { // If we have only one test data file with data and prediction
-      testDatas.reset(new DataSetFid("testDatas from FidexGlo", testSamplesDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
-    } else { // We have a different file for test predictions
-      testDatas.reset(new DataSetFid("testDatas from FidexGlo", testSamplesDataFile, params->getString(TEST_PRED_FILE), nbAttributes, nbClasses, decisionThreshold, positiveClassIndex));
-    }
+    std::unique_ptr<DataSetFid> testDatas = createTestDataset(*params, testSamplesDataFile, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex);
     const auto &testSamplesValues = testDatas->getDatas();
     const auto &testSamplesPreds = testDatas->getPredictions();
     const auto &testSamplesPredictionScores = testDatas->getPredictionScores();
 
     int nbSamples = testDatas->getNbSamples();
+    const bool isSingleSample = (nbSamples == 1);
 
     // Get attributes
     std::vector<std::string> attributeNames;
@@ -408,7 +595,10 @@ int fidexGlo(const std::string &command) {
       }
     }
 
-    // If we use Fidex
+    // =========================================================================
+    // 4) Optional Fidex setup (train data, normalization, hyperspace)
+    // =========================================================================
+
     std::unique_ptr<DataSetFid> trainDatas;
     std::vector<std::vector<double>> matHypLocus;
     std::unique_ptr<Hyperspace> fidexHyperspace;
@@ -506,7 +696,10 @@ int fidexGlo(const std::string &command) {
                 << std::endl;
     }
 
-    // Get rules
+    // =========================================================================
+    // 5) Load global rules and summary stats
+    // =========================================================================
+
     std::vector<Rule> rules;
     std::vector<std::string> lines;
     std::string statsLine;
@@ -514,7 +707,7 @@ int fidexGlo(const std::string &command) {
     std::string rulesFile = params->getString(GLOBAL_RULES_FILE);
     lines.emplace_back("Global statistics of the rule set : ");
 
-    if (rulesFile.substr(rulesFile.find_last_of(".") + 1) == "json") {
+    if (hasJsonExtension(rulesFile)) {
       rules = Rule::fromJsonFile(rulesFile, decisionThreshold, positiveClassIndex);
 
       double meanCovering = 0;
@@ -550,7 +743,7 @@ int fidexGlo(const std::string &command) {
 
     std::cout << "Files imported" << std::endl
               << std::endl;
-    if (nbSamples > 1) {
+    if (!isSingleSample) {
       std::cout << "Find explanation for each sample..." << std::endl
                 << std::endl;
     }
@@ -568,159 +761,49 @@ int fidexGlo(const std::string &command) {
     lines.emplace_back("\n--------------------------------------------------------------------\n");
     std::cout << "\n--------------------------------------------------------------------" << std::endl;
 
-    // we search explanation for each sample
+    // =========================================================================
+    // 6) Compute explanations sample by sample
+    // =========================================================================
 
-    if (nbSamples == 1) {
+    if (isSingleSample) {
       lines.emplace_back("Explanation for the sample :\n");
       std::cout << "Explanation for the sample :" << std::endl
                 << std::endl;
     }
     int nb_fidex = 0; // Number of times Fidex is used
-    bool launchingFidex;
     std::vector<std::vector<Rule>> rulesPerSamples(nbSamples);
     for (int currentSample = 0; currentSample < nbSamples; currentSample++) {
-      launchingFidex = false;
       std::vector<Rule> currentRules;
-      if (nbSamples > 1) {
-        lines.push_back("Explanation for sample " + std::to_string(currentSample) + " :\n");
-        std::cout << "Explanation for sample " << std::to_string(currentSample) << " :" << std::endl
-                  << std::endl;
+      int mainSamplePred = testSamplesPreds[currentSample];
+      double mainSamplePredScore = testSamplesPredictionScores[currentSample][mainSamplePred];
+      const bool usedFidexForSample = explainSample(lines,
+                                                    currentRules,
+                                                    rules,
+                                                    testSamplesValues[currentSample],
+                                                    mainSamplePred,
+                                                    mainSamplePredScore,
+                                                    currentSample,
+                                                    isSingleSample,
+                                                    withFidex,
+                                                    minimalVersion,
+                                                    hasClassNames,
+                                                    classNames,
+                                                    attributeNames,
+                                                    trainDatas.get(),
+                                                    fidexHyperspace.get(),
+                                                    *params);
+      if (usedFidexForSample) {
+        nb_fidex += 1;
       }
-      int currentPredId = testSamplesPreds[currentSample];
-      std::string currentPred;
-      if (hasClassNames) {
-        currentPred = classNames[currentPredId];
-      } else {
-        currentPred = std::to_string(currentPredId);
-      }
-      lines.emplace_back("The model predicts class " + currentPred + " with probability " + std::to_string(testSamplesPredictionScores[currentSample][currentPredId]) + "\n");
-      std::cout << "The model predicts class " << currentPred << " with probability " << std::to_string(testSamplesPredictionScores[currentSample][currentPredId]) << std::endl
-                << std::endl;
-      // Find rules activated by this sample
-      std::vector<int> activatedRules;
-      getActivatedRules(activatedRules, rules, testSamplesValues[currentSample]);
-      // Check which rules are correct
-      std::vector<int> correctRules;
-      std::vector<int> notCorrectRules;
-      bool notShowUncorrectRules = false;
-      if (activatedRules.empty()) { // If there is no activated rule
-        std::cout << "There is no rule activated" << std::endl;
-        std::cout << "We couldn't find any global explanation for this sample." << std::endl; // There is no explanation, we choose the model decision
-        std::cout << "We choose the model prediction." << std::endl;
-        std::cout << "The predicted class is " << std::to_string(testSamplesPreds[currentSample]) << std::endl;
-        lines.emplace_back("We couldn't find any global explanation for this sample."); // There is no explanation, we choose the model decision
-        lines.emplace_back("We choose the model prediction.");
-        lines.emplace_back("The predicted class is " + std::to_string(testSamplesPreds[currentSample]));
-        if (withFidex) {
-          launchingFidex = true;
-          nb_fidex += 1;
-        }
-
-      } else { // There are some activated rules
-        for (int v : activatedRules) {
-          if (rules[v].getOutputClass() == testSamplesPreds[currentSample]) { // Check if the class of the rule is the predicted one
-            // currentRules.emplace_back(rules[v]);
-            correctRules.push_back(v);
-          } else {
-            notCorrectRules.push_back(v);
-          }
-        }
-        if (correctRules.empty()) { // If there is no correct rule
-          int ancientClass = rules[activatedRules[0]].getOutputClass();
-          bool allSameClass = true; // Check if all the rules choose the same class
-          for (int v : activatedRules) {
-            if (rules[v].getOutputClass() != ancientClass) {
-              allSameClass = false;
-              break;
-            }
-          }
-
-          if (allSameClass && !minimalVersion) {
-            notShowUncorrectRules = true;
-            if (activatedRules.size() > 1) {
-              lines.emplace_back("We didn't find any rule with the same prediction as the model (class " + std::to_string(testSamplesPreds[currentSample]) + "), but we found " + std::to_string(activatedRules.size()) + " rules with class " + std::to_string(ancientClass) + " :\n");
-              std::cout << "We didn't find any rule with the same prediction as the model (class " << std::to_string(testSamplesPreds[currentSample]) << "), but we found " << std::to_string(activatedRules.size()) << " rules with class " << std::to_string(ancientClass) << " :" << std::endl
-                        << std::endl;
-            } else {
-              lines.emplace_back("We didn't find any rule with the same prediction as the model (class " + std::to_string(testSamplesPreds[currentSample]) + "), but we found 1 rule with class " + std::to_string(ancientClass) + " :\n");
-              std::cout << "We didn't find any rule with the same prediction as the model (class " << std::to_string(testSamplesPreds[currentSample]) << "), but we found 1 rule with class " << std::to_string(ancientClass) << " :" << std::endl
-                        << std::endl;
-            }
-            for (size_t v = 0; v < activatedRules.size(); v++) {
-              currentRules.push_back(rules[activatedRules[v]]); // add a rule for a given sample
-              const std::string ruleText = rules[activatedRules[v]].toString(attributeNames, classNames);
-              lines.emplace_back("R" + std::to_string(v + 1) + ": " + ruleText);
-              std::cout << "R" << std::to_string(v + 1) << ": " << ruleText << std::endl;
-            }
-          } else { // If minimalVersion or uncorrected rules are not all same class (only if we don't have correct rules)
-            if (minimalVersion) {
-              std::cout << "There is no correct activated rule for this sample." << std::endl;
-            } else {
-              std::cout << "There is no correct rule for this sample." << std::endl;
-            }
-
-            std::cout << "We couldn't find any global explanation for this sample." << std::endl; // There is no explanation, we choose the model decision
-            std::cout << "We choose the model prediction." << std::endl;
-            std::cout << "The predicted class is " << std::to_string(testSamplesPreds[currentSample]) << std::endl;
-            lines.emplace_back("We couldn't find any global explanation for this sample."); // There is no explanation, we choose the model decision
-            lines.emplace_back("We choose the model prediction.");
-            lines.emplace_back("The predicted class is " + std::to_string(testSamplesPreds[currentSample]));
-            if (withFidex) {
-              launchingFidex = true;
-              nb_fidex += 1;
-            }
-          }
-
-        } else { // There is an explanation which is caracterised by the correct rules
-          if (correctRules.size() > 1) {
-            lines.emplace_back("We have found " + std::to_string(correctRules.size()) + " global rules explaining the model prediction :\n"); // There is no explanation, we choose the model decision
-            std::cout << "We have found " << std::to_string(correctRules.size()) << " global rules explaining the model prediction :" << std::endl
-                      << std::endl; // There is no explanation, we choose the model decision
-          } else {
-            lines.emplace_back("We have found 1 global rule explaining the model prediction :\n"); // There is no explanation, we choose the model decision
-            std::cout << "We have found 1 global rule explaining the model prediction :" << std::endl
-                      << std::endl; // There is no explanation, we choose the model decision
-          }
-          for (size_t c = 0; c < correctRules.size(); c++) {
-            currentRules.push_back(rules[correctRules[c]]); // add a rule for a given sample
-            const std::string ruleText = rules[correctRules[c]].toString(attributeNames, classNames);
-            lines.emplace_back("R" + std::to_string(c + 1) + ": " + ruleText);
-            std::cout << "R" << std::to_string(c + 1) << ": " << ruleText << std::endl;
-          }
-        }
-      }
-      if (minimalVersion) {
-        notShowUncorrectRules = true;
-      }
-      if (!notShowUncorrectRules) {
-        if (!notCorrectRules.empty()) {
-          lines.emplace_back("\nActivated rules without correct decision class :");
-          std::cout << "\nActivated rules without correct decision class :" << std::endl;
-          for (size_t n = 0; n < notCorrectRules.size(); n++) {
-            const std::string ruleText = rules[notCorrectRules[n]].toString(attributeNames, classNames);
-            lines.emplace_back("F" + std::to_string(n + 1) + ": " + ruleText);
-            std::cout << "F" << std::to_string(n + 1) << ": " << ruleText << std::endl;
-          }
-        } else {
-          lines.emplace_back("\nThere are no incorrect rules.");
-          std::cout << "\nThere are no uncorrect rules." << std::endl;
-        }
-      }
-
-      if (launchingFidex) {
-        auto &trainDataset = *trainDatas;
-        fidexHyperspace->resetHyperbox();
-        const auto &mainSampleValues = testSamplesValues[currentSample];
-        int mainSamplePred = testSamplesPreds[currentSample];
-        double mainSamplePredScore = testSamplesPredictionScores[currentSample][mainSamplePred];
-        executeFidex(lines, currentRules, trainDataset, *params, *fidexHyperspace, mainSampleValues, mainSamplePred, mainSamplePredScore, attributeNames, classNames);
-      }
-      rulesPerSamples[currentSample] = currentRules;
+      rulesPerSamples[currentSample] = std::move(currentRules);
 
       lines.emplace_back("\n--------------------------------------------------------------------\n");
       std::cout << "\n--------------------------------------------------------------------" << std::endl;
     }
 
+    // =========================================================================
+    // 7) Report fallback usage of Fidex
+    // =========================================================================
     if (withFidex) {
       double fidex_mean;
       if (nb_fidex == 0) {
@@ -733,10 +816,12 @@ int fidexGlo(const std::string &command) {
       std::cout << "\nFidex is used for " + std::to_string(fidex_mean) + "% of samples." << std::endl;
     }
 
-    // Output global explanation result
+    // =========================================================================
+    // 8) Export explanation output (text or JSON)
+    // =========================================================================
     if (params->isStringSet(EXPLANATION_FILE)) {
       std::string filename = params->getString(EXPLANATION_FILE);
-      if (filename.substr(filename.find_last_of('.') + 1) != "json") {
+      if (!hasJsonExtension(filename)) {
         std::ofstream outputFile(filename);
 
         if (outputFile.is_open()) {
@@ -759,6 +844,9 @@ int fidexGlo(const std::string &command) {
       }
     }
 
+    // =========================================================================
+    // 9) Report execution timings
+    // =========================================================================
     t2 = clock();
     temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;

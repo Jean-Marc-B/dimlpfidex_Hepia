@@ -2,6 +2,10 @@
 
 #include <numeric>
 
+// ============================================================================
+// Construction and core state
+// ============================================================================
+
 /**
  * @brief Constructs a Hyperbox object with specified discriminative hyperplanes.
  *
@@ -50,7 +54,7 @@ void Hyperbox::addDiscriminativeHyperplan(int dimVal, int hypValIndex) {
  * @param index item index to remove.
  */
 void Hyperbox::removeDiscriminativehyperplan(int index) {
-  if (index < 0 || index >= discriminativeHyperplans.size()) {
+  if (index < 0 || index >= static_cast<int>(discriminativeHyperplans.size())) {
     return;
   }
 
@@ -72,6 +76,10 @@ void Hyperbox::resetDiscriminativeHyperplans() {
 void Hyperbox::setDiscriminativeHyperplans(std::vector<std::pair<int, int>> newDiscriminativeHyperplan) {
   discriminativeHyperplans = std::move(newDiscriminativeHyperplan);
 }
+
+// ============================================================================
+// Coverage and fidelity computation
+// ============================================================================
 
 /**
  * @brief Computes the new covered samples with a new discriminative hyperplane.
@@ -143,6 +151,10 @@ const std::vector<int> &Hyperbox::getCoveringSizesWithNewAntecedent() const {
   return coveringSizesWithNewAntecedent;
 }
 
+// ============================================================================
+// Covering-size history management
+// ============================================================================
+
 /**
  * @brief sets the new covering sizes.
  *
@@ -167,7 +179,7 @@ void Hyperbox::addCoveringSizesWithNewAntecedent(int covSize) {
  * @param index item index to remove.
  */
 void Hyperbox::removeCoveringSizesWithNewAntecedent(int index) {
-  if (index < 0 || index >= coveringSizesWithNewAntecedent.size()) {
+  if (index < 0 || index >= static_cast<int>(coveringSizesWithNewAntecedent.size())) {
     return;
   }
 
@@ -221,6 +233,10 @@ void Hyperbox::setFidelity(double x) {
   fidelity = x;
 }
 
+// ============================================================================
+// Fidelity/accuracy evolution with antecedents
+// ============================================================================
+
 /**
  * @brief Gets the increased fidelity for each new antecedent.
  *
@@ -247,7 +263,7 @@ void Hyperbox::setIncreasedFidelity(std::vector<double> newIncreasedFidelities) 
 void Hyperbox::addIncreasedFidelity(double newFidelity) {
 
   double incrFidelity = newFidelity;
-  if (increasedFidelity.size() != 0) {
+  if (!increasedFidelity.empty()) {
     incrFidelity -= std::accumulate(increasedFidelity.begin(), increasedFidelity.end(), 0.0); // We remove the sum of precedents increase, which is the last fidelity obtained
   }
   increasedFidelity.push_back(incrFidelity);
@@ -259,7 +275,7 @@ void Hyperbox::addIncreasedFidelity(double newFidelity) {
  * @param index item index to remove.
  */
 void Hyperbox::removeIncreasedFidelity(int index) {
-  if (index < 0 || index >= increasedFidelity.size()) {
+  if (index < 0 || index >= static_cast<int>(increasedFidelity.size())) {
     return;
   }
 
@@ -299,7 +315,7 @@ void Hyperbox::setAccuracyChanges(std::vector<double> newAccuracyChanges) {
 void Hyperbox::addAccuracyChanges(double newAccuracy) {
 
   double changeAcc = newAccuracy;
-  if (accuracyChanges.size() != 0) {
+  if (!accuracyChanges.empty()) {
     changeAcc -= std::accumulate(accuracyChanges.begin(), accuracyChanges.end(), 0.0); // We remove the sum of precedent changes, which is the last accuracy obtained
   }
   accuracyChanges.push_back(changeAcc);
@@ -311,7 +327,7 @@ void Hyperbox::addAccuracyChanges(double newAccuracy) {
  * @param index item index to remove.
  */
 void Hyperbox::removeAccuracyChange(int index) {
-  if (index < 0 || index >= accuracyChanges.size()) {
+  if (index < 0 || index >= static_cast<int>(accuracyChanges.size())) {
     return;
   }
 
@@ -325,8 +341,12 @@ void Hyperbox::resetAccuracyChanges() {
   accuracyChanges.clear();
 }
 
-Hyperbox Hyperbox::deepCopy() {
-  Hyperbox copy = Hyperbox();
+// ============================================================================
+// Copying and derived rule metrics
+// ============================================================================
+
+Hyperbox Hyperbox::deepCopy() const {
+  Hyperbox copy;
 
   copy.setDiscriminativeHyperplans(discriminativeHyperplans);
   copy.setCoveringSizesWithNewAntecedent(coveringSizesWithNewAntecedent);
