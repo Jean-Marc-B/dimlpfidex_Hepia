@@ -1,23 +1,16 @@
 #ifndef FIDEXGLOSTATSFCT_H
 #define FIDEXGLOSTATSFCT_H
 
-#include "../../../common/cpp/src/dataSet.h"
-#include "../../../common/cpp/src/errorHandler.h"
-#include "../../../common/cpp/src/parameters.h"
-#include "../../../common/cpp/src/rule.h"
-#include <fstream>
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <time.h>
-#include <tuple>
-#include <unordered_map>
+#include <string>
 #include <vector>
+
+class Parameters;
+class Rule;
 
 /**
  * @brief Determines which samples are covered by a given rule.
  */
-void getCovering(std::vector<int> &sampleIds, const Rule &rule, std::vector<std::vector<double>> &testValues);
+void getCovering(std::vector<int> &sampleIds, const Rule &rule, const std::vector<std::vector<double>> &testValues);
 
 /**
  * @brief Computes the number of true positives, false positives, true negatives, and false negatives based on the model's or rules's decision and the true class.
