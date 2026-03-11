@@ -1,4 +1,8 @@
 #include "parameters.h"
+#include <regex>
+#include <set>
+
+using Json = nlohmann::json;
 
 /**
  * @brief Construct a new Parameters object containing all arguments passed by CLI.
@@ -589,7 +593,7 @@ void Parameters::setDoubleVector(ParameterCode id, const std::string &value) {
     throwAlreadySetArgumentException(id, value);
   }
 
-  if (!checkList(value)) {
+  if (!checkDoubleList(value)) {
     throw CommandArgumentException("Error : invalide type for parameter " + getParameterName(id) + ", list in the form [a,b,...,c] without spaces requested, a,b,c are numbers. Received " + value + ".");
   }
 

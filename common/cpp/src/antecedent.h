@@ -1,11 +1,7 @@
 #ifndef ANTECEDENT_H
 #define ANTECEDENT_H
 #include "../../../json/single_include/nlohmann/json.hpp"
-#include <cmath>
-#include <iostream>
 #include <ostream>
-
-using Json = nlohmann::json;
 
 /**
  * @brief Represents an antecedent condition in a rule-based system.
@@ -16,9 +12,9 @@ using Json = nlohmann::json;
  */
 class Antecedent {
 private:
-  int attribute;   ///< Integer ID representing the attribute.
-  bool inequality; ///< True if the condition is '>=', False if '<'.
-  double value;    ///< The comparison value for the condition.
+  int attribute = 0;       ///< Integer ID representing the attribute.
+  bool inequality = false; ///< True if the condition is '>=', False if '<'.
+  double value = 0.0;      ///< The comparison value for the condition.
 
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(Antecedent, attribute, inequality, value)
 
@@ -78,7 +74,7 @@ public:
   /**
    * @brief Checks equality with another Antecedent object.
    */
-  bool isEqual(Antecedent other) const;
+  bool isEqual(const Antecedent &other) const;
 };
 
 // Operator overloads
@@ -91,10 +87,11 @@ public:
  * @return std::ostream& The output stream with the Antecedent information.
  */
 inline std::ostream &operator<<(std::ostream &stream, const Antecedent &antecedent) {
+  const char *inequalitySymbol = antecedent.getInequality() ? ">=" : "<";
   return stream << " "
-                << std::to_string(antecedent.getAttribute()) << " "
-                << std::to_string(antecedent.getInequality()) << " "
-                << std::to_string(antecedent.getValue()) << " ";
+                << antecedent.getAttribute() << " "
+                << inequalitySymbol << " "
+                << antecedent.getValue() << " ";
 }
 
 /**

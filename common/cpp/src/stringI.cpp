@@ -41,20 +41,23 @@ void StringInt::Insert(int val)
 int StringInt::FindIndMax()
 
 {
-  float max;
-  float newVal;
+  int max;
+  int newVal;
   int e;
   int indMax;
+
+  if (NbEl == 0)
+    return -1;
 
   if (NbEl == 1)
     return 0;
 
   GoToBeg();
-  max = static_cast<float>(GetVal());
+  max = GetVal();
   indMax = 0;
 
   for (e = 1, GoToNext(); e < NbEl; e++, GoToNext()) {
-    newVal = static_cast<float>(GetVal());
+    newVal = GetVal();
 
     if (newVal > max) {
       max = newVal;
@@ -78,20 +81,23 @@ int StringInt::FindIndMax()
 int StringInt::FindIndMin()
 
 {
-  float min;
-  float newVal;
+  int min;
+  int newVal;
   int e;
   int indMin;
+
+  if (NbEl == 0)
+    return -1;
 
   if (NbEl == 1)
     return 0;
 
   GoToBeg();
-  min = static_cast<float>(GetVal());
+  min = GetVal();
   indMin = 0;
 
   for (e = 1, GoToNext(); e < NbEl; e++, GoToNext()) {
-    newVal = static_cast<float>(GetVal());
+    newVal = GetVal();
 
     if (newVal < min) {
       min = newVal;
@@ -114,6 +120,14 @@ void StringInt::DelVal(int indPrune, int newSet)
 
 {
   int i;
+
+  if (NbEl == 0) {
+    throw InternalError("StringInt::DelVal called on an empty list.");
+  }
+
+  if (indPrune < 0 || indPrune >= NbEl) {
+    throw InternalError("StringInt::DelVal received an out-of-range index.");
+  }
 
   for (i = 0, GoToBeg(); i < indPrune; i++, GoToNext())
     ;

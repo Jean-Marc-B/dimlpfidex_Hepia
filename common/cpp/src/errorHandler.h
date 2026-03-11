@@ -1,34 +1,24 @@
 #ifndef ERRORHANDLER_H
 #define ERRORHANDLER_H
 
-#include <exception>
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 /**
  * @brief Base class for handling exceptions with custom messages.
  *
- * ErrorHandler extends the standard std::exception class to allow for exceptions
+ * ErrorHandler extends the standard std::runtime_error class to allow for exceptions
  * that carry custom messages. These messages are passed during construction and
  * retrieved via the what() method.
  */
-class ErrorHandler : public std::exception {
-private:
-  std::string message_;
-
+class ErrorHandler : public std::runtime_error {
 public:
   /**
    * @brief Constructs an ErrorHandler with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit ErrorHandler(const std::string &message) : message_(message) {}
-
-  /**
-   * @brief Returns the message associated with the exception.
-   * @return The message for the exception.
-   */
-  const char *what() const noexcept override {
-    return message_.c_str();
-  }
+  explicit ErrorHandler(std::string message) : std::runtime_error(std::move(message)) {}
 };
 
 /**
@@ -40,7 +30,7 @@ public:
    * @brief Constructs a CommandArgumentException with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit CommandArgumentException(const std::string &message) : ErrorHandler("CommandArgumentException: " + message) {}
+  explicit CommandArgumentException(std::string message) : ErrorHandler("CommandArgumentException: " + std::move(message)) {}
 };
 
 /**
@@ -52,7 +42,7 @@ public:
    * @brief Constructs a FileNotFoundError with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit FileNotFoundError(const std::string &message) : ErrorHandler("FileNotFoundError: " + message) {}
+  explicit FileNotFoundError(std::string message) : ErrorHandler("FileNotFoundError: " + std::move(message)) {}
 };
 
 /**
@@ -64,7 +54,7 @@ public:
    * @brief Constructs a CannotOpenFileError with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit CannotOpenFileError(const std::string &message) : ErrorHandler("CannotOpenFileError: " + message) {}
+  explicit CannotOpenFileError(std::string message) : ErrorHandler("CannotOpenFileError: " + std::move(message)) {}
 };
 
 /**
@@ -76,7 +66,7 @@ public:
    * @brief Constructs a FileFormatError with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit FileFormatError(const std::string &message) : ErrorHandler("FileFormatError: " + message) {}
+  explicit FileFormatError(std::string message) : ErrorHandler("FileFormatError: " + std::move(message)) {}
 };
 
 /**
@@ -88,7 +78,7 @@ public:
    * @brief Constructs a FileContentError with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit FileContentError(const std::string &message) : ErrorHandler("FileContentError: " + message) {}
+  explicit FileContentError(std::string message) : ErrorHandler("FileContentError: " + std::move(message)) {}
 };
 
 /**
@@ -100,7 +90,7 @@ public:
    * @brief Constructs an InternalError with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit InternalError(const std::string &message) : ErrorHandler("InternalError: " + message) {}
+  explicit InternalError(std::string message) : ErrorHandler("InternalError: " + std::move(message)) {}
 };
 
 /**
@@ -112,7 +102,7 @@ public:
    * @brief Constructs a CannotCreateDirectoryError with a custom message.
    * @param message The message detailing the cause of the exception.
    */
-  explicit CannotCreateDirectoryError(const std::string &message) : ErrorHandler("CannotCreateDirectoryError: " + message) {}
+  explicit CannotCreateDirectoryError(std::string message) : ErrorHandler("CannotCreateDirectoryError: " + std::move(message)) {}
 };
 
-#endif
+#endif // ERRORHANDLER_H

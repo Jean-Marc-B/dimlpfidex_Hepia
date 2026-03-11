@@ -1,16 +1,7 @@
 #ifndef CHECKFUNFid_H
 #define CHECKFUNFid_H
 
-#include "errorHandler.h"
-#include <algorithm>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <regex>
-#include <set>
-#include <sstream>
 #include <string>
-#include <sys/stat.h>
 #include <tuple>
 #include <vector>
 
@@ -33,6 +24,11 @@ bool checkBool(const std::string &input);
  * @brief Checks if a given string is in the format of a list of floating-point numbers.
  */
 bool checkList(const std::string &input);
+
+/**
+ * @brief Checks if a given string is in the format of a list of doubles, including scientific notation and special values (nan/inf).
+ */
+bool checkDoubleList(const std::string &input);
 
 /**
  * @brief Checks if a given string is empty or contains only whitespace characters.
