@@ -1,4 +1,51 @@
 #include "checkFun.h"
+#include "errorHandler.h"
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <regex>
+#include <set>
+#include <sstream>
+#include <sys/stat.h>
+#include <utility>
+
+namespace {
+/**
+ * @brief Escapes regex metacharacters so attribute names are matched literally.
+ */
+std::string escapeRegexLiteral(const std::string &input) {
+  std::string escaped;
+  escaped.reserve(input.size() * 2);
+
+  for (char c : input) {
+    switch (c) {
+    case '\\':
+    case '^':
+    case '$':
+    case '.':
+    case '|':
+    case '?':
+    case '*':
+    case '+':
+    case '(':
+    case ')':
+    case '[':
+    case ']':
+    case '{':
+    case '}':
+      escaped.push_back('\\');
+      break;
+    default:
+      break;
+    }
+    escaped.push_back(c);
+  }
+
+  return escaped;
+}
+} // namespace
 
 /**
  * @brief Checks if a given string represents a valid integer.
@@ -69,9 +116,23 @@ bool checkBool(const std::string &inputTemp) {
  * @return Returns true if the string is a valid list of floats, false otherwise.
  */
 bool checkList(const std::string &str) {
-  std::string floatPattern = "(-?\\d+(\\.\\d+)?)";
+  static const std::string numericPattern = "[-+]?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?";
+  static const std::regex listPattern("^\\s*(?:\\[|\\()?\\s*" + numericPattern + "(?:[ ,]+\\s*" + numericPattern + ")*\\s*(?:\\]|\\))?\\s*$");
 
-  std::regex listPattern("(\\[|\\()?(" + floatPattern + ")([ ,]+" + floatPattern + ")*(\\]|\\))?");
+  return std::regex_match(str, listPattern);
+}
+
+////////////////////////////////////////////////////////
+
+/**
+ * @brief Checks if a given string is in the format of a list of doubles, including nan/inf values.
+ *
+ * @param input A string representing a list of doubles.
+ * @return Returns true if the string is a valid list of doubles, false otherwise.
+ */
+bool checkDoubleList(const std::string &str) {
+  static const std::string doublePattern = "[-+]?(?:\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?|[nN][aA][nN]|[iI][nN][fF](?:[iI][nN][iI][tT][yY])?)";
+  static const std::regex listPattern("^\\s*(?:\\[|\\()?\\s*" + doublePattern + "(?:[ ,]+\\s*" + doublePattern + ")*\\s*(?:\\]|\\))?\\s*$");
 
   return std::regex_match(str, listPattern);
 }
@@ -88,7 +149,7 @@ bool checkStringEmpty(const std::string &line) {
   if (line.length() == 0) {
     return true;
   } else {
-    if (std::any_of(line.begin(), line.end(), [](int c) { return isgraph(c); })) {
+    if (std::any_of(line.begin(), line.end(), [](unsigned char c) { return std::isgraph(c) != 0; })) {
       return false;
     }
     return true;
@@ -125,6 +186,13 @@ std::string formattingDoubleToString(double number) {
  */
 std::vector<std::string> splitString(const std::string &str, const std::string &delimiter) {
   std::vector<std::string> tokens;
+  if (delimiter.empty()) {
+    if (!str.empty()) {
+      tokens.push_back(str);
+    }
+    return tokens;
+  }
+
   size_t start = 0;
   size_t end = str.find(delimiter);
 
@@ -155,11 +223,11 @@ std::vector<std::string> splitString(const std::string &str, const std::string &
  * @return A vector of doubles parsed from the string.
  */
 std::vector<double> getDoubleVectorFromString(std::string str) {
-  std::regex floatPattern("(-?\\d+(\\.\\d+)?)");
+  static const std::regex floatPattern("[-+]?(?:\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?|[nN][aA][nN]|[iI][nN][fF](?:[iI][nN][iI][tT][yY])?)");
   std::smatch match;
   std::vector<double> numbers;
   while (std::regex_search(str, match, floatPattern)) {
-    numbers.push_back(std::stof(match[0].str()));
+    numbers.push_back(std::stod(match[0].str()));
     str = match.suffix().str(); // Continue with the rest of the string
   }
   return numbers;
@@ -175,10 +243,10 @@ std::vector<double> getDoubleVectorFromString(std::string str) {
  * @return A vector of integers parsed from the string.
  */
 std::vector<int> getIntVectorFromString(std::string str) {
-  std::regex floatPattern("(-?\\d+(\\.\\d+)?)");
+  static const std::regex numericTokenPattern("[-+]?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?");
   std::smatch match;
   std::vector<int> numbers;
-  while (std::regex_search(str, match, floatPattern)) {
+  while (std::regex_search(str, match, numericTokenPattern)) {
     if (checkInt(match[0])) {
       numbers.push_back(std::stoi(match[0].str()));
     } else {
@@ -215,7 +283,6 @@ std::tuple<std::vector<int>, bool, std::vector<double>, std::vector<double>> par
   std::vector<double> mus;
   std::vector<double> sigmas;
   bool withMedian = false;
-  bool withMedian_initialized = false;
   std::set<int> unique_indices;
 
   if (!attributes.empty() && attributes.size() != nbAttributes) {
@@ -223,21 +290,14 @@ std::tuple<std::vector<int>, bool, std::vector<double>, std::vector<double>> par
   }
 
   // Create some general regex patterns
-  std::string indexPattern = "(";
-
-  for (int i = 0; i < nbAttributes; i++) {
-    indexPattern += std::to_string(i);
-    if (i < nbAttributes - 1) {
-      indexPattern += "|";
-    }
-  }
-  indexPattern += ")";
+  // Keep the index regex simple and validate bounds in code (more scalable than "(0|1|...|N)").
+  const std::string indexPattern = "(\\d+)";
 
   std::string attrPattern = "";
   if (!attributes.empty()) {
     attrPattern += "(";
     for (int i = 0; i < nbAttributes; i++) {
-      attrPattern += attributes[i];
+      attrPattern += escapeRegexLiteral(attributes[i]);
       if (i < nbAttributes - 1) {
         attrPattern += "|";
       }
@@ -245,22 +305,35 @@ std::tuple<std::vector<int>, bool, std::vector<double>, std::vector<double>> par
     attrPattern += ")";
   }
 
-  std::string floatPattern = "(-?\\d+(\\.\\d+)?)(?=$|[^\\d])"; // We ask that the float is followed either by the end of the line either by a not-number character
+  std::string floatPattern = "((?:[-+]?(?:\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?|[nN][aA][nN]|[iI][nN][fF](?:[iI][nN][iI][tT][yY])?)))(?=$|[^\\dA-Za-z_])"; // We ask that the float is followed either by the end of the line either by a separator character
 
   // Create regex patterns for a line
-  std::vector<std::pair<std::regex, std::string>> patterns;
-  std::regex patternIndices("^" + indexPattern + " : original (mean|median): " + floatPattern + ", original std: " + floatPattern);
-  std::string patternIndicesStr = "indexPattern";
-  std::regex patternAttributes("^" + attrPattern + " : original (mean|median): " + floatPattern + ", original std: " + floatPattern);
-  std::string patternAttributesStr = "attributePattern";
-  if (!attributes.empty()) {
-    patterns.emplace_back(patternAttributes, patternAttributesStr);
-  }
-  patterns.emplace_back(patternIndices, patternIndicesStr);
+  enum class PatternKind {
+    Indices,
+    Attributes
+  };
+  struct PatternSpec {
+    const std::regex *regex;
+    PatternKind kind;
+  };
 
-  bool patternError;
+  std::vector<PatternSpec> patterns;
+  std::regex patternIndices("^" + indexPattern + " : original (mean|median): " + floatPattern + ", original std: " + floatPattern);
+  std::regex patternAttributes("^" + attrPattern + " : original (mean|median): " + floatPattern + ", original std: " + floatPattern);
+  if (!attributes.empty()) {
+    patterns.push_back({&patternAttributes, PatternKind::Attributes});
+  }
+  patterns.push_back({&patternIndices, PatternKind::Indices});
+
+  bool patternError = true;
 
   for (const auto &pattern : patterns) {
+    std::vector<int> currentIndicesList;
+    std::vector<double> currentMus;
+    std::vector<double> currentSigmas;
+    std::set<int> currentUniqueIndices;
+    bool currentWithMedian = false;
+    bool currentWithMedianInitialized = false;
 
     std::ifstream file(normalizationFile);
     if (!file) {
@@ -276,16 +349,17 @@ std::tuple<std::vector<int>, bool, std::vector<double>, std::vector<double>> par
       if (line.empty())
         continue;
 
-      std::istringstream iss(line);
-
       std::smatch matches;
 
-      if (std::regex_search(line, matches, pattern.first)) {
+      if (std::regex_search(line, matches, *pattern.regex)) {
         mean_median = matches[2];
-        mus.push_back(stod(matches[3]));
-        sigmas.push_back(stod(matches[5]));
-        if (pattern.second == patternIndicesStr) {
+        currentMus.push_back(stod(matches[3]));
+        currentSigmas.push_back(stod(matches[4]));
+        if (pattern.kind == PatternKind::Indices) {
           index = stoi(matches[1]);
+          if (index < 0 || index >= nbAttributes) {
+            throw FileContentError("Error in " + normalizationFile + ": Attribute index " + std::to_string(index) + " out of range [0," + std::to_string(nbAttributes - 1) + "].");
+          }
         } else {
           std::string attr = matches[1];
           auto it = std::find(attributes.begin(), attributes.end(), attr);
@@ -300,17 +374,22 @@ std::tuple<std::vector<int>, bool, std::vector<double>, std::vector<double>> par
         break;
       }
 
-      indices_list.push_back(index);
-      unique_indices.insert(index);
+      currentIndicesList.push_back(index);
+      currentUniqueIndices.insert(index);
 
-      if (!withMedian_initialized) {
-        withMedian = (mean_median == "median");
-        withMedian_initialized = true;
-      } else if ((withMedian && mean_median != "median") || (!withMedian && mean_median != "mean")) {
+      if (!currentWithMedianInitialized) {
+        currentWithMedian = (mean_median == "median");
+        currentWithMedianInitialized = true;
+      } else if ((currentWithMedian && mean_median != "median") || (!currentWithMedian && mean_median != "mean")) {
         throw FileContentError("Error in " + normalizationFile + ": Inconsistency in using mean or median.");
       }
     }
     if (!patternError) {
+      indices_list = std::move(currentIndicesList);
+      mus = std::move(currentMus);
+      sigmas = std::move(currentSigmas);
+      unique_indices = std::move(currentUniqueIndices);
+      withMedian = currentWithMedian;
       break;
     }
   }
@@ -453,7 +532,7 @@ std::vector<double> parseFileLine(std::string str, const std::string &fileName) 
 
   std::vector<double> valuesData;
 
-  std::regex re("([ \\t]+)|[,;]");
+  static const std::regex re("([ \\t]+)|[,;]");
   std::sregex_token_iterator first{str.begin(), str.end(), re, -1}; //  -1 makes the regex split, it keeps only what was not matched
   std::sregex_token_iterator last;
   std::vector<std::string> stringTokens{first, last};

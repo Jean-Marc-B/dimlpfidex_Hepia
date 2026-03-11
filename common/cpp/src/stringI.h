@@ -1,6 +1,7 @@
 #ifndef STRINGI_H
 #define STRINGI_H
 
+#include "errorHandler.h"
 #include <memory>
 
 ///////////////////////////////////////////////////////////////////
@@ -44,21 +45,36 @@ public:
   /**
    * @brief Move the current element pointer to the next element in the list.
    */
-  void GoToNext() { PtrList = PtrList->Next; }
+  void GoToNext() {
+    if (!PtrList) {
+      throw InternalError("StringInt::GoToNext called with a null current pointer.");
+    }
+    PtrList = PtrList->Next;
+  }
 
   /**
    * @brief Get the value of the current element.
    *
    * @return int The value of the current element.
    */
-  int GetVal() const { return PtrList->Val; }
+  int GetVal() const {
+    if (!PtrList) {
+      throw InternalError("StringInt::GetVal called with a null current pointer.");
+    }
+    return PtrList->Val;
+  }
 
   /**
    * @brief Set the value of the current element.
    *
    * @param val The new value to set.
    */
-  void SetVal(int val) const { PtrList->Val = val; }
+  void SetVal(int val) {
+    if (!PtrList) {
+      throw InternalError("StringInt::SetVal called with a null current pointer.");
+    }
+    PtrList->Val = val;
+  }
 
   /**
    * @brief Insert a new element with the given value at the end of the list.
@@ -83,7 +99,12 @@ public:
   /**
    * @brief Delete all elements in the list.
    */
-  void Del() { NbEl = 0; };
+  void Del() {
+    NbEl = 0;
+    First.reset();
+    Last.reset();
+    PtrList.reset();
+  };
 
   ~StringInt() = default;
   StringInt() = default;

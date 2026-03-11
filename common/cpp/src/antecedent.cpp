@@ -1,4 +1,5 @@
 #include "antecedent.h"
+#include <cmath>
 
 /**
  * @brief Constructs a new Antecedent object with specified parameters.
@@ -25,8 +26,8 @@ Antecedent::Antecedent(int attribute, bool inequality, double value) {
  * @param other The other Antecedent to compare with.
  * @return True if both Antecedent objects are equal, False otherwise.
  */
-bool Antecedent::isEqual(const Antecedent other) const {
-  double epsilon = 10e-6;
+bool Antecedent::isEqual(const Antecedent &other) const {
+  const double epsilon = 1e-6;
 
   if (getAttribute() != other.getAttribute())
     return false;
@@ -34,7 +35,7 @@ bool Antecedent::isEqual(const Antecedent other) const {
   if (getInequality() != other.getInequality())
     return false;
 
-  if (fabs(getValue() != other.getValue()) > epsilon)
+  if (std::fabs(getValue() - other.getValue()) > epsilon)
     return false;
 
   return true;
