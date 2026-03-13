@@ -254,8 +254,8 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     if (p.isStringSet(CONSOLE_FILE)) {
       consoleFile = p.getString(CONSOLE_FILE);
     }
-    std::vector<int> &trainPreds = trainDataset.getPredictions();
-    std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
+    const std::vector<int> &trainPreds = trainDataset.getPredictions();
+    const std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
 
 #pragma omp critical
     {
@@ -267,7 +267,7 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
     t1 = omp_get_wtime();
 #pragma omp for
     for (int idSample = startIndex; idSample < endIndex; idSample++) {
-      std::vector<double> &mainSampleValues = trainData[idSample];
+      const std::vector<double> &mainSampleValues = trainData[idSample];
       int mainSamplePred = trainPreds[idSample];
       cnt += 1;
 
@@ -745,8 +745,8 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
   auto nbDatas = static_cast<int>(trainDataset.getDatas().size());
   std::vector<int> notCoveredSamples(nbDatas);
   auto fidex = Fidex(trainDataset, p, hyperspace, false);
-  std::vector<int> &trainPreds = trainDataset.getPredictions();
-  std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
+  const std::vector<int> &trainPreds = trainDataset.getPredictions();
+  const std::vector<std::vector<double>> &trainData = trainDataset.getDatas();
   std::string consoleFile = "";
   if (p.isStringSet(CONSOLE_FILE)) {
     consoleFile = p.getString(CONSOLE_FILE);
@@ -775,7 +775,7 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
     }
 
     idSample = notCoveredSamples[0];
-    std::vector<double> &mainSampleValues = trainData[idSample];
+    const std::vector<double> &mainSampleValues = trainData[idSample];
     int mainSamplePred = trainPreds[idSample];
 
     ruleCreated = fidex.launchFidex(rule, mainSampleValues, mainSamplePred);

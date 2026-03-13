@@ -1,4 +1,5 @@
 #include "hyperspace.h"
+#include "../../../common/cpp/src/errorHandler.h"
 
 /**
  * @brief Constructs a Hyperspace object with a specified 2D vector of doubles of possible hyperplanes.

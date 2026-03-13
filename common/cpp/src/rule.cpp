@@ -1,4 +1,40 @@
 #include "rule.h"
+#include "checkFun.h"
+#include "dataSet.h"
+#include "errorHandler.h"
+
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+
+using Json = nlohmann::json;
+
+namespace {
+/**
+ * @brief Returns true when a path ends with ".json".
+ */
+bool hasJsonExtension(const std::string &path) {
+  const auto dotPos = path.find_last_of('.');
+  return dotPos != std::string::npos && path.substr(dotPos + 1) == "json";
+}
+
+/**
+ * @brief Compares two vectors of doubles with an epsilon tolerance.
+ */
+bool areDoubleVectorsEqual(const std::vector<double> &left, const std::vector<double> &right, double epsilon) {
+  if (left.size() != right.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < left.size(); ++i) {
+    if (std::fabs(left[i] - right[i]) > epsilon) {
+      return false;
+    }
+  }
+  return true;
+}
+} // namespace
 
 /**
  * @brief Constructs a Rule object.
@@ -37,15 +73,19 @@ std::string Rule::toString(const std::vector<std::string> &attributes, const std
   double _fidelity = getFidelity();
   double _accuracy = getAccuracy();
   double _confidence = getConfidence();
-  std::vector<int> _coveringSizesWithNewAntecedent = getCoveringSizesWithNewAntecedent();
-  std::vector<double> _increasedFidelity = getIncreasedFidelity();
-  std::vector<double> _accuracyChanges = getAccuracyChanges();
+  const auto &_coveringSizesWithNewAntecedent = getCoveringSizesWithNewAntecedent();
+  const auto &_increasedFidelity = getIncreasedFidelity();
+  const auto &_accuracyChanges = getAccuracyChanges();
 
-  for (Antecedent a : getAntecedents()) {
+  for (const Antecedent &a : getAntecedents()) {
+    const int attribute = a.getAttribute();
     if (!attributes.empty()) {
-      result << attributes[a.getAttribute()];
+      if (attribute < 0 || static_cast<size_t>(attribute) >= attributes.size()) {
+        throw InternalError("Error while formatting rule: antecedent attribute index " + std::to_string(attribute) + " is out of bounds for attributes size " + std::to_string(attributes.size()) + ".");
+      }
+      result << attributes[attribute];
     } else {
-      result << "X" + std::to_string(a.getAttribute());
+      result << "X" + std::to_string(attribute);
     }
 
     if (a.getInequality()) {
@@ -58,6 +98,9 @@ std::string Rule::toString(const std::vector<std::string> &attributes, const std
   }
 
   if (!classes.empty()) {
+    if (_outputClass < 0 || static_cast<size_t>(_outputClass) >= classes.size()) {
+      throw InternalError("Error while formatting rule: output class index " + std::to_string(_outputClass) + " is out of bounds for classes size " + std::to_string(classes.size()) + ".");
+    }
     result << "-> " << classes[_outputClass] << std::endl;
   } else {
     result << "-> class " << getOutputClass() << std::endl;
@@ -136,8 +179,7 @@ std::vector<Rule> Rule::fromJsonFile(const std::string &filename, float &decisio
   Json jsonData = Json::parse(ifs);
 
   if (!jsonData.contains("rules") || !jsonData.contains("positive index class") || !jsonData.contains("threshold")) {
-    std::cout << "Parsing error: cannot find 'rules' list in json file." << std::endl;
-    return result;
+    throw FileContentError("Parsing error in JSON file '" + filename + "': missing required key(s) among 'rules', 'positive index class', and 'threshold'.");
   }
 
   positiveClassIndex = jsonData["positive index class"];
@@ -172,15 +214,19 @@ void Rule::toJsonFile(const std::string &filename, const std::vector<Rule> &rule
 }
 
 /**
- * @brief Writes vectors of train rules and test into a JSON file.
+ * @brief Writes vectors of rules with train and test stats into a JSON file.
  *
  * @param filename Name of the file to be written.
- * @param trainRules Vector of train rules to be written.
- * @param testRules Vector of test rules to be written.
+ * @param trainRules Vector of rules with train stats rules to be written.
+ * @param testRules Vector of rules with test stats to be written.
  * @param threshold Decision threshold.
  * @param positiveIndex Positive class index.
  */
 void Rule::toJsonStatsFile(const std::string &filename, const std::vector<Rule> &trainRules, const std::vector<Rule> &testRules, float threshold, int positiveIndex) {
+  if (trainRules.size() != testRules.size()) {
+    throw InternalError("Error while writing stats JSON: trainRules and testRules must have the same size.");
+  }
+
   std::ofstream ofs(filename);
 
   if (!ofs.is_open() || ofs.fail()) {
@@ -188,12 +234,11 @@ void Rule::toJsonStatsFile(const std::string &filename, const std::vector<Rule> 
   }
 
   Json jsonData;
-  std::vector<std::tuple<Rule, Rule>> rules;
 
   jsonData["threshold"] = threshold;
   jsonData["positive index class"] = positiveIndex;
 
-  for (int i = 0; i < trainRules.size(); i++) {
+  for (size_t i = 0; i < trainRules.size(); ++i) {
     jsonData["rules"].push_back({{"train", trainRules[i]}, {"test", testRules[i]}});
   }
 
@@ -216,7 +261,7 @@ void Rule::toJsonGloFile(const std::string &filename, const std::vector<std::vec
 
   Json jsonData;
 
-  for (int i = 0; i < rulesPerSamples.size(); i++) {
+  for (size_t i = 0; i < rulesPerSamples.size(); ++i) {
     jsonData["samples"].push_back({{"sampleId", i}, {"rules", rulesPerSamples[i]}});
   }
 
@@ -247,16 +292,16 @@ bool Rule::isEqual(const Rule &other) const {
   if (fabs(getFidelity() - other.getFidelity()) > epsilon)
     return false;
 
-  if (getIncreasedFidelity() != other.getIncreasedFidelity())
+  if (!areDoubleVectorsEqual(getIncreasedFidelity(), other.getIncreasedFidelity(), epsilon))
     return false;
 
-  if (fabs(getAccuracy() != other.getAccuracy()) > epsilon)
+  if (fabs(getAccuracy() - other.getAccuracy()) > epsilon)
     return false;
 
-  if (getAccuracyChanges() != other.getAccuracyChanges())
+  if (!areDoubleVectorsEqual(getAccuracyChanges(), other.getAccuracyChanges(), epsilon))
     return false;
 
-  if (fabs(getConfidence() != other.getConfidence()) > epsilon)
+  if (fabs(getConfidence() - other.getConfidence()) > epsilon)
     return false;
 
   return true;
@@ -364,7 +409,6 @@ std::vector<bool> getRulesPatternsFromRuleFile(const std::string &rulesFile, con
   }
 
   std::string line;
-  Rule rule;
 
   std::regex antecedentsPatternIds(": (" + getAntStrPatternWithAttrIds(dataset.getNbAttributes()) + " )*" + "\\s?->");
   std::regex antecedentsPatternNames;
@@ -447,7 +491,7 @@ std::vector<bool> getRulesPatternsFromRuleFile(const std::string &rulesFile, con
  * @return Returns true if the rule is created, false otherwise.
 
  */
-bool stringToRule(Rule &rule, const std::string &str, const std::regex &attributePattern, const std::regex &classPattern, bool withAttributeNames, bool withClassNames, DataSetFid &dataset) {
+bool stringToRule(Rule &rule, const std::string &str, const std::regex &attributePattern, const std::regex &classPattern, bool withAttributeNames, bool withClassNames, const DataSetFid &dataset) {
 
   std::vector<Antecedent> antecedents;
   bool isRule = false;
@@ -520,13 +564,13 @@ bool stringToRule(Rule &rule, const std::string &str, const std::regex &attribut
  * @throws FileNotFoundError If the rules file cannot be opened.
  * @throws FileContentError If the rules in the file are not properly formatted.
  */
-void getRules(std::vector<Rule> &rules, const std::string &rulesFile, DataSetFid &dataset, float &decisionThreshold, int &positiveClassIndex) {
+void getRules(std::vector<Rule> &rules, const std::string &rulesFile, const DataSetFid &dataset, float &decisionThreshold, int &positiveClassIndex) {
   // if file is JSON read it properly
-  if (rulesFile.substr(rulesFile.find_last_of(".") + 1) == "json") {
+  if (hasJsonExtension(rulesFile)) {
     rules = Rule::fromJsonFile(rulesFile, decisionThreshold, positiveClassIndex);
   } else {
     // Open rules file
-    std::fstream rulesData;
+    std::ifstream rulesData;
     rulesData.open(rulesFile, std::ios::in); // Read data file
     if (rulesData.fail()) {
       throw FileNotFoundError("Error : file " + rulesFile + " not found.");
@@ -557,39 +601,40 @@ void getRules(std::vector<Rule> &rules, const std::string &rulesFile, DataSetFid
       bool isRule = stringToRule(rule, line, attributePattern, classPattern, !attributeIdsInFile, !classeIdsInFile, dataset);
 
       if (isRule) {
-        getline(rulesData, line); // Cov size
-        rule.setCoveringSize(stoi(splitString(line, " ")[4]));
-        getline(rulesData, line); // Fidelity
-        rule.setFidelity(stoi(splitString(line, " ")[3]));
-        getline(rulesData, line); // Accuracy
-        rule.setAccuracy(stod(splitString(line, " ")[3]));
-        getline(rulesData, line); // Confidence
-        rule.setConfidence(stod(splitString(line, " ")[3]));
-        getline(rulesData, line); // Cov size evolution
-        std::vector<std::string> elements = splitString(line, " ");
-        if (elements.size() <= 7) {
-          throw FileFormatError("Error : In file " + rulesFile + ", missing covering size for new antecedents in the line " + line + ".");
-        }
+        const std::string ruleHeader = line;
+        auto readTokensOrThrow = [&](const std::string &fieldName, size_t minTokens, const std::string &invalidLinePrefix) -> std::vector<std::string> {
+          if (!std::getline(rulesData, line)) {
+            throw FileFormatError("Error : In file " + rulesFile + ", missing line for " + fieldName + " after rule: " + ruleHeader + ".");
+          }
+          auto tokens = splitString(line, " ");
+          if (tokens.size() < minTokens) {
+            throw FileFormatError("Error : In file " + rulesFile + ", " + invalidLinePrefix + line + ".");
+          }
+          return tokens;
+        };
+
+        auto elements = readTokensOrThrow("covering size", 5, "invalid covering size line: ");
+        rule.setCoveringSize(std::stoi(elements[4]));
+        elements = readTokensOrThrow("fidelity", 4, "invalid fidelity line: ");
+        rule.setFidelity(std::stod(elements[3]));
+        elements = readTokensOrThrow("accuracy", 4, "invalid accuracy line: ");
+        rule.setAccuracy(std::stod(elements[3]));
+        elements = readTokensOrThrow("confidence", 4, "invalid confidence line: ");
+        rule.setConfidence(std::stod(elements[3]));
+
+        elements = readTokensOrThrow("covering size evolution", 8, "missing covering size for new antecedents in the line ");
         std::vector<int> covSizeAnt;
         for (size_t i = 7; i < elements.size(); i++) {
           covSizeAnt.push_back(std::stoi(elements[i]));
         }
         rule.setCoveringSizesWithNewAntecedent(covSizeAnt);
-        getline(rulesData, line); // Fidelity increase
-        elements = splitString(line, " ");
-        if (elements.size() <= 6) {
-          throw FileFormatError("Error : In file " + rulesFile + ", missing increased fidelity for new antecedents in the line " + line + ".");
-        }
+        elements = readTokensOrThrow("fidelity increase", 7, "missing increased fidelity for new antecedents in the line ");
         std::vector<double> fidIncr;
         for (size_t i = 6; i < elements.size(); i++) {
           fidIncr.push_back(std::stod(elements[i]));
         }
         rule.setIncreasedFidelity(fidIncr);
-        getline(rulesData, line); // Accuracy change
-        elements = splitString(line, " ");
-        if (elements.size() <= 6) {
-          throw FileFormatError("Error : In file " + rulesFile + ", missing accuracy change for new antecedents in the line " + line + ".");
-        }
+        elements = readTokensOrThrow("accuracy change", 7, "missing accuracy change for new antecedents in the line ");
         std::vector<double> accChange;
         for (size_t i = 6; i < elements.size(); i++) {
           accChange.push_back(std::stod(elements[i]));
@@ -615,18 +660,21 @@ void getRules(std::vector<Rule> &rules, const std::string &rulesFile, DataSetFid
 std::tuple<double, double> writeRulesFile(const std::string &filename, const std::vector<Rule> &rules, const std::vector<std::string> &attributeNames,
                                           const std::vector<std::string> &classNames, float threshold, int positiveIndex) {
   if (rules.empty()) {
-    std::cout << "Warning: cannot write to file \"" << filename << "\", generated rules list is empty.";
+    std::cout << "Warning: cannot write to file \"" << filename << "\", generated rules list is empty." << std::endl;
     return std::make_tuple(0, 0);
   }
 
   double meanCovSize = 0;
   double meanNbAntecedents = 0;
+  const auto nbRules = static_cast<int>(rules.size());
 
-  if (filename.substr(filename.find_last_of(".") + 1) == "json") {
-    for (Rule r : rules) { // each rule
-      meanCovSize += static_cast<double>(r.getCoveredSamples().size());
+  if (hasJsonExtension(filename)) {
+    for (const Rule &r : rules) { // each rule
+      meanCovSize += static_cast<double>(r.getCoveringSize());
       meanNbAntecedents += static_cast<double>(r.getAntecedents().size());
     }
+    meanCovSize /= nbRules;
+    meanNbAntecedents /= nbRules;
 
     Rule::toJsonFile(filename, rules, threshold, positiveIndex);
 
@@ -634,9 +682,8 @@ std::tuple<double, double> writeRulesFile(const std::string &filename, const std
     int counter = 0;
     std::stringstream stream;
     std::ofstream file(filename);
-    auto nbRules = static_cast<int>(rules.size());
 
-    for (Rule r : rules) { // each rule
+    for (const Rule &r : rules) { // each rule
       meanCovSize += static_cast<double>(r.getCoveringSize());
       meanNbAntecedents += static_cast<double>(r.getAntecedents().size());
       counter++;
@@ -679,24 +726,31 @@ std::tuple<double, double> writeRulesFile(const std::string &filename, const std
  * @param testValues Values of the test sample for which we search activated rules.
  */
 void getActivatedRules(std::vector<int> &activatedRules, const std::vector<Rule> &rules, const std::vector<double> &testValues) {
+  activatedRules.clear();
+
   int attr;
   bool ineq;
   double val;
-  for (int r = 0; r < rules.size(); r++) { // For each rule
+  for (size_t r = 0; r < rules.size(); ++r) { // For each rule
     bool notActivated = false;
     for (const auto &antecedent : rules[r].getAntecedents()) { // For each antecedent
       attr = antecedent.getAttribute();
+      if (attr < 0 || static_cast<size_t>(attr) >= testValues.size()) {
+        throw InternalError("Error while checking activated rules: antecedent attribute index " + std::to_string(attr) + " is out of bounds for test sample size " + std::to_string(testValues.size()) + ".");
+      }
       ineq = antecedent.getInequality();
       val = antecedent.getValue();
       if (ineq == 0 && testValues[attr] >= val) { // If the inequality is not verified
         notActivated = true;
+        break;
       }
       if (ineq == 1 && testValues[attr] < val) {
         notActivated = true;
+        break;
       }
     }
     if (!notActivated) {
-      activatedRules.push_back(r);
+      activatedRules.push_back(static_cast<int>(r));
     }
   }
 }
@@ -718,9 +772,8 @@ void getThresholdFromRulesFile(const std::string &filePath, float &decisionThres
   std::ifstream file(filePath);
   std::string line;
 
-  if (filePath.substr(filePath.find_last_of('.') + 1) == "json") {
-    std::vector<Rule> rules;
-    rules = Rule::fromJsonFile(filePath, decisionThreshold, positiveClassIndex);
+  if (hasJsonExtension(filePath)) {
+    Rule::fromJsonFile(filePath, decisionThreshold, positiveClassIndex);
   } else {
 
     if (!file) {

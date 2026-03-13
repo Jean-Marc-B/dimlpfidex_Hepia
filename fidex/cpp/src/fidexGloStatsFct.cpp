@@ -457,11 +457,11 @@ int fidexGloStats(const std::string &command) {
       testDatas.reset(new DataSetFid("testDatas from FidexGloStats", testDataFile, testDataFilePred, nbAttributes, nbClasses, decisionThreshold, positiveClassIndex, params->getString(TEST_CLASS_FILE)));
     }
 
-    std::vector<std::vector<double>> &testData = testDatas->getDatas();
-    std::vector<int> &testPreds = testDatas->getPredictions();
-    std::vector<int> &testTrueClasses = testDatas->getClasses();
+    const std::vector<std::vector<double>> &testData = testDatas->getDatas();
+    const std::vector<int> &testPreds = testDatas->getPredictions();
+    const std::vector<int> &testTrueClasses = testDatas->getClasses();
 
-    std::vector<std::vector<double>> &testPredictionScores = testDatas->getPredictionScores();
+    const std::vector<std::vector<double>> &testPredictionScores = testDatas->getPredictionScores();
     int nbTestData = testDatas->getNbSamples();
 
     // Get attributes
