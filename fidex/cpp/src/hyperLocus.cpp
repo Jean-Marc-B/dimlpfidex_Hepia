@@ -45,8 +45,8 @@ std::vector<std::vector<double>> calcHypLocus(DataSetFid &dataset, int nbQuantLe
   // 2) Compute raw barriers from network weights and biases
   // =========================================================================
   for (int n = 0; n < nbNets; n++) {
-    std::vector<double> bias = dataset.getInputBias(n);
-    std::vector<double> weights = dataset.getInputWeights(n);
+    const std::vector<double> &bias = dataset.getInputBias(n);
+    const std::vector<double> &weights = dataset.getInputWeights(n);
 
     for (int i = 0; i < nbFeatures; i++) { // Loop on dimension
       const double safeWeight = (std::abs(weights[i]) < minAbsWeight) ? (weights[i] < 0.0 ? -minAbsWeight : minAbsWeight) : weights[i];

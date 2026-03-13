@@ -3,19 +3,13 @@
 // Find better way to include this
 #include "../../../json/single_include/nlohmann/json.hpp"
 #include "antecedent.h"
-#include "checkFun.h"
-#include "dataSet.h"
-#include "parameters.h"
-#include <algorithm>
-#include <cmath>
-#include <fstream>
-#include <iostream>
+#include <ostream>
 #include <regex>
 #include <string>
 #include <tuple>
 #include <vector>
 
-using Json = nlohmann::json;
+class DataSetFid;
 
 /**
  * @brief Represents a rule used in a rule-based system.
@@ -222,17 +216,7 @@ public:
    *
    * @param value The antecedent to add.
    */
-  void addAntecedent(Antecedent value) { antecedents.push_back(value); };
-
-  /**
-   * @brief Adds a covered sample to the rule and updates the covering size.
-   *
-   * @param value The sample to add.
-   */
-  void addCoveredSample(int value) {
-    coveredSamples.push_back(value);
-    coveringSize += 1;
-  };
+  void addAntecedent(const Antecedent &value) { antecedents.push_back(value); };
 
   /**
    * @brief Builds a string presenting every element and value contained by a given rule.
@@ -275,7 +259,7 @@ public:
  * @return std::ostream& The output stream with the Rule information.
  */
 inline std::ostream &operator<<(std::ostream &stream, const Rule &rule) {
-  for (Antecedent a : rule.getAntecedents())
+  for (const Antecedent &a : rule.getAntecedents())
     stream << a;
   stream << std::endl;
   stream << "   #Antecedents:     " << std::to_string(rule.getAntecedents().size()) << std::endl
@@ -344,12 +328,12 @@ std::vector<bool> getRulesPatternsFromRuleFile(const std::string &rulesFile, con
 /**
  * @brief Converts a well-formatted rule string to a Rule object.
  */
-bool stringToRule(Rule &rule, const std::string &str, const std::regex &attributePattern, const std::regex &classPattern, bool withAttributeNames, bool withClassNames, DataSetFid &dataset);
+bool stringToRule(Rule &rule, const std::string &str, const std::regex &attributePattern, const std::regex &classPattern, bool withAttributeNames, bool withClassNames, const DataSetFid &dataset);
 
 /**
  * @brief Get the rules from a rules file.
  */
-void getRules(std::vector<Rule> &rules, const std::string &rulesFile, DataSetFid &dataset, float &decisionThreshold, int &positiveClassIndex);
+void getRules(std::vector<Rule> &rules, const std::string &rulesFile, const DataSetFid &dataset, float &decisionThreshold, int &positiveClassIndex);
 
 /**
  * @brief Writes a list of rules into a given file. Returns a tuple of two doubles representing the mean covering size and the mean number of antecedents.

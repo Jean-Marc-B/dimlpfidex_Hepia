@@ -60,10 +60,10 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   // Cached references used throughout the search
   Hyperspace *hyperspace = _hyperspace; // Hyperspace containing the hyperbox and the hyperlocus
   int nbAttributes = _trainDataset->getNbAttributes();
-  std::vector<int> &trainPreds = _trainDataset->getPredictions();
-  std::vector<int> &trainTrueClass = _trainDataset->getClasses();
-  std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();
-  std::vector<std::vector<double>> &trainPredictionScores = _trainDataset->getPredictionScores();
+  const std::vector<int> &trainPreds = _trainDataset->getPredictions();
+  const std::vector<int> &trainTrueClass = _trainDataset->getClasses();
+  const std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();
+  const std::vector<std::vector<double>> &trainPredictionScores = _trainDataset->getPredictionScores();
   const auto &hyperLocus = hyperspace->getHyperLocus();    // Matrix of all possible hyperplanes for each dimension
   const auto &hyperbox = hyperspace->getHyperbox();        // Main hyperbox of the rule
   auto nbDimensions = static_cast<int>(hyperLocus.size()); // Number of dimensions in the hyperlocus (must be a multiple of the number of attributes)

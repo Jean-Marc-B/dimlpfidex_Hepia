@@ -1,15 +1,8 @@
 #ifndef DATASETFID_H
 #define DATASETFID_H
 
-#include "checkFun.h"
-#include "errorHandler.h"
-#include <algorithm>
-#include <cmath>
-#include <cstring>
-#include <fstream>
-#include <iostream>
-#include <limits>
-#include <sstream>
+#include <iosfwd>
+#include <string>
 #include <vector>
 
 /**
@@ -29,7 +22,14 @@ private:
   bool hasClasses = false;                               ///< Flag indicating if classes are loaded.
   bool hasWeights = false;                               ///< Flag indicating if weights are loaded.
 
-  std::string classFormat = ""; ///< Format of the class representation (one-hot, id, one-hot_combined, id_combined).
+  enum class ClassFormat {
+    Unknown,
+    OneHot,
+    Id,
+    OneHotCombined,
+    IdCombined
+  };
+  ClassFormat classFormat = ClassFormat::Unknown; ///< Format of the class representation.
 
   double decisionThreshold = -1; ///< Decision threshold for classifying samples.
   int positiveClassIndex = -1;   ///< Index of the positive class used for threshold-based classification.
@@ -60,6 +60,22 @@ private:
    * @brief Read a class line from the class file and save it in trueClasses.
    */
   void setClassLine(const std::string &line, const std::string &dataFile);
+
+  /**
+   * @brief Parses a weight file containing a single network's weights and stores them in the weights vector.
+   *
+   * @param fileWts Reference to opened weight input stream.
+   * @param weightFile Weight filename used for detailed error messages.
+   */
+  void parseSingleNetwork(std::istream &fileWts, const std::string &weightFile);
+
+  /**
+   * @brief Parses a weight file containing multiple networks' weights and stores them in the weights vector.
+   *
+   * @param fileWts Reference to opened weight input stream.
+   * @param weightFile Weight filename used for detailed error messages.
+   */
+  void parseMultipleNetworks(std::istream &fileWts, const std::string &weightFile);
 
   /**
    * @brief Set the number of classes for the dataset.
@@ -97,27 +113,17 @@ public:
   /**
    * @brief Construct a new DataSetFid object using separate data, prediction, and optional class files.
    */
-  DataSetFid(const std::string &name, const std::string &dataFile, const std::string &predFile, int nbAttributes, int nbClasses, double decisionThresh, int indexPositiveCl, const std::string &trueClassFile = "");
+  DataSetFid(const std::string &name, const std::string &dataFile, const std::string &predFile, int nbAttributes, int nbClasses, double decisionThresh = -1, int positiveClassId = -1, const std::string &trueClassFile = "");
 
   /**
    * @brief Construct a new DataSetFid object using a single data file containing data, predictions, and optionally classes.
    */
-  DataSetFid(const std::string &name, const std::string &dataFile, int nbAttributes, int nbClasses, double decisionThresh, int indexPositiveCl); // dataFile with data, predictions and maybe classes
+  DataSetFid(const std::string &name, const std::string &dataFile, int nbAttributes, int nbClasses, double decisionThresh = -1, int positiveClassId = -1); // dataFile with data, predictions and maybe classes
 
   /**
    * @brief Construct a new DataSetFid object using a weight file.
    */
   explicit DataSetFid(const std::string &name, const std::string &weightFile);
-
-  /**
-   * @brief Parses a weight file containing a single network's weights and stores them in the weights vector.
-   */
-  void parseSingleNetwork(std::fstream &fileWts);
-
-  /**
-   * @brief Parses a weight file containing multiple networks' weights and stores them in the weights vector.
-   */
-  void parseMultipleNetworks(std::fstream &fileWts);
 
   /**
    * @brief Get data from dataFile and save it in datas and trueClasses if it contains class information.
@@ -132,7 +138,7 @@ public:
   /**
    * @brief Add predictions to the dataset using a prediction file.
    */
-  void setPredFromFile(const std::string &predFile, int nbClasses, double decisionThreshold = -1, int positiveClassIndex = -1);
+  void setPredFromFile(const std::string &predFile, int nbClasses, double decisionThreshold = -1, int positiveClassId = -1);
 
   /**
    * @brief Add classes from a specified file into the dataset.
@@ -142,12 +148,12 @@ public:
   /**
    * @brief Return the samples' data.
    */
-  std::vector<std::vector<double>> &getDatas();
+  const std::vector<std::vector<double>> &getDatas() const;
 
   /**
    * @brief Return the classes of the samples.
    */
-  std::vector<int> &getClasses();
+  const std::vector<int> &getClasses() const;
 
   /**
    * @brief Return whether the dataset contains classes.
@@ -157,12 +163,12 @@ public:
   /**
    * @brief Return the predictions of the samples.
    */
-  std::vector<int> &getPredictions();
+  const std::vector<int> &getPredictions() const;
 
   /**
    * @brief Return the prediction output values of the samples.
    */
-  std::vector<std::vector<double>> &getPredictionScores();
+  const std::vector<std::vector<double>> &getPredictionScores() const;
 
   /**
    * @brief Return the number of classes in the dataset.
@@ -187,12 +193,12 @@ public:
   /**
    * @brief Return attribute names.
    */
-  std::vector<std::string> &getAttributeNames();
+  const std::vector<std::string> &getAttributeNames() const;
 
   /**
    * @brief Return class names.
    */
-  std::vector<std::string> &getClassNames();
+  const std::vector<std::string> &getClassNames() const;
 
   /**
    * @brief Return whether the dataset contains attribute names.
@@ -207,17 +213,17 @@ public:
   /**
    * @brief Return the weights.
    */
-  std::vector<std::vector<std::vector<double>>> getWeights() const;
+  const std::vector<std::vector<std::vector<double>>> &getWeights() const;
 
   /**
    * @brief Return the biases of the first layer.
    */
-  std::vector<double> getInputBias(int netId) const;
+  const std::vector<double> &getInputBias(int netId) const;
 
   /**
    * @brief Return the weights of the first layer.
    */
-  std::vector<double> getInputWeights(int netId) const;
+  const std::vector<double> &getInputWeights(int netId) const;
 
   /**
    * @brief Return the number of training networks.
