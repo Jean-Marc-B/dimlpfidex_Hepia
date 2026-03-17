@@ -1,8 +1,102 @@
 #include "parameters.h"
+#include "../../../json/single_include/nlohmann/json.hpp"
+#include "checkFun.h"
+#include <algorithm>
+#include <fstream>
+#include <iostream>
 #include <regex>
 #include <set>
 
 using Json = nlohmann::json;
+
+const std::unordered_map<std::string, ParameterCode> parameterNames = {
+    {"train_data_file", TRAIN_DATA_FILE},
+    {"train_pred_file", TRAIN_PRED_FILE},
+    {"train_pred_outfile", TRAIN_PRED_OUTFILE},
+    {"train_class_file", TRAIN_CLASS_FILE},
+    {"test_data_file", TEST_DATA_FILE},
+    {"test_pred_file", TEST_PRED_FILE},
+    {"test_pred_outfile", TEST_PRED_OUTFILE},
+    {"test_class_file", TEST_CLASS_FILE},
+    {"valid_data_file", VALID_DATA_FILE},
+    {"valid_class_file", VALID_CLASS_FILE},
+    {"valid_pred_outfile", VALID_PRED_OUTFILE},
+    {"rules_file", RULES_FILE},
+    {"rules_outfile", RULES_OUTFILE},
+    {"global_rules_outfile", GLOBAL_RULES_OUTFILE},
+    {"global_rules_file", GLOBAL_RULES_FILE},
+    {"explanation_file", EXPLANATION_FILE},
+    {"console_file", CONSOLE_FILE},
+    {"root_folder", ROOT_FOLDER},
+    {"attributes_file", ATTRIBUTES_FILE},
+    {"weights_file", WEIGHTS_FILE},
+    {"weights_outfile", WEIGHTS_OUTFILE},
+    {"hid_file", HID_FILE},
+    {"stats_file", STATS_FILE},
+    {"nb_attributes", NB_ATTRIBUTES},
+    {"nb_classes", NB_CLASSES},
+    {"nb_dimlp_nets", NB_DIMLP_NETS},
+    {"nb_ex_per_net", NB_EX_PER_NET},
+    {"nb_quant_levels", NB_QUANT_LEVELS},
+    {"nb_fidex_rules", NB_FIDEX_RULES},
+    {"heuristic", HEURISTIC},
+    {"max_iterations", MAX_ITERATIONS},
+    {"min_covering", MIN_COVERING},
+    {"learning_rate", LEARNING_RATE},
+    {"momentum", MOMENTUM},
+    {"flat", FLAT},
+    {"error_thresh", ERROR_THRESH},
+    {"acc_thresh", ACC_THRESH},
+    {"abs_error_thresh", ABS_ERROR_THRESH},
+    {"nb_epochs", NB_EPOCHS},
+    {"nb_epochs_error", NB_EPOCHS_ERROR},
+    {"with_rule_extraction", WITH_RULE_EXTRACTION},
+    {"covering_strategy", COVERING_STRATEGY},
+    {"max_failed_attempts", MAX_FAILED_ATTEMPTS},
+    {"allow_no_fid_change", ALLOW_NO_FID_CHANGE},
+    {"nb_threads", NB_THREADS},
+    {"positive_class_index", POSITIVE_CLASS_INDEX},
+    {"seed", SEED},
+    {"decision_threshold", DECISION_THRESHOLD},
+    {"hi_knot", HI_KNOT},
+    {"dropout_hyp", DROPOUT_HYP},
+    {"dropout_dim", DROPOUT_DIM},
+    {"min_fidelity", MIN_FIDELITY},
+    {"lowest_min_fidelity", LOWEST_MIN_FIDELITY},
+    {"normalization_file", NORMALIZATION_FILE},
+    {"mus", MUS},
+    {"sigmas", SIGMAS},
+    {"normalization_indices", NORMALIZATION_INDICES},
+    {"with_fidex", WITH_FIDEX},
+    {"with_minimal_version", WITH_MINIMAL_VERSION},
+    {"first_hidden_layer", FIRST_HIDDEN_LAYER},
+    {"hidden_layers", HIDDEN_LAYERS},
+    {"hidden_layers_outfile", HIDDEN_LAYERS_OUTFILE},
+    {"hidden_layers_file", HIDDEN_LAYERS_FILE},
+    {"metrics_file", METRICS_FILE},
+    {"start_index", START_INDEX},
+    {"end_index", END_INDEX},
+    {"aggregate_rules", AGGREGATE_RULES},
+    {"aggregate_folder", AGGREGATE_FOLDER},
+    {"no_simplification", NO_SIMPLIFICATION},
+    {"verbose", VERBOSE},
+    {"hyperplan_opti", HYPERPLAN_OPTI},
+    {"revive_barriers", REVIVE_BARRIERS},
+};
+
+namespace {
+const std::unordered_map<ParameterCode, std::string> &getParameterCodeToNameMap() {
+  static const std::unordered_map<ParameterCode, std::string> parameterCodeToName = []() {
+    std::unordered_map<ParameterCode, std::string> result;
+    result.reserve(parameterNames.size());
+    for (const auto &entry : parameterNames) {
+      result.emplace(entry.second, entry.first);
+    }
+    return result;
+  }();
+  return parameterCodeToName;
+}
+} // namespace
 
 /**
  * @brief Construct a new Parameters object containing all arguments passed by CLI.
@@ -23,11 +117,13 @@ Parameters::Parameters(const std::vector<std::string> &args, const std::vector<P
       }
       const std::string arg = args[p];
 
-      if (p + 1 < args.size() && (args[p + 1].substr(0, 2) != "--" && args[p + 1].substr(0, 2) != "")) {
+      if (p + 1 < args.size() && !args[p + 1].empty() && args[p + 1].rfind("--", 0) != 0) {
         throw CommandArgumentException("There is a parameter without -- (" + args[p + 1] + ").");
       }
 
       parseArg(param, arg, validParams);
+    } else {
+      throw CommandArgumentException("There is a parameter without -- (" + param + ").");
     }
   }
 
@@ -649,12 +745,13 @@ void Parameters::setIntVector(ParameterCode id, const std::vector<int> &value) {
  *
  * @param id The parameter code to set.
  * @param value The string value to set.
- * @throws CommandArgumentException if the parameter is already set.
+ * @param allowOverride If true, allows overwriting an already set string parameter.
+ * @throws CommandArgumentException if the parameter is already set and overriding is not allowed.
  */
-void Parameters::setString(ParameterCode id, const std::string &value) {
-  // if (isStringSet(id)) {
-  //   throwAlreadySetArgumentException(id, value);
-  // }
+void Parameters::setString(ParameterCode id, const std::string &value, bool allowOverride) {
+  if (isStringSet(id) && !allowOverride) {
+    throwAlreadySetArgumentException(id, value);
+  }
   _stringParams[id] = value;
 }
 
@@ -674,7 +771,12 @@ void Parameters::completePath(ParameterCode id) {
   std::string separator = getOSSeparator();
   std::string root = isStringSet(ROOT_FOLDER) ? getString(ROOT_FOLDER) : "";
 
-  if ((target.empty() || target.back() == separator[0]) && id != AGGREGATE_FOLDER) {
+  // AGGREGATE_FOLDER can end with a separator, but no path parameter can be empty.
+  if (target.empty()) {
+    throwInvalidFileOrDirectory(id, target);
+  }
+
+  if (target.back() == separator[0] && id != AGGREGATE_FOLDER) {
     throwInvalidFileOrDirectory(id, target);
   }
 
@@ -769,9 +871,9 @@ bool Parameters::getBool(ParameterCode id) {
  * @return The vector of double values associated with the parameter code.
  * @throws CommandArgumentException if the parameter is not set.
  */
-std::vector<double> Parameters::getDoubleVector(ParameterCode id) {
+const std::vector<double> &Parameters::getDoubleVector(ParameterCode id) {
   assertDoubleVectorExists(id);
-  return _doubleVectorParams[id];
+  return _doubleVectorParams.at(id);
 }
 
 /**
@@ -781,9 +883,9 @@ std::vector<double> Parameters::getDoubleVector(ParameterCode id) {
  * @return The vector of integer values associated with the parameter code.
  * @throws CommandArgumentException if the parameter is not set.
  */
-std::vector<int> Parameters::getIntVector(ParameterCode id) {
+const std::vector<int> &Parameters::getIntVector(ParameterCode id) {
   assertIntVectorExists(id);
-  return _intVectorParams[id];
+  return _intVectorParams.at(id);
 }
 
 /**
@@ -793,9 +895,9 @@ std::vector<int> Parameters::getIntVector(ParameterCode id) {
  * @return The string value associated with the parameter code.
  * @throws CommandArgumentException if the parameter is not set.
  */
-std::string Parameters::getString(ParameterCode id) {
+const std::string &Parameters::getString(ParameterCode id) {
   assertStringExists(id);
-  return _stringParams[id];
+  return _stringParams.at(id);
 }
 
 /**
@@ -809,8 +911,9 @@ StringInt Parameters::getArch() {
     arch.Insert(getInt(FIRST_HIDDEN_LAYER));
   }
   if (isIntVectorSet(HIDDEN_LAYERS)) {
-    for (int i = 0; i < getIntVector(HIDDEN_LAYERS).size(); i++) {
-      arch.Insert(getIntVector(HIDDEN_LAYERS)[i]);
+    const auto &hiddenLayers = getIntVector(HIDDEN_LAYERS);
+    for (size_t i = 0; i < hiddenLayers.size(); i++) {
+      arch.Insert(hiddenLayers[i]);
     }
   }
   return arch;
@@ -827,7 +930,8 @@ StringInt Parameters::getArchInd() {
     archInd.Insert(1);
   }
   if (isIntVectorSet(HIDDEN_LAYERS)) {
-    for (int i = 0; i < getIntVector(HIDDEN_LAYERS).size(); i++) {
+    const auto &hiddenLayers = getIntVector(HIDDEN_LAYERS);
+    for (size_t i = 0; i < hiddenLayers.size(); i++) {
       archInd.Insert(i + 2);
     }
   }
@@ -842,10 +946,10 @@ StringInt Parameters::getArchInd() {
  * @return The name of the parameter.
  */
 std::string Parameters::getParameterName(ParameterCode id) {
-  for (const auto &pair : parameterNames) {
-    if (pair.second == id) {
-      return pair.first;
-    }
+  const auto &parameterCodeToName = getParameterCodeToNameMap();
+  const auto it = parameterCodeToName.find(id);
+  if (it != parameterCodeToName.end()) {
+    return it->second;
   }
   return "unknown";
 }
@@ -1084,10 +1188,11 @@ void Parameters::setDefaultIntVector(ParameterCode id, const std::string &defaul
 void Parameters::setDefaultString(ParameterCode id, const std::string &defaultValue, bool withRoot) {
   if (!isStringSet(id)) {
     std::string value = defaultValue;
-    if (withRoot) {
+    if (withRoot && isStringSet(ROOT_FOLDER)) {
       // define separator depending on OS
-      std::string separator = getOSSeparator();
-      value = getString(ROOT_FOLDER) + separator + defaultValue;
+      const std::string separator = getOSSeparator();
+      const std::string root = getString(ROOT_FOLDER);
+      value = (root.empty() || root.back() == separator[0]) ? root + defaultValue : root + separator + defaultValue;
     }
     setString(id, value);
   }
@@ -1280,15 +1385,20 @@ void Parameters::checkParametersNormalization() {
   }
 
   // Mus, sigmas and normalizationIndices must have the same size and not be empty
-  if (isDoubleVectorSet(MUS) && (getDoubleVector(MUS).size() != getDoubleVector(SIGMAS).size() || getDoubleVector(MUS).size() != getIntVector(NORMALIZATION_INDICES).size() || getDoubleVector(MUS).empty())) {
-    throw CommandArgumentException("Error : mus (--mus), sigmas (--sigmas) and normalization indices (--normalization_indices) don't have the same size or are empty.");
+  if (isDoubleVectorSet(MUS)) {
+    const auto &mus = getDoubleVector(MUS);
+    const auto &sigmas = getDoubleVector(SIGMAS);
+    const auto &normalizationIndices = getIntVector(NORMALIZATION_INDICES);
+    if (mus.size() != sigmas.size() || mus.size() != normalizationIndices.size() || mus.empty()) {
+      throw CommandArgumentException("Error : mus (--mus), sigmas (--sigmas) and normalization indices (--normalization_indices) don't have the same size or are empty.");
+    }
   }
 
   // Check normalizationIndices
   if (isIntVectorSet(NORMALIZATION_INDICES)) {
-    std::vector<int> tempVect = getIntVector(NORMALIZATION_INDICES);
+    const auto &tempVect = getIntVector(NORMALIZATION_INDICES);
     std::set<int> uniqueIndices(tempVect.begin(), tempVect.end());
-    if (uniqueIndices.size() != getIntVector(NORMALIZATION_INDICES).size() ||
+    if (uniqueIndices.size() != tempVect.size() ||
         *std::max_element(uniqueIndices.begin(), uniqueIndices.end()) >= getInt(NB_ATTRIBUTES) ||
         *std::min_element(uniqueIndices.begin(), uniqueIndices.end()) < 0) {
       throw CommandArgumentException("Error : parameter normalization indices (--normalization_indices) must be a list composed of integers between [0, nb_attributes-1(" + std::to_string(getInt(NB_ATTRIBUTES) - 1) + ")] without repeted elements.");
@@ -1369,8 +1479,9 @@ void Parameters::writeHiddenLayersFile() {
   hidFile << "\n";
 
   if (isIntVectorSet(HIDDEN_LAYERS)) {
-    for (int i = 0; i < getIntVector(HIDDEN_LAYERS).size(); i++) {
-      hidFile << std::to_string(i + 2) << " " << std::to_string(getIntVector(HIDDEN_LAYERS)[i]) << "\n";
+    const auto &hiddenLayers = getIntVector(HIDDEN_LAYERS);
+    for (size_t i = 0; i < hiddenLayers.size(); i++) {
+      hidFile << std::to_string(i + 2) << " " << std::to_string(hiddenLayers[i]) << "\n";
     }
   }
 

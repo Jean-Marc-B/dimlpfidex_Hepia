@@ -1,13 +1,8 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
-#include "../../../json/single_include/nlohmann/json.hpp"
-#include "antecedent.h"
-#include "checkFun.h"
 #include "errorHandler.h"
 #include "stringI.h"
-#include <fstream>
 #include <iomanip>
-#include <iostream>
 #include <map>
 #include <ostream>
 #include <sstream>
@@ -97,80 +92,7 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
 /**
  * @brief Maps parameter names to their corresponding ParameterCode values.
  */
-static const std::unordered_map<std::string, ParameterCode> parameterNames = {
-    {"train_data_file", TRAIN_DATA_FILE},
-    {"train_pred_file", TRAIN_PRED_FILE},
-    {"train_pred_outfile", TRAIN_PRED_OUTFILE},
-    {"train_class_file", TRAIN_CLASS_FILE},
-    {"test_data_file", TEST_DATA_FILE},
-    {"test_pred_file", TEST_PRED_FILE},
-    {"test_pred_outfile", TEST_PRED_OUTFILE},
-    {"test_class_file", TEST_CLASS_FILE},
-    {"valid_data_file", VALID_DATA_FILE},
-    {"valid_class_file", VALID_CLASS_FILE},
-    {"valid_pred_outfile", VALID_PRED_OUTFILE},
-    {"rules_file", RULES_FILE},
-    {"rules_outfile", RULES_OUTFILE},
-    {"global_rules_outfile", GLOBAL_RULES_OUTFILE},
-    {"global_rules_file", GLOBAL_RULES_FILE},
-    {"explanation_file", EXPLANATION_FILE},
-    {"console_file", CONSOLE_FILE},
-    {"root_folder", ROOT_FOLDER},
-    {"attributes_file", ATTRIBUTES_FILE},
-    {"weights_file", WEIGHTS_FILE},
-    {"weights_outfile", WEIGHTS_OUTFILE},
-    {"hid_file", HID_FILE},
-    {"stats_file", STATS_FILE},
-    {"nb_attributes", NB_ATTRIBUTES},
-    {"nb_classes", NB_CLASSES},
-    {"nb_dimlp_nets", NB_DIMLP_NETS},
-    {"nb_ex_per_net", NB_EX_PER_NET},
-    {"nb_quant_levels", NB_QUANT_LEVELS},
-    {"nb_fidex_rules", NB_FIDEX_RULES},
-    {"heuristic", HEURISTIC},
-    {"max_iterations", MAX_ITERATIONS},
-    {"min_covering", MIN_COVERING},
-    {"learning_rate", LEARNING_RATE},
-    {"momentum", MOMENTUM},
-    {"flat", FLAT},
-    {"error_thresh", ERROR_THRESH},
-    {"acc_thresh", ACC_THRESH},
-    {"abs_error_thresh", ABS_ERROR_THRESH},
-    {"nb_epochs", NB_EPOCHS},
-    {"nb_epochs_error", NB_EPOCHS_ERROR},
-    {"with_rule_extraction", WITH_RULE_EXTRACTION},
-    {"covering_strategy", COVERING_STRATEGY},
-    {"max_failed_attempts", MAX_FAILED_ATTEMPTS},
-    {"allow_no_fid_change", ALLOW_NO_FID_CHANGE},
-    {"nb_threads", NB_THREADS},
-    {"positive_class_index", POSITIVE_CLASS_INDEX},
-    {"seed", SEED},
-    {"decision_threshold", DECISION_THRESHOLD},
-    {"hi_knot", HI_KNOT},
-    {"dropout_hyp", DROPOUT_HYP},
-    {"dropout_dim", DROPOUT_DIM},
-    {"min_fidelity", MIN_FIDELITY},
-    {"lowest_min_fidelity", LOWEST_MIN_FIDELITY},
-    {"normalization_file", NORMALIZATION_FILE},
-    {"mus", MUS},
-    {"sigmas", SIGMAS},
-    {"normalization_indices", NORMALIZATION_INDICES},
-    {"with_fidex", WITH_FIDEX},
-    {"with_minimal_version", WITH_MINIMAL_VERSION},
-    {"first_hidden_layer", FIRST_HIDDEN_LAYER},
-    {"hidden_layers", HIDDEN_LAYERS},
-    {"hidden_layers_outfile", HIDDEN_LAYERS_OUTFILE},
-    {"hidden_layers_file", HIDDEN_LAYERS_FILE},
-    {"metrics_file", METRICS_FILE},
-    {"start_index", START_INDEX},
-    {"end_index", END_INDEX},
-    {"aggregate_rules", AGGREGATE_RULES},
-    {"aggregate_folder", AGGREGATE_FOLDER},
-    {"no_simplification", NO_SIMPLIFICATION},
-    {"verbose", VERBOSE},
-    {"hyperplan_opti", HYPERPLAN_OPTI},
-    {"revive_barriers", REVIVE_BARRIERS},
-};
+extern const std::unordered_map<std::string, ParameterCode> parameterNames;
 
 /**
  * @brief The Parameters class manages configuration parameters for each program.
@@ -188,7 +110,6 @@ private:
   std::map<ParameterCode, std::vector<double>> _doubleVectorParams; ///< Vector of double parameters.
   std::map<ParameterCode, std::vector<int>> _intVectorParams;       ///< Vector of integer parameters.
   std::map<ParameterCode, std::string> _stringParams;               ///< String parameters.
-  std::vector<std::string> _weightFiles;                            ///< Weight files.
 
   // private parser
   /**
@@ -333,7 +254,7 @@ public:
   /**
    * @brief Sets a string parameter.
    */
-  void setString(ParameterCode id, const std::string &value);
+  void setString(ParameterCode id, const std::string &value, bool allowOverride = false);
 
   //////////////////////////////////////////////////////
 
@@ -401,17 +322,17 @@ public:
   /**
    * @brief Gets the vector of double values for the given parameter code.
    */
-  std::vector<double> getDoubleVector(ParameterCode id);
+  const std::vector<double> &getDoubleVector(ParameterCode id);
 
   /**
    * @brief Gets the vector of integer values for the given parameter code.
    */
-  std::vector<int> getIntVector(ParameterCode id);
+  const std::vector<int> &getIntVector(ParameterCode id);
 
   /**
    * @brief Gets the string value for the given parameter code.
    */
-  std::string getString(ParameterCode id);
+  const std::string &getString(ParameterCode id);
 
   /**
    * @brief Gets the architecture of hidden layers.
@@ -430,49 +351,49 @@ public:
    *
    * @return A map of all integer parameters.
    */
-  std::map<ParameterCode, int> getAllInts() const { return _intParams; }
+  const std::map<ParameterCode, int> &getAllInts() const { return _intParams; }
 
   /**
    * @brief Gets all float parameters.
    *
    * @return A map of all float parameters.
    */
-  std::map<ParameterCode, float> getAllFloats() const { return _floatParams; }
+  const std::map<ParameterCode, float> &getAllFloats() const { return _floatParams; }
 
   /**
    * @brief Gets all double parameters.
    *
    * @return A map of all double parameters.
    */
-  std::map<ParameterCode, double> getAllDoubles() const { return _doubleParams; }
+  const std::map<ParameterCode, double> &getAllDoubles() const { return _doubleParams; }
 
   /**
    * @brief Gets all boolean parameters.
    *
    * @return A map of all boolean parameters.
    */
-  std::map<ParameterCode, bool> getAllBools() const { return _boolParams; }
+  const std::map<ParameterCode, bool> &getAllBools() const { return _boolParams; }
 
   /**
    * @brief Gets all double vector parameters.
    *
    * @return A map of all double vector parameters.
    */
-  std::map<ParameterCode, std::vector<double>> getAllDoubleVectors() const { return _doubleVectorParams; }
+  const std::map<ParameterCode, std::vector<double>> &getAllDoubleVectors() const { return _doubleVectorParams; }
 
   /**
    * @brief Gets all integer vector parameters.
    *
    * @return A map of all integer vector parameters.
    */
-  std::map<ParameterCode, std::vector<int>> getAllIntVectors() const { return _intVectorParams; }
+  const std::map<ParameterCode, std::vector<int>> &getAllIntVectors() const { return _intVectorParams; }
 
   /**
    * @brief Gets all string parameters.
    *
    * @return A map of all string parameters.
    */
-  std::map<ParameterCode, std::string> getAllStrings() const { return _stringParams; }
+  const std::map<ParameterCode, std::string> &getAllStrings() const { return _stringParams; }
 
   //////////////////////////////////////////////////////
 
