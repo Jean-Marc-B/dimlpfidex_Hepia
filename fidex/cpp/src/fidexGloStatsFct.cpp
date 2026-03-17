@@ -7,7 +7,7 @@
 #include "../../../common/cpp/src/rule.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 
-#include <ctime>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -353,11 +353,8 @@ int fidexGloStats(const std::string &command) {
     // 1) Initialization and command parsing
     // =========================================================================
 
-    float temps;
-    clock_t t1;
-    clock_t t2;
-
-    t1 = clock();
+    double temps;
+    const auto t1 = std::chrono::steady_clock::now();
 
     // Parsing the command
     std::vector<std::string> commandList = {"fidexGloStats"};
@@ -379,9 +376,9 @@ int fidexGloStats(const std::string &command) {
 
     // Import parameters
     std::unique_ptr<Parameters> params;
-    std::vector<ParameterCode> validParams = {TEST_DATA_FILE, TEST_PRED_FILE, TEST_CLASS_FILE,
-                                              GLOBAL_RULES_FILE, GLOBAL_RULES_OUTFILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE,
-                                              STATS_FILE, CONSOLE_FILE, POSITIVE_CLASS_INDEX};
+    static const std::vector<ParameterCode> validParams = {TEST_DATA_FILE, TEST_PRED_FILE, TEST_CLASS_FILE,
+                                                           GLOBAL_RULES_FILE, GLOBAL_RULES_OUTFILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE,
+                                                           STATS_FILE, CONSOLE_FILE, POSITIVE_CLASS_INDEX};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -843,8 +840,8 @@ int fidexGloStats(const std::string &command) {
     // 10) End-of-run timing
     // =========================================================================
 
-    t2 = clock();
-    temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
+    const auto t2 = std::chrono::steady_clock::now();
+    temps = std::chrono::duration<double>(t2 - t1).count();
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
   } catch (const ErrorHandler &e) {

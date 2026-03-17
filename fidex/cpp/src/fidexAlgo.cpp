@@ -20,7 +20,7 @@ Fidex::Fidex(DataSetFid &trainDataset, Parameters &parameters, Hyperspace &hyper
   int seed = parameters.getInt(SEED);
 
   if (seed == 0) {
-    auto currentTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::steady_clock::now();
     auto seedValue = currentTime.time_since_epoch().count();
     _rnd.seed(seedValue);
   } else {

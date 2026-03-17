@@ -1,7 +1,37 @@
 #include "dimlpBTFct.h"
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/parameters.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
+#include "bagDimlp.h"
+#include "realHyp2.h"
+
+#include <chrono>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <utility>
+#include <vector>
 
 ////////////////////////////////////////////////////////////
+
+namespace {
+struct OwnedDataSetDeleter {
+  void operator()(DataSet *dataset) const {
+    if (dataset != nullptr) {
+      dataset->Del();
+      delete dataset;
+    }
+  }
+};
+
+using OwnedDataSetPtr = std::unique_ptr<DataSet, OwnedDataSetDeleter>;
+
+template <typename... Args>
+OwnedDataSetPtr makeOwnedDataSet(Args &&...args) {
+  return OwnedDataSetPtr(new DataSet(std::forward<Args>(args)...));
+}
+} // namespace
 
 /**
  * @brief Displays the parameters for dimlpBT.
@@ -185,11 +215,8 @@ void checkDimlpBTParametersLogicValues(Parameters &p) {
  */
 int dimlpBT(const std::string &command) {
   try {
-    float temps;
-    clock_t t1;
-    clock_t t2;
-
-    t1 = clock();
+    double temps;
+    const auto t1 = std::chrono::steady_clock::now();
 
     // Parsing the command
     std::vector<std::string> commandList = {"dimlpBT"};
@@ -208,11 +235,11 @@ int dimlpBT(const std::string &command) {
 
     // Import parameters
     std::unique_ptr<Parameters> params;
-    std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, NB_DIMLP_NETS, ATTRIBUTES_FILE,
-                                              TEST_DATA_FILE, TRAIN_CLASS_FILE, TEST_CLASS_FILE, CONSOLE_FILE, WEIGHTS_OUTFILE,
-                                              TRAIN_PRED_OUTFILE, TEST_PRED_OUTFILE, STATS_FILE, FIRST_HIDDEN_LAYER, HIDDEN_LAYERS, HIDDEN_LAYERS_OUTFILE, WITH_RULE_EXTRACTION, GLOBAL_RULES_OUTFILE,
-                                              LEARNING_RATE, MOMENTUM, FLAT, NB_QUANT_LEVELS, ERROR_THRESH, ACC_THRESH, ABS_ERROR_THRESH,
-                                              NB_EPOCHS, NB_EPOCHS_ERROR, NB_EX_PER_NET, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, METRICS_FILE, SEED};
+    static const std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, NB_DIMLP_NETS, ATTRIBUTES_FILE,
+                                                           TEST_DATA_FILE, TRAIN_CLASS_FILE, TEST_CLASS_FILE, CONSOLE_FILE, WEIGHTS_OUTFILE,
+                                                           TRAIN_PRED_OUTFILE, TEST_PRED_OUTFILE, STATS_FILE, FIRST_HIDDEN_LAYER, HIDDEN_LAYERS, HIDDEN_LAYERS_OUTFILE, WITH_RULE_EXTRACTION, GLOBAL_RULES_OUTFILE,
+                                                           LEARNING_RATE, MOMENTUM, FLAT, NB_QUANT_LEVELS, ERROR_THRESH, ACC_THRESH, ABS_ERROR_THRESH,
+                                                           NB_EPOCHS, NB_EPOCHS_ERROR, NB_EX_PER_NET, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, METRICS_FILE, SEED};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -238,7 +265,7 @@ int dimlpBT(const std::string &command) {
 
     std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
+      coutRedirect = std::unique_ptr<ScopedCoutFileRedirect>(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
@@ -254,6 +281,7 @@ int dimlpBT(const std::string &command) {
     std::string predTrainFile = params->getString(TRAIN_PRED_OUTFILE);
     std::string predTestFile = params->getString(TEST_PRED_OUTFILE);
     std::string genericWeightsFile = params->getString(WEIGHTS_OUTFILE);
+    std::string statsFile = params->getString(STATS_FILE);
     std::string metricsPath = params->getString(METRICS_FILE);
 
     float eta = params->getFloat(LEARNING_RATE);
@@ -269,12 +297,12 @@ int dimlpBT(const std::string &command) {
     int nbExInOne = params->getInt(NB_EX_PER_NET);
     int seed = params->getInt(SEED);
 
-    DataSet Train;
-    DataSet Test;
-    DataSet TrainClass;
-    DataSet TestClass;
-    DataSet Valid;
-    DataSet ValidClass;
+    OwnedDataSetPtr Train = makeOwnedDataSet();
+    OwnedDataSetPtr Test = makeOwnedDataSet();
+    OwnedDataSetPtr TrainClass = makeOwnedDataSet();
+    OwnedDataSetPtr TestClass = makeOwnedDataSet();
+    OwnedDataSetPtr Valid = makeOwnedDataSet();
+    OwnedDataSetPtr ValidClass = makeOwnedDataSet();
     DataSet All;
 
     AttrName Attr;
@@ -285,7 +313,6 @@ int dimlpBT(const std::string &command) {
     StringInt arch = params->getArch();
     StringInt archInd = params->getArchInd();
 
-    std::string weightFile = "dimlp.wts";
     // ----------------------------------------------------------------------
 
     if (arch.GetNbEl() == 0) {
@@ -348,97 +375,75 @@ int dimlpBT(const std::string &command) {
     // ----------------------------------------------------------------------
 
     if (params->isStringSet(TRAIN_CLASS_FILE)) {
-      DataSet train(learnFile, nbIn, nbOut);
-      DataSet trainClass(params->getString(TRAIN_CLASS_FILE), nbIn, nbOut);
-
-      Train = train;
-      TrainClass = trainClass;
+      Train = makeOwnedDataSet(learnFile, nbIn, nbOut);
+      TrainClass = makeOwnedDataSet(params->getString(TRAIN_CLASS_FILE), nbIn, nbOut);
     } else {
-      DataSet data(learnFile, nbIn, nbOut);
+      OwnedDataSetPtr data = makeOwnedDataSet(learnFile, nbIn, nbOut);
 
-      DataSet train(data.GetNbEx());
-      DataSet trainClass(data.GetNbEx());
-
-      data.ExtractDataAndTarget(train, nbIn, trainClass, nbOut);
-
-      Train = train;
-      TrainClass = trainClass;
-
-      data.Del();
+      Train = makeOwnedDataSet(data->GetNbEx());
+      TrainClass = makeOwnedDataSet(data->GetNbEx());
+      data->ExtractDataAndTarget(*Train, nbIn, *TrainClass, nbOut);
     }
 
     if (params->isStringSet(TEST_DATA_FILE)) {
       if (params->isStringSet(TEST_CLASS_FILE)) {
-        DataSet test(params->getString(TEST_DATA_FILE), nbIn, nbOut);
-        DataSet testClass(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
-
-        Test = test;
-        TestClass = testClass;
+        Test = makeOwnedDataSet(params->getString(TEST_DATA_FILE), nbIn, nbOut);
+        TestClass = makeOwnedDataSet(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
       }
 
       else {
-        DataSet data(params->getString(TEST_DATA_FILE), nbIn, nbOut);
+        OwnedDataSetPtr data = makeOwnedDataSet(params->getString(TEST_DATA_FILE), nbIn, nbOut);
 
-        DataSet test(data.GetNbEx());
-        DataSet testClass(data.GetNbEx());
-
-        data.ExtractDataAndTarget(test, nbIn, testClass, nbOut);
-
-        Test = test;
-        TestClass = testClass;
-
-        data.Del();
+        Test = makeOwnedDataSet(data->GetNbEx());
+        TestClass = makeOwnedDataSet(data->GetNbEx());
+        data->ExtractDataAndTarget(*Test, nbIn, *TestClass, nbOut);
       }
     }
 
     auto net = std::make_shared<BagDimlp>(eta, mu, flat, errThres, accThres, deltaErr,
                                           quant, showErr, epochs, nbLayers, vecNbNeurons,
-                                          nbDimlpNets, metricsPath, weightFile, seed);
+                                          nbDimlpNets, metricsPath, genericWeightsFile, seed);
 
     if (nbExInOne == 0)
-      nbExInOne = Train.GetNbEx();
-    else if (nbExInOne > Train.GetNbEx())
-      nbExInOne = Train.GetNbEx();
+      nbExInOne = Train->GetNbEx();
+    else if (nbExInOne > Train->GetNbEx())
+      nbExInOne = Train->GetNbEx();
 
-    net->MakeDataSets(Train, TrainClass, nbExInOne);
-    if (params->isStringSet(STATS_FILE)) {
-      std::ofstream accFile(params->getString(STATS_FILE));
-      if (accFile.is_open()) {
-        accFile << "Accuracy for Bag training : \n"
-                << std::endl;
-        accFile.close();
-      } else {
-        throw CannotOpenFileError("Error : Cannot open accuracy file " + params->getString(STATS_FILE));
-      }
+    net->MakeDataSets(*Train, *TrainClass, nbExInOne);
+    std::ofstream accFile(statsFile);
+    if (accFile.is_open()) {
+      accFile << "Accuracy for Bag training : \n"
+              << std::endl;
+      accFile.close();
+    } else {
+      throw CannotOpenFileError("Error : Cannot open accuracy file " + statsFile);
     }
-    net->TrainAll(Test, TestClass, genericWeightsFile, params->getString(STATS_FILE), seed);
+    net->TrainAll(*Test, *TestClass, genericWeightsFile, statsFile, seed);
     float acc;
     float accTest;
 
-    net->ComputeAcc(Train, TrainClass, &acc, 1, predTrainFile);
+    net->ComputeAcc(*Train, *TrainClass, &acc, 1, predTrainFile);
     std::cout << "\n\n*** GLOBAL ACCURACY ON TRAINING SET = " << acc << "\n"
               << std::endl;
 
-    if (Test.GetNbEx() != 0) {
-      net->ComputeAcc(Test, TestClass, &accTest, 1, predTestFile);
+    if (Test->GetNbEx() != 0) {
+      net->ComputeAcc(*Test, *TestClass, &accTest, 1, predTestFile);
       std::cout << "*** GLOBAL ACCURACY ON TESTING SET = " << accTest << "" << std::endl;
     }
 
     // Output accuracy stats in file
-    if (params->isStringSet(STATS_FILE)) {
-      std::ofstream accFile(params->getString(STATS_FILE), std::ios::app);
-      if (accFile.is_open()) {
-        accFile << "-------------------------------------------------------" << std::endl;
-        accFile << "-------------------------------------------------------\n"
-                << std::endl;
-        accFile << "Global accuracy on training set = " << acc << "" << std::endl;
-        if (Test.GetNbEx() != 0) {
-          accFile << "Global accuracy on testing set = " << accTest;
-        }
-        accFile.close();
-      } else {
-        throw CannotOpenFileError("Error : could not open accuracy file " + params->getString(STATS_FILE));
+    std::ofstream accFileAppend(statsFile, std::ios::app);
+    if (accFileAppend.is_open()) {
+      accFileAppend << "-------------------------------------------------------" << std::endl;
+      accFileAppend << "-------------------------------------------------------\n"
+                    << std::endl;
+      accFileAppend << "Global accuracy on training set = " << acc << "" << std::endl;
+      if (Test->GetNbEx() != 0) {
+        accFileAppend << "Global accuracy on testing set = " << accTest;
       }
+      accFileAppend.close();
+    } else {
+      throw CannotOpenFileError("Error : could not open accuracy file " + statsFile);
     }
 
     if (params->getBool(WITH_RULE_EXTRACTION)) {
@@ -446,16 +451,18 @@ int dimlpBT(const std::string &command) {
       if (params->isStringSet(ATTRIBUTES_FILE)) {
         AttrName attr(params->getString(ATTRIBUTES_FILE), nbIn, nbOut);
 
-        if (attr.ReadAttr())
-          std::cout << "\n\n"
-                    << params->getString(ATTRIBUTES_FILE) << ": Read file of attributes.\n"
-                    << std::endl;
+        if (!attr.ReadAttr()) {
+          throw FileContentError("Error while reading attributes file " + params->getString(ATTRIBUTES_FILE));
+        }
+        std::cout << "\n\n"
+                  << params->getString(ATTRIBUTES_FILE) << ": Read file of attributes.\n"
+                  << std::endl;
 
         Attr = attr;
         attributeNames = Attr.GetListAttr();
       }
 
-      All = Train;
+      All = *Train;
       if (params->isStringSet(GLOBAL_RULES_OUTFILE)) {
         std::cout << "Extraction Part :: " << std::endl;
       }
@@ -486,98 +493,67 @@ int dimlpBT(const std::string &command) {
                   All, net, quant, nbIn, vecNbNeurons[1] / nbIn,
                   nbWeightLayers);
 
+      std::unique_ptr<std::ofstream> rulesFile;
+      std::ostream *rulesOutput = &std::cout;
       if (params->isStringSet(GLOBAL_RULES_OUTFILE)) {
-        std::filebuf buf;
-
-        if (buf.open(params->getString(GLOBAL_RULES_OUTFILE), std::ios_base::out) == nullptr) {
+        rulesFile = std::unique_ptr<std::ofstream>(new std::ofstream(params->getString(GLOBAL_RULES_OUTFILE), std::ios_base::out));
+        if (!rulesFile->is_open()) {
           throw CannotOpenFileError("Error : Cannot open rules file " + params->getString(GLOBAL_RULES_OUTFILE));
         }
+        rulesOutput = rulesFile.get();
+      }
 
-        std::ostream rulesFileost(&buf);
+      const bool useDenormalization = params->isDoubleVectorSet(MUS);
+      if (useDenormalization) {
+        ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                           *Test, *TestClass, Attr, *rulesOutput, mus, sigmas, normalizationIndices);
+      } else {
+        ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                           *Test, *TestClass, Attr, *rulesOutput);
+      }
 
-        if (params->isDoubleVectorSet(MUS)) {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
+      if (ryp.TreeAborted()) {
+        std::shared_ptr<VirtualHyp> globVirt2 = net->MakeGlobalVirt(quant, nbIn,
+                                                                    vecNbNeurons[1] / nbIn);
+
+        RealHyp2 ryp2(globVirt2, nbDimlpNets, net->GetGlobalOut(), nbOut,
+                      All, net, quant, nbIn, vecNbNeurons[1] / nbIn,
+                      nbWeightLayers);
+
+        if (useDenormalization) {
+          ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                              *Test, *TestClass, Attr, *rulesOutput, mus, sigmas, normalizationIndices);
         } else {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, rulesFileost);
+          ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                              *Test, *TestClass, Attr, *rulesOutput);
         }
+      }
 
-        if (ryp.TreeAborted()) {
-
-          std::shared_ptr<VirtualHyp> globVirt2 = net->MakeGlobalVirt(quant, nbIn,
-                                                                      vecNbNeurons[1] / nbIn);
-
-          RealHyp2 ryp2(globVirt2, nbDimlpNets, net->GetGlobalOut(), nbOut,
-                        All, net, quant, nbIn, vecNbNeurons[1] / nbIn,
-                        nbWeightLayers);
-
-          if (params->isDoubleVectorSet(MUS)) {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
-          } else {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, rulesFileost);
-          }
-        }
-
+      if (rulesFile) {
         std::cout << "\n\n"
                   << params->getString(GLOBAL_RULES_OUTFILE) << ": "
                   << "Written.\n"
                   << std::endl;
-      } else {
-        if (params->isDoubleVectorSet(MUS)) {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, std::cout, mus, sigmas, normalizationIndices);
-        } else {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, std::cout);
-        }
-
-        if (ryp.TreeAborted()) {
-
-          std::shared_ptr<VirtualHyp> globVirt3 = net->MakeGlobalVirt(quant, nbIn,
-                                                                      vecNbNeurons[1] / nbIn);
-
-          RealHyp2 ryp2(globVirt3, nbDimlpNets, net->GetGlobalOut(), nbOut,
-                        All, net, quant, nbIn, vecNbNeurons[1] / nbIn,
-                        nbWeightLayers);
-
-          if (params->isDoubleVectorSet(MUS)) {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, std::cout, mus, sigmas, normalizationIndices);
-          } else {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, std::cout);
-          }
-        }
       }
     }
 
     // Save hidden layers sizes
     params->writeHiddenLayersFile();
 
-    t2 = clock();
-    temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
+    const auto t2 = std::chrono::steady_clock::now();
+    temps = std::chrono::duration<double>(t2 - t1).count();
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
     BpNN::resetInitRandomGen();
 
-    Train.Del();
-    TrainClass.Del();
-
-    if (Test.GetNbEx() > 0) {
-      Test.Del();
-      TestClass.Del();
-    }
-
-    if (Valid.GetNbEx() > 0) {
-      Valid.Del();
-      ValidClass.Del();
-    }
-
   } catch (const ErrorHandler &e) {
     std::cerr << e.what() << std::endl;
+    return -1;
+  } catch (const std::exception &e) {
+    std::cerr << "Unhandled standard exception in dimlpBT: " << e.what() << std::endl;
+    return -1;
+  } catch (...) {
+    std::cerr << "Unhandled unknown exception in dimlpBT." << std::endl;
     return -1;
   }
   return 0;

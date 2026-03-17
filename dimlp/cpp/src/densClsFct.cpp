@@ -1,7 +1,28 @@
 #include "densClsFct.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 
+#include <chrono>
+#include <utility>
+
 ////////////////////////////////////////////////////////////
+
+namespace {
+struct OwnedDataSetDeleter {
+  void operator()(DataSet *dataset) const {
+    if (dataset != nullptr) {
+      dataset->Del();
+      delete dataset;
+    }
+  }
+};
+
+using OwnedDataSetPtr = std::unique_ptr<DataSet, OwnedDataSetDeleter>;
+
+template <typename... Args>
+OwnedDataSetPtr makeOwnedDataSet(Args &&...args) {
+  return OwnedDataSetPtr(new DataSet(std::forward<Args>(args)...));
+}
+} // namespace
 
 /**
  * @brief Displays the parameters for densCls.
@@ -152,11 +173,8 @@ void checkDensClsParametersLogicValues(Parameters &p) {
 int densCls(const std::string &command) {
   try {
 
-    float temps;
-    clock_t t1;
-    clock_t t2;
-
-    t1 = clock();
+    double temps;
+    const auto t1 = std::chrono::steady_clock::now();
 
     // Parsing the command
     std::vector<std::string> commandList = {"densCls"};
@@ -176,10 +194,10 @@ int densCls(const std::string &command) {
     // Import parameters
     std::unique_ptr<Parameters> params;
 
-    std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, WEIGHTS_FILE, NB_ATTRIBUTES, NB_CLASSES,
-                                              ROOT_FOLDER, ATTRIBUTES_FILE, TEST_DATA_FILE, TRAIN_CLASS_FILE, TEST_CLASS_FILE,
-                                              CONSOLE_FILE, TRAIN_PRED_OUTFILE, TEST_PRED_OUTFILE, STATS_FILE, HIDDEN_LAYERS_FILE, WITH_RULE_EXTRACTION,
-                                              GLOBAL_RULES_OUTFILE, NB_QUANT_LEVELS, NORMALIZATION_FILE, MUS, SIGMAS, METRICS_FILE, NORMALIZATION_INDICES};
+    static const std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, WEIGHTS_FILE, NB_ATTRIBUTES, NB_CLASSES,
+                                                           ROOT_FOLDER, ATTRIBUTES_FILE, TEST_DATA_FILE, TRAIN_CLASS_FILE, TEST_CLASS_FILE,
+                                                           CONSOLE_FILE, TRAIN_PRED_OUTFILE, TEST_PRED_OUTFILE, STATS_FILE, HIDDEN_LAYERS_FILE, WITH_RULE_EXTRACTION,
+                                                           GLOBAL_RULES_OUTFILE, NB_QUANT_LEVELS, NORMALIZATION_FILE, MUS, SIGMAS, METRICS_FILE, NORMALIZATION_INDICES};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -204,7 +222,7 @@ int densCls(const std::string &command) {
 
     std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
+      coutRedirect = std::unique_ptr<ScopedCoutFileRedirect>(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
@@ -232,12 +250,12 @@ int densCls(const std::string &command) {
     StringInt archInd;
     params->readHiddenLayersFile(arch, archInd);
 
-    DataSet Train;
-    DataSet Test;
-    DataSet TrainClass;
-    DataSet TestClass;
-    DataSet Valid;
-    DataSet ValidClass;
+    OwnedDataSetPtr Train = makeOwnedDataSet();
+    OwnedDataSetPtr Test = makeOwnedDataSet();
+    OwnedDataSetPtr TrainClass = makeOwnedDataSet();
+    OwnedDataSetPtr TestClass = makeOwnedDataSet();
+    OwnedDataSetPtr Valid = makeOwnedDataSet();
+    OwnedDataSetPtr ValidClass = makeOwnedDataSet();
     DataSet All;
 
     AttrName Attr;
@@ -304,46 +322,28 @@ int densCls(const std::string &command) {
     // ----------------------------------------------------------------------
 
     if (params->isStringSet(TRAIN_CLASS_FILE) != false) {
-      DataSet train(learnFile, nbIn, nbOut);
-      DataSet trainClass(params->getString(TRAIN_CLASS_FILE), nbIn, nbOut);
-
-      Train = train;
-      TrainClass = trainClass;
+      Train = makeOwnedDataSet(learnFile, nbIn, nbOut);
+      TrainClass = makeOwnedDataSet(params->getString(TRAIN_CLASS_FILE), nbIn, nbOut);
     } else {
-      DataSet data(learnFile, nbIn, nbOut);
+      OwnedDataSetPtr data = makeOwnedDataSet(learnFile, nbIn, nbOut);
 
-      DataSet train(data.GetNbEx());
-      DataSet trainClass(data.GetNbEx());
-
-      data.ExtractDataAndTarget(train, nbIn, trainClass, nbOut);
-
-      Train = train;
-      TrainClass = trainClass;
-
-      data.Del();
+      Train = makeOwnedDataSet(data->GetNbEx());
+      TrainClass = makeOwnedDataSet(data->GetNbEx());
+      data->ExtractDataAndTarget(*Train, nbIn, *TrainClass, nbOut);
     }
 
     if (params->isStringSet(TEST_DATA_FILE)) {
       if (params->isStringSet(TEST_CLASS_FILE)) {
-        DataSet test(params->getString(TEST_DATA_FILE), nbIn, nbOut);
-        DataSet testClass(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
-
-        Test = test;
-        TestClass = testClass;
+        Test = makeOwnedDataSet(params->getString(TEST_DATA_FILE), nbIn, nbOut);
+        TestClass = makeOwnedDataSet(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
       }
 
       else {
-        DataSet data(params->getString(TEST_DATA_FILE), nbIn, nbOut);
+        OwnedDataSetPtr data = makeOwnedDataSet(params->getString(TEST_DATA_FILE), nbIn, nbOut);
 
-        DataSet test(data.GetNbEx());
-        DataSet testClass(data.GetNbEx());
-
-        data.ExtractDataAndTarget(test, nbIn, testClass, nbOut);
-
-        Test = test;
-        TestClass = testClass;
-
-        data.Del();
+        Test = makeOwnedDataSet(data->GetNbEx());
+        TestClass = makeOwnedDataSet(data->GetNbEx());
+        data->ExtractDataAndTarget(*Test, nbIn, *TestClass, nbOut);
       }
     }
 
@@ -354,12 +354,12 @@ int densCls(const std::string &command) {
     float acc;
     float accTest;
 
-    net->ComputeAcc(Train, TrainClass, &acc, 1, predTrainFile);
+    net->ComputeAcc(*Train, *TrainClass, &acc, 1, predTrainFile);
     std::cout << "\n\n*** GLOBAL ACCURACY ON TRAINING SET = " << acc << "\n"
               << std::endl;
 
-    if (Test.GetNbEx() != 0) {
-      net->ComputeAcc(Test, TestClass, &accTest, 1, predTestFile);
+    if (Test->GetNbEx() != 0) {
+      net->ComputeAcc(*Test, *TestClass, &accTest, 1, predTestFile);
       std::cout << "*** GLOBAL ACCURACY ON TESTING SET = " << accTest << "" << std::endl;
     }
 
@@ -368,7 +368,7 @@ int densCls(const std::string &command) {
       std::ofstream accFile(params->getString(STATS_FILE));
       if (accFile.is_open()) {
         accFile << "Global accuracy on training set = " << acc << "" << std::endl;
-        if (Test.GetNbEx() != 0) {
+        if (Test->GetNbEx() != 0) {
           accFile << "Global accuracy on testing set = " << accTest;
         }
         accFile.close();
@@ -382,10 +382,12 @@ int densCls(const std::string &command) {
       if (params->isStringSet(ATTRIBUTES_FILE)) {
         AttrName attr(params->getString(ATTRIBUTES_FILE), nbIn, nbOut);
 
-        if (attr.ReadAttr())
-          std::cout << "\n\n"
-                    << params->getString(ATTRIBUTES_FILE) << ": Read file of attributes.\n"
-                    << std::endl;
+        if (!attr.ReadAttr()) {
+          throw FileContentError("Error while reading attributes file " + params->getString(ATTRIBUTES_FILE));
+        }
+        std::cout << "\n\n"
+                  << params->getString(ATTRIBUTES_FILE) << ": Read file of attributes.\n"
+                  << std::endl;
 
         Attr = attr;
         attributeNames = Attr.GetListAttr();
@@ -406,7 +408,7 @@ int densCls(const std::string &command) {
         params->setDoubleVector(SIGMAS, sigmas);
       }
 
-      All = Train;
+      All = *Train;
 
       std::cout << "\n\n****************************************************\n"
                 << std::endl;
@@ -428,11 +430,11 @@ int densCls(const std::string &command) {
 
         std::ostream rulesFileost(&buf);
         if (params->isDoubleVectorSet(MUS)) {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
+          ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                             *Test, *TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
         } else {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, rulesFileost);
+          ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                             *Test, *TestClass, Attr, rulesFileost);
         }
 
         if (ryp.TreeAborted()) {
@@ -445,11 +447,11 @@ int densCls(const std::string &command) {
                         nbWeightLayers);
 
           if (params->isDoubleVectorSet(MUS)) {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
+            ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                                *Test, *TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
           } else {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, rulesFileost);
+            ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                                *Test, *TestClass, Attr, rulesFileost);
           }
         }
 
@@ -459,11 +461,11 @@ int densCls(const std::string &command) {
                   << std::endl;
       } else {
         if (params->isDoubleVectorSet(MUS)) {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, std::cout, mus, sigmas, normalizationIndices);
+          ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                             *Test, *TestClass, Attr, std::cout, mus, sigmas, normalizationIndices);
         } else {
-          ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                             Test, TestClass, Attr, std::cout);
+          ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                             *Test, *TestClass, Attr, std::cout);
         }
 
         if (ryp.TreeAborted()) {
@@ -475,37 +477,30 @@ int densCls(const std::string &command) {
                         All, net, quant, nbIn, vecNbNeurons[1] / nbIn,
                         nbWeightLayers);
           if (params->isDoubleVectorSet(MUS)) {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, std::cout, mus, sigmas, normalizationIndices);
+            ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                                *Test, *TestClass, Attr, std::cout, mus, sigmas, normalizationIndices);
           } else {
-            ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                                Test, TestClass, Attr, std::cout);
+            ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                                *Test, *TestClass, Attr, std::cout);
           }
         }
       }
     }
 
-    t2 = clock();
-    temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
+    const auto t2 = std::chrono::steady_clock::now();
+    temps = std::chrono::duration<double>(t2 - t1).count();
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
     BpNN::resetInitRandomGen();
 
-    Train.Del();
-    TrainClass.Del();
-
-    if (Test.GetNbEx() > 0) {
-      Test.Del();
-      TestClass.Del();
-    }
-
-    if (Valid.GetNbEx() > 0) {
-      Valid.Del();
-      ValidClass.Del();
-    }
-
   } catch (const ErrorHandler &e) {
     std::cerr << e.what() << std::endl;
+    return -1;
+  } catch (const std::exception &e) {
+    std::cerr << "Unhandled standard exception in densCls: " << e.what() << std::endl;
+    return -1;
+  } catch (...) {
+    std::cerr << "Unhandled unknown exception in densCls." << std::endl;
     return -1;
   }
   return 0;

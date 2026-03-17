@@ -1,7 +1,28 @@
 #include "dimlpClsFct.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 
+#include <chrono>
+#include <utility>
+
 ////////////////////////////////////////////////////////////
+
+namespace {
+struct OwnedDataSetDeleter {
+  void operator()(DataSet *dataset) const {
+    if (dataset != nullptr) {
+      dataset->Del();
+      delete dataset;
+    }
+  }
+};
+
+using OwnedDataSetPtr = std::unique_ptr<DataSet, OwnedDataSetDeleter>;
+
+template <typename... Args>
+OwnedDataSetPtr makeOwnedDataSet(Args &&...args) {
+  return OwnedDataSetPtr(new DataSet(std::forward<Args>(args)...));
+}
+} // namespace
 
 /**
  * @brief Displays the parameters for dimlpCls.
@@ -184,11 +205,8 @@ void checkDimlpClsParametersLogicValues(Parameters &p) {
 int dimlpCls(const std::string &command) {
   try {
 
-    float temps;
-    clock_t t1;
-    clock_t t2;
-
-    t1 = clock();
+    double temps;
+    const auto t1 = std::chrono::steady_clock::now();
 
     // Parsing the command
     std::vector<std::string> commandList = {"dimlpCls"};
@@ -207,8 +225,8 @@ int dimlpCls(const std::string &command) {
 
     // Import parameters
     std::unique_ptr<Parameters> params;
-    std::vector<ParameterCode> validParams = {TEST_DATA_FILE, WEIGHTS_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, TEST_CLASS_FILE,
-                                              TEST_PRED_OUTFILE, CONSOLE_FILE, STATS_FILE, HID_FILE, HIDDEN_LAYERS_FILE, NB_QUANT_LEVELS};
+    static const std::vector<ParameterCode> validParams = {TEST_DATA_FILE, WEIGHTS_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, TEST_CLASS_FILE,
+                                                           TEST_PRED_OUTFILE, CONSOLE_FILE, STATS_FILE, HID_FILE, HIDDEN_LAYERS_FILE, NB_QUANT_LEVELS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -233,7 +251,7 @@ int dimlpCls(const std::string &command) {
 
     std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
+      coutRedirect = std::unique_ptr<ScopedCoutFileRedirect>(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
@@ -251,8 +269,8 @@ int dimlpCls(const std::string &command) {
     std::string predFile = params->getString(TEST_PRED_OUTFILE);
     int quant = params->getInt(NB_QUANT_LEVELS);
 
-    DataSet Test;
-    DataSet TestClass;
+    OwnedDataSetPtr Test = makeOwnedDataSet();
+    OwnedDataSetPtr TestClass = makeOwnedDataSet();
     int nbLayers;
     int nbWeightLayers;
     std::vector<int> vecNbNeurons;
@@ -318,26 +336,16 @@ int dimlpCls(const std::string &command) {
 
     if (params->isStringSet(TEST_DATA_FILE)) {
       if (params->isStringSet(TEST_CLASS_FILE)) {
-
-        DataSet test(testFile, nbIn, nbOut);
-        DataSet testClass(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
-
-        Test = test;
-        TestClass = testClass;
+        Test = makeOwnedDataSet(testFile, nbIn, nbOut);
+        TestClass = makeOwnedDataSet(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
       }
 
       else {
-        DataSet data(testFile, nbIn, nbOut);
+        OwnedDataSetPtr data = makeOwnedDataSet(testFile, nbIn, nbOut);
 
-        DataSet test(data.GetNbEx());
-        DataSet testClass(data.GetNbEx());
-
-        data.ExtractDataAndTarget(test, nbIn, testClass, nbOut);
-
-        Test = test;
-        TestClass = testClass;
-
-        data.Del();
+        Test = makeOwnedDataSet(data->GetNbEx());
+        TestClass = makeOwnedDataSet(data->GetNbEx());
+        data->ExtractDataAndTarget(*Test, nbIn, *TestClass, nbOut);
       }
     }
 
@@ -345,7 +353,7 @@ int dimlpCls(const std::string &command) {
 
     float acc;
 
-    float err = net.Error(Test, TestClass, &acc);
+    float err = net.Error(*Test, *TestClass, &acc);
 
     std::cout << "\n\n*** SUM SQUARED ERROR = " << err;
     std::cout << "\n\n*** ACCURACY = " << acc << "" << std::endl;
@@ -362,25 +370,26 @@ int dimlpCls(const std::string &command) {
       }
     }
 
-    SaveOutputs(Test, std::make_shared<Dimlp>(net), nbOut, nbWeightLayers, predFile);
-    SaveFirstHid(Test, &net, vecNbNeurons[1], predFile, hidFile);
+    SaveOutputs(*Test, std::make_shared<Dimlp>(net), nbOut, nbWeightLayers, predFile);
+    SaveFirstHid(*Test, &net, vecNbNeurons[1], predFile, hidFile);
 
     std::cout << "\n-------------------------------------------------\n"
               << std::endl;
 
-    t2 = clock();
-    temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
+    const auto t2 = std::chrono::steady_clock::now();
+    temps = std::chrono::duration<double>(t2 - t1).count();
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
     BpNN::resetInitRandomGen();
 
-    if (Test.GetNbEx() > 0) {
-      Test.Del();
-      TestClass.Del();
-    }
-
   } catch (const ErrorHandler &e) {
     std::cerr << e.what() << std::endl;
+    return -1;
+  } catch (const std::exception &e) {
+    std::cerr << "Unhandled standard exception in dimlpCls: " << e.what() << std::endl;
+    return -1;
+  } catch (...) {
+    std::cerr << "Unhandled unknown exception in dimlpCls." << std::endl;
     return -1;
   }
 
