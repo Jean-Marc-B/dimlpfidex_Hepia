@@ -753,7 +753,7 @@ std::vector<Rule> heuristic_3(DataSetFid &trainDataset, Parameters &p, const std
   }
 
   if (seed == 0) {
-    auto currentTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::steady_clock::now();
     auto seedValue = currentTime.time_since_epoch().count();
     seed = static_cast<int>(seedValue);
   }
@@ -873,7 +873,7 @@ void checkRulesParametersLogicValues(Parameters &p) {
       const size_t dotPos = globalRulesOutfile.find_last_of('.');
       const std::string filenameWithoutExtension = (dotPos == std::string::npos) ? globalRulesOutfile : globalRulesOutfile.substr(0, dotPos);
       std::string updated_file = filenameWithoutExtension + ".json";
-      p.setString(GLOBAL_RULES_OUTFILE, updated_file);
+      p.setString(GLOBAL_RULES_OUTFILE, updated_file, true);
       std::cout << "WARNING: You're trying to use the batching mechanism with .txt files as output. This does not produces a desired behaviour when merging the batched files. Therefore, the OUTPUT_RULES_OUTFILE has been changed to: '" << p.getString(GLOBAL_RULES_OUTFILE) << "'." << std::endl;
     }
   }
@@ -995,12 +995,12 @@ int fidexGloRules(const std::string &command) {
 
     // Import parameters
     std::unique_ptr<Parameters> params;
-    std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, WEIGHTS_FILE, RULES_FILE, GLOBAL_RULES_OUTFILE,
-                                              HEURISTIC, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE, CONSOLE_FILE,
-                                              MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
-                                              DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
-                                              NB_THREADS, COVERING_STRATEGY, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX,
-                                              AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE, HYPERPLAN_OPTI, REVIVE_BARRIERS};
+    static const std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, WEIGHTS_FILE, RULES_FILE, GLOBAL_RULES_OUTFILE,
+                                                           HEURISTIC, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE, CONSOLE_FILE,
+                                                           MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
+                                                           DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
+                                                           NB_THREADS, COVERING_STRATEGY, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX,
+                                                           AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -1157,7 +1157,7 @@ int fidexGloRules(const std::string &command) {
 
     // Initialize random number generator
 
-    const auto start = std::chrono::high_resolution_clock::now();
+    const auto start = std::chrono::steady_clock::now();
     int heuristic = params->getInt(HEURISTIC);
     DataSetFid &trainDataset = *trainDatas;
     Parameters &parameters = *params;
@@ -1187,7 +1187,7 @@ int fidexGloRules(const std::string &command) {
 
     std::cout << "Global ruleset Computed." << std::endl;
 
-    const auto end_h = std::chrono::high_resolution_clock::now();
+    const auto end_h = std::chrono::steady_clock::now();
     const std::chrono::duration<double> diff_h = end_h - start;
 
     std::cout << "\nheuristic #" << heuristic << " ended in "
@@ -1213,7 +1213,7 @@ int fidexGloRules(const std::string &command) {
     std::cout << "Mean covering size per rule : " << std::get<0>(stats) << std::endl;
     std::cout << "Mean number of antecedents per rule : " << std::get<1>(stats) << std::endl;
 
-    const auto end = std::chrono::high_resolution_clock::now();
+    const auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> diff = end - start;
     std::cout << "\nFull execution time = " << diff.count() << " sec" << std::endl;
 

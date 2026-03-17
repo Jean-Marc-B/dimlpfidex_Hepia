@@ -9,7 +9,7 @@
 #include "hyperLocus.h"
 #include "hyperspace.h"
 
-#include <ctime>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -244,11 +244,8 @@ int fidex(const std::string &command) {
     // 1) Parse command and load parameters
     // =========================================================================
 
-    float temps;
-    clock_t t1;
-    clock_t t2;
-
-    t1 = clock();
+    double temps;
+    const auto t1 = std::chrono::steady_clock::now();
 
     std::vector<std::string> commandList = {"fidex"};
     std::string s;
@@ -266,13 +263,13 @@ int fidex(const std::string &command) {
 
     // Import parameters from JSON config file or CLI args.
     std::unique_ptr<Parameters> params;
-    std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, TEST_DATA_FILE,
-                                              WEIGHTS_FILE, RULES_FILE, RULES_OUTFILE, NB_ATTRIBUTES, NB_CLASSES,
-                                              ROOT_FOLDER, TEST_PRED_FILE, TEST_CLASS_FILE, ATTRIBUTES_FILE,
-                                              STATS_FILE, CONSOLE_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
-                                              MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, HI_KNOT, DROPOUT_DIM, DROPOUT_HYP,
-                                              NB_QUANT_LEVELS, DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS,
-                                              SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI, REVIVE_BARRIERS};
+    static const std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, TEST_DATA_FILE,
+                                                           WEIGHTS_FILE, RULES_FILE, RULES_OUTFILE, NB_ATTRIBUTES, NB_CLASSES,
+                                                           ROOT_FOLDER, TEST_PRED_FILE, TEST_CLASS_FILE, ATTRIBUTES_FILE,
+                                                           STATS_FILE, CONSOLE_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
+                                                           MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, HI_KNOT, DROPOUT_DIM, DROPOUT_HYP,
+                                                           NB_QUANT_LEVELS, DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS,
+                                                           SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -334,11 +331,8 @@ int fidex(const std::string &command) {
     // =========================================================================
     std::cout << "Import files..." << std::endl;
 
-    float importTime;
-    clock_t impt1;
-    clock_t impt2;
-
-    impt1 = clock();
+    double importTime;
+    const auto impt1 = std::chrono::steady_clock::now();
 
     std::unique_ptr<DataSetFid> trainDatas;
     if (!params->isStringSet(TRAIN_CLASS_FILE)) {
@@ -381,8 +375,8 @@ int fidex(const std::string &command) {
       }
     }
 
-    impt2 = clock();
-    importTime = (float)(impt2 - impt1) / CLOCKS_PER_SEC;
+    const auto impt2 = std::chrono::steady_clock::now();
+    importTime = std::chrono::duration<double>(impt2 - impt1).count();
 
     std::vector<int> normalizationIndices;
     std::vector<double> mus;
@@ -409,11 +403,8 @@ int fidex(const std::string &command) {
     std::cout << "----------------------------------------------" << std::endl
               << std::endl;
 
-    float temps2;
-    clock_t d1;
-    clock_t d2;
-
-    d1 = clock();
+    double temps2;
+    const auto d1 = std::chrono::steady_clock::now();
 
     std::vector<std::string> lines;
     lines.reserve(static_cast<size_t>(nbTestSamples) * (isSingleSample ? 2u : 3u));
@@ -569,16 +560,16 @@ int fidex(const std::string &command) {
       }
     }
 
-    d2 = clock();
-    temps2 = (float)(d2 - d1) / CLOCKS_PER_SEC;
+    const auto d2 = std::chrono::steady_clock::now();
+    temps2 = std::chrono::duration<double>(d2 - d1).count();
 
     // =========================================================================
     // 9) Report execution timings
     // =========================================================================
     std::cout << "\nTime without data import = " << temps2 << " sec" << std::endl;
 
-    t2 = clock();
-    temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
+    const auto t2 = std::chrono::steady_clock::now();
+    temps = std::chrono::duration<double>(t2 - t1).count();
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
   } catch (const ErrorHandler &e) {
     std::cerr << e.what() << std::endl;

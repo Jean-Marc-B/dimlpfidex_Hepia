@@ -105,7 +105,7 @@ int testArgsParser() {
       "--heuristic", "1",
       "--dropout_hyp", "0.4"};
 
-  std::vector<ParameterCode> validParams = {
+  static const std::vector<ParameterCode> validParams = {
       ROOT_FOLDER,
       TRAIN_DATA_FILE,
       HEURISTIC,
@@ -165,7 +165,7 @@ int testJsonParser() {
   std::stringstream buffer1;
   std::stringstream buffer2;
 
-  std::vector<ParameterCode> validParams = {
+  static const std::vector<ParameterCode> validParams = {
       ROOT_FOLDER,
       TRAIN_DATA_FILE,
       TRAIN_PRED_FILE,

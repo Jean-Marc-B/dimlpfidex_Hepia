@@ -1,7 +1,28 @@
 #include "dimlpRulFct.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
 
+#include <chrono>
+#include <utility>
+
 ////////////////////////////////////////////////////////////
+
+namespace {
+struct OwnedDataSetDeleter {
+  void operator()(DataSet *dataset) const {
+    if (dataset != nullptr) {
+      dataset->Del();
+      delete dataset;
+    }
+  }
+};
+
+using OwnedDataSetPtr = std::unique_ptr<DataSet, OwnedDataSetDeleter>;
+
+template <typename... Args>
+OwnedDataSetPtr makeOwnedDataSet(Args &&...args) {
+  return OwnedDataSetPtr(new DataSet(std::forward<Args>(args)...));
+}
+} // namespace
 
 /**
  * @brief Displays the parameters for dimlpRul.
@@ -146,11 +167,8 @@ void checkDimlpRulParametersLogicValues(Parameters &p) {
 int dimlpRul(const std::string &command) {
   try {
 
-    float temps;
-    clock_t t1;
-    clock_t t2;
-
-    t1 = clock();
+    double temps;
+    const auto t1 = std::chrono::steady_clock::now();
 
     // Parsing the command
     std::vector<std::string> commandList = {"dimlpRul"};
@@ -169,10 +187,10 @@ int dimlpRul(const std::string &command) {
 
     // Import parameters
     std::unique_ptr<Parameters> params;
-    std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, WEIGHTS_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER,
-                                              ATTRIBUTES_FILE, VALID_DATA_FILE, TEST_DATA_FILE, TRAIN_CLASS_FILE,
-                                              TEST_CLASS_FILE, VALID_CLASS_FILE, GLOBAL_RULES_OUTFILE, CONSOLE_FILE,
-                                              STATS_FILE, HIDDEN_LAYERS_FILE, NB_QUANT_LEVELS, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES};
+    static const std::vector<ParameterCode> validParams = {TRAIN_DATA_FILE, WEIGHTS_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER,
+                                                           ATTRIBUTES_FILE, VALID_DATA_FILE, TEST_DATA_FILE, TRAIN_CLASS_FILE,
+                                                           TEST_CLASS_FILE, VALID_CLASS_FILE, GLOBAL_RULES_OUTFILE, CONSOLE_FILE,
+                                                           STATS_FILE, HIDDEN_LAYERS_FILE, NB_QUANT_LEVELS, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -197,7 +215,7 @@ int dimlpRul(const std::string &command) {
 
     std::unique_ptr<ScopedCoutFileRedirect> coutRedirect;
     if (params->isStringSet(CONSOLE_FILE)) {
-      coutRedirect.reset(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
+      coutRedirect = std::unique_ptr<ScopedCoutFileRedirect>(new ScopedCoutFileRedirect(params->getString(CONSOLE_FILE)));
     }
 
     // Show chosen parameters
@@ -221,12 +239,12 @@ int dimlpRul(const std::string &command) {
     StringInt archInd;
     params->readHiddenLayersFile(arch, archInd);
 
-    DataSet Train;
-    DataSet Test;
-    DataSet TrainClass;
-    DataSet TestClass;
-    DataSet Valid;
-    DataSet ValidClass;
+    OwnedDataSetPtr Train = makeOwnedDataSet();
+    OwnedDataSetPtr Test = makeOwnedDataSet();
+    OwnedDataSetPtr TrainClass = makeOwnedDataSet();
+    OwnedDataSetPtr TestClass = makeOwnedDataSet();
+    OwnedDataSetPtr Valid = makeOwnedDataSet();
+    OwnedDataSetPtr ValidClass = makeOwnedDataSet();
     DataSet All;
 
     AttrName Attr;
@@ -293,70 +311,43 @@ int dimlpRul(const std::string &command) {
     // ----------------------------------------------------------------------
 
     if (params->isStringSet(TRAIN_CLASS_FILE)) {
-      DataSet train(learnFile, nbIn, nbOut);
-      DataSet trainClass(params->getString(TRAIN_CLASS_FILE), nbIn, nbOut);
-
-      Train = train;
-      TrainClass = trainClass;
+      Train = makeOwnedDataSet(learnFile, nbIn, nbOut);
+      TrainClass = makeOwnedDataSet(params->getString(TRAIN_CLASS_FILE), nbIn, nbOut);
     } else {
-      DataSet data(learnFile, nbIn, nbOut);
+      OwnedDataSetPtr data = makeOwnedDataSet(learnFile, nbIn, nbOut);
 
-      DataSet train(data.GetNbEx());
-      DataSet trainClass(data.GetNbEx());
-
-      data.ExtractDataAndTarget(train, nbIn, trainClass, nbOut);
-
-      Train = train;
-      TrainClass = trainClass;
-
-      data.Del();
+      Train = makeOwnedDataSet(data->GetNbEx());
+      TrainClass = makeOwnedDataSet(data->GetNbEx());
+      data->ExtractDataAndTarget(*Train, nbIn, *TrainClass, nbOut);
     }
 
     if (params->isStringSet(VALID_DATA_FILE)) {
       if (params->isStringSet(VALID_CLASS_FILE)) {
-        DataSet valid(params->getString(VALID_DATA_FILE), nbIn, nbOut);
-        DataSet validClass(params->getString(VALID_CLASS_FILE), nbIn, nbOut);
-
-        Valid = valid;
-        ValidClass = validClass;
+        Valid = makeOwnedDataSet(params->getString(VALID_DATA_FILE), nbIn, nbOut);
+        ValidClass = makeOwnedDataSet(params->getString(VALID_CLASS_FILE), nbIn, nbOut);
       }
 
       else {
-        DataSet data(params->getString(VALID_DATA_FILE), nbIn, nbOut);
+        OwnedDataSetPtr data = makeOwnedDataSet(params->getString(VALID_DATA_FILE), nbIn, nbOut);
 
-        DataSet valid(data.GetNbEx());
-        DataSet validClass(data.GetNbEx());
-
-        data.ExtractDataAndTarget(valid, nbIn, validClass, nbOut);
-
-        Valid = valid;
-        ValidClass = validClass;
-
-        data.Del();
+        Valid = makeOwnedDataSet(data->GetNbEx());
+        ValidClass = makeOwnedDataSet(data->GetNbEx());
+        data->ExtractDataAndTarget(*Valid, nbIn, *ValidClass, nbOut);
       }
     }
 
     if (params->isStringSet(TEST_DATA_FILE)) {
       if (params->isStringSet(TEST_CLASS_FILE)) {
-        DataSet test(params->getString(TEST_DATA_FILE), nbIn, nbOut);
-        DataSet testClass(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
-
-        Test = test;
-        TestClass = testClass;
+        Test = makeOwnedDataSet(params->getString(TEST_DATA_FILE), nbIn, nbOut);
+        TestClass = makeOwnedDataSet(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
       }
 
       else {
-        DataSet data(params->getString(TEST_DATA_FILE), nbIn, nbOut);
+        OwnedDataSetPtr data = makeOwnedDataSet(params->getString(TEST_DATA_FILE), nbIn, nbOut);
 
-        DataSet test(data.GetNbEx());
-        DataSet testClass(data.GetNbEx());
-
-        data.ExtractDataAndTarget(test, nbIn, testClass, nbOut);
-
-        Test = test;
-        TestClass = testClass;
-
-        data.Del();
+        Test = makeOwnedDataSet(data->GetNbEx());
+        TestClass = makeOwnedDataSet(data->GetNbEx());
+        data->ExtractDataAndTarget(*Test, nbIn, *TestClass, nbOut);
       }
     }
 
@@ -371,20 +362,20 @@ int dimlpRul(const std::string &command) {
     float accTest;
     float errTest;
 
-    errTrain = net->Error(Train, TrainClass, &accTrain);
+    errTrain = net->Error(*Train, *TrainClass, &accTrain);
 
     std::cout << "\n\n*** SUM SQUARED ERROR ON TRAINING SET = " << errTrain;
     std::cout << "\n\n*** ACCURACY ON TRAINING SET = " << accTrain << "" << std::endl;
 
-    if (Valid.GetNbEx() > 0) {
-      errValid = net->Error(Valid, ValidClass, &accValid);
+    if (Valid->GetNbEx() > 0) {
+      errValid = net->Error(*Valid, *ValidClass, &accValid);
 
       std::cout << "\n\n*** SUM SQUARED ERROR ON VALIDATION SET = " << errValid;
       std::cout << "\n\n*** ACCURACY ON VALIDATION SET = " << accValid << "" << std::endl;
     }
 
-    if (Test.GetNbEx() > 0) {
-      errTest = net->Error(Test, TestClass, &accTest);
+    if (Test->GetNbEx() > 0) {
+      errTest = net->Error(*Test, *TestClass, &accTest);
 
       std::cout << "\n\n*** SUM SQUARED ERROR ON TESTING SET = " << errTest;
       std::cout << "\n\n*** ACCURACY ON TESTING SET = " << accTest << "" << std::endl;
@@ -397,12 +388,12 @@ int dimlpRul(const std::string &command) {
         accFile << "Sum squared error on training set = " << errTrain << "" << std::endl;
         accFile << "Accuracy on training set = " << accTrain << "\n"
                 << std::endl;
-        if (Valid.GetNbEx() > 0) {
+        if (Valid->GetNbEx() > 0) {
           accFile << "Sum squared error on validation set = " << errValid << "" << std::endl;
           accFile << "Accuracy on validation set = " << accValid << "\n"
                   << std::endl;
         }
-        if (Test.GetNbEx() > 0) {
+        if (Test->GetNbEx() > 0) {
           accFile << "Sum squared error on testing set = " << errTest << "" << std::endl;
           accFile << "Accuracy on testing set = " << accTest << "\n"
                   << std::endl;
@@ -418,12 +409,12 @@ int dimlpRul(const std::string &command) {
 
     // ----------------------------------------------------------------------
 
-    All = Train;
+    All = *Train;
 
     std::cout << "Extraction Part :: " << std::endl;
 
-    if (Valid.GetNbEx() > 0) {
-      DataSet all2(All, Valid);
+    if (Valid->GetNbEx() > 0) {
+      DataSet all2(All, *Valid);
       All = all2;
     }
 
@@ -436,10 +427,12 @@ int dimlpRul(const std::string &command) {
     if (params->isStringSet(ATTRIBUTES_FILE)) {
       AttrName attr(params->getString(ATTRIBUTES_FILE), nbIn, nbOut);
 
-      if (attr.ReadAttr())
-        std::cout << "\n\n"
-                  << params->getString(ATTRIBUTES_FILE) << ": Read file of attributes.\n"
-                  << std::endl;
+      if (!attr.ReadAttr()) {
+        throw FileContentError("Error while reading attributes file " + params->getString(ATTRIBUTES_FILE));
+      }
+      std::cout << "\n\n"
+                << params->getString(ATTRIBUTES_FILE) << ": Read file of attributes.\n"
+                << std::endl;
 
       Attr = attr;
       attributeNames = Attr.GetListAttr();
@@ -472,11 +465,11 @@ int dimlpRul(const std::string &command) {
     std::ostream rulesFileost(&buf);
 
     if (params->isDoubleVectorSet(MUS)) {
-      ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                         Test, TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
+      ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                         *Test, *TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
     } else {
-      ryp.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                         Test, TestClass, Attr, rulesFileost);
+      ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                         *Test, *TestClass, Attr, rulesFileost);
     }
 
     if (ryp.TreeAborted()) {
@@ -484,11 +477,11 @@ int dimlpRul(const std::string &command) {
                     vecNbNeurons[1] / nbIn, nbWeightLayers);
 
       if (params->isDoubleVectorSet(MUS)) {
-        ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                            Test, TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
+        ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                            *Test, *TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
       } else {
-        ryp2.RuleExtraction(All, Train, TrainClass, Valid, ValidClass,
-                            Test, TestClass, Attr, rulesFileost);
+        ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                            *Test, *TestClass, Attr, rulesFileost);
       }
     }
 
@@ -497,27 +490,20 @@ int dimlpRul(const std::string &command) {
               << "Written.\n"
               << std::endl;
 
-    t2 = clock();
-    temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
+    const auto t2 = std::chrono::steady_clock::now();
+    temps = std::chrono::duration<double>(t2 - t1).count();
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
     BpNN::resetInitRandomGen();
 
-    Train.Del();
-    TrainClass.Del();
-
-    if (Test.GetNbEx() > 0) {
-      Test.Del();
-      TestClass.Del();
-    }
-
-    if (Valid.GetNbEx() > 0) {
-      Valid.Del();
-      ValidClass.Del();
-    }
-
   } catch (const ErrorHandler &e) {
     std::cerr << e.what() << std::endl;
+    return -1;
+  } catch (const std::exception &e) {
+    std::cerr << "Unhandled standard exception in dimlpRul: " << e.what() << std::endl;
+    return -1;
+  } catch (...) {
+    std::cerr << "Unhandled unknown exception in dimlpRul." << std::endl;
     return -1;
   }
   return 0;

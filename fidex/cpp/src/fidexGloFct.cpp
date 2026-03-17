@@ -9,7 +9,7 @@
 #include "hyperLocus.h"
 #include "hyperspace.h"
 
-#include <ctime>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -494,11 +494,8 @@ int fidexGlo(const std::string &command) {
     // 1) Parse command and load parameters
     // =========================================================================
 
-    float temps;
-    clock_t t1;
-    clock_t t2;
-
-    t1 = clock();
+    double temps;
+    const auto t1 = std::chrono::steady_clock::now();
 
     std::vector<std::string> commandList = {"fidexGlo"};
     std::string s;
@@ -515,12 +512,12 @@ int fidexGlo(const std::string &command) {
 
     // Import parameters
     std::unique_ptr<Parameters> params;
-    std::vector<ParameterCode> validParams = {TEST_DATA_FILE, GLOBAL_RULES_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE,
-                                              TEST_PRED_FILE, EXPLANATION_FILE, CONSOLE_FILE,
-                                              WITH_FIDEX, WITH_MINIMAL_VERSION, TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, WEIGHTS_FILE,
-                                              RULES_FILE, TEST_CLASS_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
-                                              MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, NB_FIDEX_RULES, LOWEST_MIN_FIDELITY, DROPOUT_DIM, DROPOUT_HYP, NB_QUANT_LEVELS,
-                                              NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI, REVIVE_BARRIERS};
+    static const std::vector<ParameterCode> validParams = {TEST_DATA_FILE, GLOBAL_RULES_FILE, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE,
+                                                           TEST_PRED_FILE, EXPLANATION_FILE, CONSOLE_FILE,
+                                                           WITH_FIDEX, WITH_MINIMAL_VERSION, TRAIN_DATA_FILE, TRAIN_PRED_FILE, TRAIN_CLASS_FILE, WEIGHTS_FILE,
+                                                           RULES_FILE, TEST_CLASS_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
+                                                           MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, NB_FIDEX_RULES, LOWEST_MIN_FIDELITY, DROPOUT_DIM, DROPOUT_HYP, NB_QUANT_LEVELS,
+                                                           NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
         throw CommandArgumentException("JSON config file name/path is missing");
@@ -847,8 +844,8 @@ int fidexGlo(const std::string &command) {
     // =========================================================================
     // 9) Report execution timings
     // =========================================================================
-    t2 = clock();
-    temps = (float)(t2 - t1) / CLOCKS_PER_SEC;
+    const auto t2 = std::chrono::steady_clock::now();
+    temps = std::chrono::duration<double>(t2 - t1).count();
     std::cout << "\nFull execution time = " << temps << " sec" << std::endl;
 
   } catch (const ErrorHandler &e) {
