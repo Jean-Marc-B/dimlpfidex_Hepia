@@ -220,6 +220,11 @@ void BagDimlp::ForwardOneExample1(DataSet &data, int index) {
     stds[class_index] = sqrt(stds[class_index] * (1.0f / (float)NbDimlpNets));
   }
 
+  // Metrics export is optional: skip file generation when no path is provided.
+  if (MetricsPath.empty()) {
+    return;
+  }
+
   Json jsonData;
   std::ofstream ofs(MetricsPath);
 

@@ -98,7 +98,6 @@ void checkDensClsParametersLogicValues(Parameters &p) {
   p.setDefaultBool(WITH_RULE_EXTRACTION, false);
   p.setDefaultString(TRAIN_PRED_OUTFILE, "densClsTrain.out", true);
   p.setDefaultString(TEST_PRED_OUTFILE, "densClsTest.out", true);
-  p.setDefaultString(METRICS_FILE, "metrics.json", true);
 
   // this sections check if values comply with program logic
 
@@ -239,7 +238,7 @@ int densCls(const std::string &command) {
     std::string predTrainFile = params->getString(TRAIN_PRED_OUTFILE);
     std::string predTestFile = params->getString(TEST_PRED_OUTFILE);
     std::string weightFile = params->getString(WEIGHTS_FILE);
-    std::string metricsPath = params->getString(METRICS_FILE);
+    const std::string metricsPath = params->isStringSet(METRICS_FILE) ? params->getString(METRICS_FILE) : "";
     int nbDimlpNets = countNetworksInFile(weightFile);
     int quant = params->getInt(NB_QUANT_LEVELS);
 

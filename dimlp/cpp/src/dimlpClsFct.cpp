@@ -1,8 +1,17 @@
 #include "dimlpClsFct.h"
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/parameters.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
+#include "dimlp.h"
+#include "dimlpCommonFun.h"
 
 #include <chrono>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
 #include <utility>
+#include <vector>
 
 ////////////////////////////////////////////////////////////
 
@@ -85,7 +94,6 @@ void showDimlpClsParams()
  * @param data Reference to the dataset containing the examples.
  * @param net Pointer to the Dimlp neural network.
  * @param nbHid Number of neurons in the first hidden layer.
- * @param outfile Name of the file where the output should be written (used for error messages).
  * @param firsthidFile Name of the file where the first hidden layer values will be written.
  * @throws CannotOpenFileError If the output file cannot be opened.
  */
@@ -93,14 +101,13 @@ void SaveFirstHid(
     DataSet &data,
     Dimlp *net,
     int nbHid,
-    const std::string &outfile,
     const std::string &firsthidFile)
 
 {
   std::filebuf buf;
 
   if (buf.open(firsthidFile, std::ios_base::out) == nullptr) {
-    throw CannotOpenFileError("Error : Cannot open output file " + outfile);
+    throw CannotOpenFileError("Error : Cannot open output file " + firsthidFile);
   }
 
   std::shared_ptr<Layer> layer = net->GetLayer(0);
@@ -269,6 +276,11 @@ int dimlpCls(const std::string &command) {
     std::string predFile = params->getString(TEST_PRED_OUTFILE);
     int quant = params->getInt(NB_QUANT_LEVELS);
 
+    const int nbNetworks = countNetworksInFile(weightFile);
+    if (nbNetworks != 1) {
+      throw FileContentError("Error : " + weightFile + " must contain exactly one network for dimlpCls.");
+    }
+
     OwnedDataSetPtr Test = makeOwnedDataSet();
     OwnedDataSetPtr TestClass = makeOwnedDataSet();
     int nbLayers;
@@ -334,26 +346,22 @@ int dimlpCls(const std::string &command) {
     }
     // ----------------------------------------------------------------------
 
-    if (params->isStringSet(TEST_DATA_FILE)) {
-      if (params->isStringSet(TEST_CLASS_FILE)) {
-        Test = makeOwnedDataSet(testFile, nbIn, nbOut);
-        TestClass = makeOwnedDataSet(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
-      }
+    if (params->isStringSet(TEST_CLASS_FILE)) {
+      Test = makeOwnedDataSet(testFile, nbIn, nbOut);
+      TestClass = makeOwnedDataSet(params->getString(TEST_CLASS_FILE), nbIn, nbOut);
+    } else {
+      OwnedDataSetPtr data = makeOwnedDataSet(testFile, nbIn, nbOut);
 
-      else {
-        OwnedDataSetPtr data = makeOwnedDataSet(testFile, nbIn, nbOut);
-
-        Test = makeOwnedDataSet(data->GetNbEx());
-        TestClass = makeOwnedDataSet(data->GetNbEx());
-        data->ExtractDataAndTarget(*Test, nbIn, *TestClass, nbOut);
-      }
+      Test = makeOwnedDataSet(data->GetNbEx());
+      TestClass = makeOwnedDataSet(data->GetNbEx());
+      data->ExtractDataAndTarget(*Test, nbIn, *TestClass, nbOut);
     }
 
-    Dimlp net(weightFile, nbLayers, vecNbNeurons, quant);
+    auto net = std::make_shared<Dimlp>(weightFile, nbLayers, vecNbNeurons, quant);
 
     float acc;
 
-    float err = net.Error(*Test, *TestClass, &acc);
+    float err = net->Error(*Test, *TestClass, &acc);
 
     std::cout << "\n\n*** SUM SQUARED ERROR = " << err;
     std::cout << "\n\n*** ACCURACY = " << acc << "" << std::endl;
@@ -370,8 +378,8 @@ int dimlpCls(const std::string &command) {
       }
     }
 
-    SaveOutputs(*Test, std::make_shared<Dimlp>(net), nbOut, nbWeightLayers, predFile);
-    SaveFirstHid(*Test, &net, vecNbNeurons[1], predFile, hidFile);
+    SaveOutputs(*Test, net, nbOut, nbWeightLayers, predFile);
+    SaveFirstHid(*Test, net.get(), vecNbNeurons[1], hidFile);
 
     std::cout << "\n-------------------------------------------------\n"
               << std::endl;
