@@ -1,15 +1,9 @@
 #ifndef DIMLPPREDFCT_H
 #define DIMLPPREDFCT_H
 
-#include "../../../common/cpp/src/parameters.h"
-#include "dimlp.h"
-#include "dimlpCommonFun.h"
-#include <fstream>
-#include <sstream>
-#include <stdlib.h>
-#include <string.h>
-#include <unordered_map>
-#include <vector>
+#include <string>
+
+class Parameters;
 
 /**
  * @brief Displays the parameters for dimlpPred.

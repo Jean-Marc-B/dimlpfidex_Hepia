@@ -1,8 +1,16 @@
 #include "dimlpPredFct.h"
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/parameters.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
+#include "dimlp.h"
+#include "dimlpCommonFun.h"
 
 #include <chrono>
+#include <iostream>
+#include <memory>
+#include <sstream>
 #include <utility>
+#include <vector>
 
 ////////////////////////////////////////////////////////////
 
@@ -206,6 +214,11 @@ int dimlpPred(const std::string &command) {
     std::string predFile = params->getString(TEST_PRED_OUTFILE);
     int quant = params->getInt(NB_QUANT_LEVELS);
 
+    const int nbNetworks = countNetworksInFile(weightFile);
+    if (nbNetworks != 1) {
+      throw FileContentError("Error : " + weightFile + " must contain exactly one network for dimlpPred.");
+    }
+
     OwnedDataSetPtr Test = makeOwnedDataSet();
     int nbLayers;
     int nbWeightLayers;
@@ -214,9 +227,7 @@ int dimlpPred(const std::string &command) {
     StringInt archInd;
     params->readHiddenLayersFile(arch, archInd);
 
-    if (params->isStringSet(TEST_DATA_FILE)) {
-      Test = makeOwnedDataSet(testFile, nbIn, nbOut);
-    }
+    Test = makeOwnedDataSet(testFile, nbIn, nbOut);
 
     // ----------------------------------------------------------------------
 

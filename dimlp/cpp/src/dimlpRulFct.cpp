@@ -1,8 +1,18 @@
 #include "dimlpRulFct.h"
+#include "../../../common/cpp/src/checkFun.h"
+#include "../../../common/cpp/src/parameters.h"
 #include "../../../common/cpp/src/scopedCoutFileRedirect.h"
+#include "dimlp.h"
+#include "dimlpCommonFun.h"
+#include "realHyp2.h"
 
 #include <chrono>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
 #include <utility>
+#include <vector>
 
 ////////////////////////////////////////////////////////////
 
@@ -232,6 +242,11 @@ int dimlpRul(const std::string &command) {
     std::string rulesFile = params->getString(GLOBAL_RULES_OUTFILE);
     int quant = params->getInt(NB_QUANT_LEVELS);
 
+    const int nbNetworks = countNetworksInFile(weightFile);
+    if (nbNetworks != 1) {
+      throw FileContentError("Error : " + weightFile + " must contain exactly one network for dimlpRul.");
+    }
+
     int nbLayers;
     int nbWeightLayers;
     std::vector<int> vecNbNeurons;
@@ -438,20 +453,14 @@ int dimlpRul(const std::string &command) {
       attributeNames = Attr.GetListAttr();
     }
 
-    std::vector<int> normalizationIndices;
-    std::vector<double> mus;
-    std::vector<double> sigmas;
-
     // Get mus, sigmas and normalizationIndices from normalizationFile for denormalization :
     if (params->isStringSet(NORMALIZATION_FILE)) {
       auto results = parseNormalizationStats(params->getString(NORMALIZATION_FILE), params->getInt(NB_ATTRIBUTES), attributeNames);
-      normalizationIndices = std::get<0>(results);
-      mus = std::get<2>(results);
-      sigmas = std::get<3>(results);
-      params->setIntVector(NORMALIZATION_INDICES, normalizationIndices);
-      params->setDoubleVector(MUS, mus);
-      params->setDoubleVector(SIGMAS, sigmas);
+      params->setIntVector(NORMALIZATION_INDICES, std::get<0>(results));
+      params->setDoubleVector(MUS, std::get<2>(results));
+      params->setDoubleVector(SIGMAS, std::get<3>(results));
     }
+    const bool useDenormalization = params->isDoubleVectorSet(MUS);
 
     RealHyp ryp(All, net, quant, nbIn,
                 vecNbNeurons[1] / nbIn, nbWeightLayers);
@@ -464,22 +473,24 @@ int dimlpRul(const std::string &command) {
 
     std::ostream rulesFileost(&buf);
 
-    if (params->isDoubleVectorSet(MUS)) {
+    if (useDenormalization) {
+      const std::vector<double> &musValues = params->getDoubleVector(MUS);
+      const std::vector<double> &sigmasValues = params->getDoubleVector(SIGMAS);
+      const std::vector<int> &normalizationIndicesValues = params->getIntVector(NORMALIZATION_INDICES);
       ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
-                         *Test, *TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
+                         *Test, *TestClass, Attr, rulesFileost, musValues, sigmasValues, normalizationIndicesValues);
+      if (ryp.TreeAborted()) {
+        RealHyp2 ryp2(All, net, quant, nbIn,
+                      vecNbNeurons[1] / nbIn, nbWeightLayers);
+        ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
+                            *Test, *TestClass, Attr, rulesFileost, musValues, sigmasValues, normalizationIndicesValues);
+      }
     } else {
       ryp.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
                          *Test, *TestClass, Attr, rulesFileost);
-    }
-
-    if (ryp.TreeAborted()) {
-      RealHyp2 ryp2(All, net, quant, nbIn,
-                    vecNbNeurons[1] / nbIn, nbWeightLayers);
-
-      if (params->isDoubleVectorSet(MUS)) {
-        ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
-                            *Test, *TestClass, Attr, rulesFileost, mus, sigmas, normalizationIndices);
-      } else {
+      if (ryp.TreeAborted()) {
+        RealHyp2 ryp2(All, net, quant, nbIn,
+                      vecNbNeurons[1] / nbIn, nbWeightLayers);
         ryp2.RuleExtraction(All, *Train, *TrainClass, *Valid, *ValidClass,
                             *Test, *TestClass, Attr, rulesFileost);
       }

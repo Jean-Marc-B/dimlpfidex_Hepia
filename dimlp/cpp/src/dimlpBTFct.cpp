@@ -120,7 +120,6 @@ void checkDimlpBTParametersLogicValues(Parameters &p) {
   p.setDefaultString(TEST_PRED_OUTFILE, "dimlpBTTest.out", true);
   p.setDefaultString(WEIGHTS_OUTFILE, "dimlpBT.wts", true);
   p.setDefaultString(STATS_FILE, "statsDimlpBT.txt", true);
-  p.setDefaultString(METRICS_FILE, "metrics.json", true);
   p.setDefaultNbQuantLevels();
   p.setDefaultDimlpTrn();
   p.setDefaultInt(NB_DIMLP_NETS, 25);
@@ -282,7 +281,7 @@ int dimlpBT(const std::string &command) {
     std::string predTestFile = params->getString(TEST_PRED_OUTFILE);
     std::string genericWeightsFile = params->getString(WEIGHTS_OUTFILE);
     std::string statsFile = params->getString(STATS_FILE);
-    std::string metricsPath = params->getString(METRICS_FILE);
+    const std::string metricsPath = params->isStringSet(METRICS_FILE) ? params->getString(METRICS_FILE) : "";
 
     float eta = params->getFloat(LEARNING_RATE);
     float mu = params->getFloat(MOMENTUM);
