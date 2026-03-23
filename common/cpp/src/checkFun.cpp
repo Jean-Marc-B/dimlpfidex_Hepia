@@ -140,20 +140,13 @@ bool checkDoubleList(const std::string &str) {
 ////////////////////////////////////////////////////////
 
 /**
- * @brief Checks if a given string is empty or contains only whitespace characters.
+ * @brief Checks if a given string is empty or contains only whitespace bytes.
  *
  * @param line A string to be checked.
  * @return Returns true if the string is empty or contains only whitespace, false otherwise.
  */
 bool checkStringEmpty(const std::string &line) {
-  if (line.length() == 0) {
-    return true;
-  } else {
-    if (std::any_of(line.begin(), line.end(), [](unsigned char c) { return std::isgraph(c) != 0; })) {
-      return false;
-    }
-    return true;
-  }
+  return std::all_of(line.begin(), line.end(), [](unsigned char c) { return std::isspace(c) != 0; });
 }
 
 ///////////////////////////////////////////////////////
@@ -412,14 +405,13 @@ std::tuple<std::vector<int>, bool, std::vector<double>, std::vector<double>> par
 //////////////////////////////////////////////////////
 
 /**
- * @brief Checks if a string contains a space between words.
+ * @brief Checks if a string contains an in-between ASCII space ' ' between words.
  *
- * Iterates through the string to find spaces. A space is considered between words if it's not at the
- * start or end of the string and is surrounded by non-space characters. Returns true if such a space is found.
+ * Tabs are intentionally accepted for backward compatibility.
  *
  * @param str The string to check.
- * @return True if a space is found between words.
- * @return False if no space is found between words.
+ * @return True if an in-between space is found.
+ * @return False otherwise.
  */
 bool hasSpaceBetweenWords(const std::string &str) {
   for (size_t i = 0; i < str.length(); ++i) {

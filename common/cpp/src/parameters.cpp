@@ -61,6 +61,8 @@ const std::unordered_map<std::string, ParameterCode> parameterNames = {
     {"hi_knot", HI_KNOT},
     {"dropout_hyp", DROPOUT_HYP},
     {"dropout_dim", DROPOUT_DIM},
+    {"fidelity_importance", FIDELITY_IMPORTANCE},
+    {"threshold_fidelity_only", THRESHOLD_FIDELITY_ONLY},
     {"min_fidelity", MIN_FIDELITY},
     {"lowest_min_fidelity", LOWEST_MIN_FIDELITY},
     {"normalization_file", NORMALIZATION_FILE},
@@ -427,6 +429,14 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
 
   case DROPOUT_HYP:
     setFloat(DROPOUT_HYP, arg);
+    break;
+
+  case FIDELITY_IMPORTANCE:
+    setFloat(FIDELITY_IMPORTANCE, arg);
+    break;
+
+  case THRESHOLD_FIDELITY_ONLY:
+    setFloat(THRESHOLD_FIDELITY_ONLY, arg);
     break;
 
   case MAX_FAILED_ATTEMPTS:
@@ -1259,6 +1269,14 @@ void Parameters::checkParametersFidex() {
     throw CommandArgumentException("Error : Minimum fidelity has to be between [0.0, 1.0]");
   }
 
+  if (getFloat(FIDELITY_IMPORTANCE) < 0.0f || getFloat(FIDELITY_IMPORTANCE) > 1.0f) {
+    throw CommandArgumentException("Error : Fidelity importance must be between [0.0, 1.0].");
+  }
+
+  if (getFloat(THRESHOLD_FIDELITY_ONLY) < 0.0f || getFloat(THRESHOLD_FIDELITY_ONLY) > 1.0f) {
+    throw CommandArgumentException("Error : Threshold fidelity only must be between [0.0, 1.0].");
+  }
+
   if (getFloat(LOWEST_MIN_FIDELITY) < 0.0f || getFloat(LOWEST_MIN_FIDELITY) > 1.0f) {
     throw CommandArgumentException("Error : Minimum fidelity has to be between [0.0, 1.0]");
   }
@@ -1420,6 +1438,8 @@ void Parameters::setDefaultFidex() {
   setDefaultInt(MAX_ITERATIONS, 10);
   setDefaultInt(MIN_COVERING, 2);
   setDefaultInt(MAX_FAILED_ATTEMPTS, 30);
+  setDefaultFloat(FIDELITY_IMPORTANCE, 1.0f);
+  setDefaultFloat(THRESHOLD_FIDELITY_ONLY, 0.6f);
   setDefaultFloat(MIN_FIDELITY, 1.0);
   setDefaultFloat(LOWEST_MIN_FIDELITY, 0.75);
   setDefaultBool(COVERING_STRATEGY, true);

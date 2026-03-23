@@ -56,6 +56,8 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
   HI_KNOT,
   DROPOUT_HYP,
   DROPOUT_DIM,
+  FIDELITY_IMPORTANCE,
+  THRESHOLD_FIDELITY_ONLY,
   MIN_FIDELITY,
   LOWEST_MIN_FIDELITY,
   LEARNING_RATE,
