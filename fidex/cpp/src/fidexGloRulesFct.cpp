@@ -92,6 +92,8 @@ void showRulesParams() {
   printOptionDescription("--covering_strategy <bool>", "Whether to use the covering strategy : if no rule is found with min_covering, find best rule with best covering using dichotomic search. Decreases min_fidelity if needed (default: True)");
   printOptionDescription("--max_failed_attempts <int [0,inf[>", "Maximum number of failed attempts to find a Fidex rule when the covering is 1 and the covering strategy is used (default: 30)");
   printOptionDescription("--allow_no_fid_change <bool>", "Whether to allow to add a new attribute with the same fidelity and less covering. It can be usefull when not finding a fidel rule (default: False)");
+  printOptionDescription("--fidelity_importance <float [0,1]>", "Weight of fidelity in candidate scoring in Fidex (default: 1.0)");
+  printOptionDescription("--threshold_fidelity_only <float [0,1]>", "Iteration ratio from which Fidex switches to fidelity-only mode (default: 0.6, used only if fidelity_importance < 1)");
   printOptionDescription("--min_fidelity <float [0,1]>", "Minimal rule fidelity accepted when generating a rule (default: 1.0)");
   printOptionDescription("--lowest_min_fidelity <float [0,1]>", "Minimal min_fidelity to which we agree to go down during the covering_strategy (default: 0.75)");
   printOptionDescription("--dropout_dim <float [0,1]>", "Probability of dropping a dimension during rule extraction (default: 0.0)");
@@ -409,6 +411,17 @@ void generateRules(std::vector<Rule> &rules, std::vector<int> &notCoveredSamples
             << "Number of samples with lower covering than " << minCovering << " is " << nbProblems << std::endl
             << "Number of rules not found is " << nbRulesNotFound << std::endl
             << "Fidex rules computed" << std::endl;
+  const double requiredMinFidelity = p.getFloat(MIN_FIDELITY);
+  const double fidelityEpsilon = 1e-12;
+  size_t nbRulesBelowRequiredFidelity = 0;
+  for (const Rule &generatedRule : rules) {
+    if (generatedRule.getFidelity() + fidelityEpsilon < requiredMinFidelity) {
+      nbRulesBelowRequiredFidelity += 1;
+    }
+  }
+  if (nbRulesBelowRequiredFidelity > 0) {
+    std::cout << "Rules below required fidelity: " << nbRulesBelowRequiredFidelity << std::endl;
+  }
   if (nbRulesNotFound > 0) {
     std::cout << "Some samples could not be covered by a rule, you may want to try again with a lower min_covering or a lower min_fidelity. You can also try to use the min cover strategy (--covering_strategy) or to allow to add a new antecedant without changing the fidelity (--allow_no_fid_change)." << std::endl;
   }
@@ -999,7 +1012,7 @@ int fidexGloRules(const std::string &command) {
                                                            HEURISTIC, NB_ATTRIBUTES, NB_CLASSES, ROOT_FOLDER, ATTRIBUTES_FILE, CONSOLE_FILE,
                                                            MAX_ITERATIONS, MIN_COVERING, DROPOUT_DIM, DROPOUT_HYP, MAX_FAILED_ATTEMPTS, NB_QUANT_LEVELS,
                                                            DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS, SIGMAS, NORMALIZATION_INDICES,
-                                                           NB_THREADS, COVERING_STRATEGY, ALLOW_NO_FID_CHANGE, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX,
+                                                           NB_THREADS, COVERING_STRATEGY, ALLOW_NO_FID_CHANGE, FIDELITY_IMPORTANCE, THRESHOLD_FIDELITY_ONLY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, SEED, START_INDEX, END_INDEX,
                                                            AGGREGATE_RULES, AGGREGATE_FOLDER, NO_SIMPLIFICATION, VERBOSE, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {
       if (commandList.size() < 3) {
@@ -1209,6 +1222,28 @@ int fidexGloRules(const std::string &command) {
                                                       classNames,
                                                       params->getFloat(DECISION_THRESHOLD),
                                                       params->getInt(POSITIVE_CLASS_INDEX));
+
+    const double requiredMinFidelity = params->getFloat(MIN_FIDELITY);
+    const double fidelityEpsilon = 1e-12;
+    size_t nbRulesBelowRequiredFidelity = 0;
+    double meanFidelityKeptRules = 0.0;
+    if (!generatedRules.empty()) {
+      for (const Rule &keptRule : generatedRules) {
+        const double ruleFidelity = keptRule.getFidelity();
+        meanFidelityKeptRules += ruleFidelity;
+        if (ruleFidelity + fidelityEpsilon < requiredMinFidelity) {
+          nbRulesBelowRequiredFidelity += 1;
+        }
+      }
+      meanFidelityKeptRules /= static_cast<double>(generatedRules.size());
+    }
+    if (nbRulesBelowRequiredFidelity == 0) {
+      std::cout << "Final fidelity check: no kept rule below required fidelity." << std::endl;
+    } else {
+      std::cout << "Final fidelity check: " << nbRulesBelowRequiredFidelity
+                << " kept rule(s) below required fidelity. Mean fidelity: "
+                << meanFidelityKeptRules << std::endl;
+    }
 
     std::cout << "Mean covering size per rule : " << std::get<0>(stats) << std::endl;
     std::cout << "Mean number of antecedents per rule : " << std::get<1>(stats) << std::endl;

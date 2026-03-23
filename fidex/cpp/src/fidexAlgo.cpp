@@ -73,7 +73,11 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   bool allowNoFidChange = _parameters->getBool(ALLOW_NO_FID_CHANGE); // Whether to allow that a new antecedent does not increase the fidelity of the rule
   bool hasdd = dropoutDim > kDropoutActivationThreshold;
   bool hasdh = dropoutHyp > kDropoutActivationThreshold;
-  const double fidelityEpsilon = 1e-12; // Tolerance for floating-point fidelity comparisons
+  const double scoreEpsilon = 1e-12;                                             // Tolerance for floating-point score comparisons
+  double coeffFidelityImportance = _parameters->getFloat(FIDELITY_IMPORTANCE);   // Coefficient to adjust the importance of fidelity with respect to the covering in the candidate selection objective function (1 = maximise fidelity only, 0 = minimise drop of covering only)
+  double thresholdFidelityOnly = _parameters->getFloat(THRESHOLD_FIDELITY_ONLY); // Ratio of max iterations from which it switches to fidelity-only mode
+  int thresholdScoreMode = static_cast<int>(thresholdFidelityOnly * maxIterations);
+  bool fidelityOnlyMode = coeffFidelityImportance >= 1.0 - scoreEpsilon; // Keep behavior close to compute() when only fidelity matters
 
   // Optional denormalization metadata
   std::vector<int> normalizationIndices;
@@ -118,6 +122,10 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
     throw InternalError("Error during computation of Fidex: minimum covering must be >= 1.");
   }
 
+  if (coeffFidelityImportance < 0 || coeffFidelityImportance > 1) {
+    throw InternalError("Error during computation of Fidex: coefficient to adjust the importance of fidelity with respect to the covering in the candidate selection objective function must be between 0 and 1.");
+  }
+
   std::uniform_real_distribution<double> dis(0.0, 1.0);
 
   // =========================================================================
@@ -147,26 +155,36 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   // 4) Greedy antecedent search
   // =========================================================================
 
-  // Main search loop: at each iteration, select and apply the best next antecedent if found
+  // Main search loop: at each iteration, select and apply the best next antecedent if found.
   while (hyperbox->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough, we try to add a new discriminative hyperplane (antecedent in the rule)
-    Hyperbox bestCandidateHyperbox;                                       // best hyperbox to choose for next step
+
+    if (nbIt >= thresholdScoreMode) {
+      coeffFidelityImportance = 1.0;
+      fidelityOnlyMode = true;
+    }
+
+    Hyperbox bestCandidateHyperbox; // best hyperbox to choose for next step
     Hyperbox candidateHyperbox;
 
     // Current rule covering used as the common baseline for all candidates in this iteration
-    const auto &ruleCoveredSamples = hyperbox->getCoveredSamples();
-    const size_t ruleCoverSize = ruleCoveredSamples.size();
+    const auto &currentCoveredSamples = hyperbox->getCoveredSamples();
+    const size_t ruleCoverSize = currentCoveredSamples.size();
+    const double currentRuleFidelity = hyperbox->getFidelity();
     double mainSampleValue;
     int attribute;
     int dimension;
     int indexBestHyp = -1;
     int bestDimension = -1;
+    double bestCandidateScore = -std::numeric_limits<double>::infinity();
+    double bestCandidateGainedFidelity = -std::numeric_limits<double>::infinity();
+    int bestCandidateType = -1; // -1: none, 0: candidateGainedFidelity==0 candidate, 1: candidateGainedFidelity>0 candidate
 
     // Explore dimensions in random order
     iota(begin(dimensions), end(dimensions), 0);
     shuffle(begin(dimensions), end(dimensions), _rnd);
 
     for (int d = 0; d < nbDimensions; d++) { // Loop on all dimensions
-      if (bestCandidateHyperbox.getFidelity() >= minFidelity) {
+      if (indexBestHyp != -1 && bestCandidateHyperbox.getFidelity() >= minFidelity) {
         break;
       }
 
@@ -194,32 +212,61 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
         double hypValue = hyperLocus[dimension][k];
         bool mainSampleGreater = hypValue <= mainSampleValue; // Check if the main sample is on the right side of the hyperplane
 
-        candidateHyperbox.computeCoveredSamplesAndFidelity(ruleCoveredSamples, attribute, trainData, mainSampleGreater, hypValue, mainSamplePred, trainPreds); // Compute new cover samples and fidelity
+        candidateHyperbox.computeCoveredSamplesAndFidelity(currentCoveredSamples, attribute, trainData, mainSampleGreater, hypValue, mainSamplePred, trainPreds); // Compute new cover samples and fidelity
 
         const auto &candidateCoveredSamples = candidateHyperbox.getCoveredSamples();
         const size_t candidateCoverSize = candidateCoveredSamples.size();
+        const double candidateFidelity = candidateHyperbox.getFidelity();
 
         // Skip candidates that already fail the minimum covering constraint
         if (candidateCoverSize < static_cast<size_t>(minCoverSize)) {
           continue;
         }
 
-        const size_t bestCandidateCoverSize = bestCandidateHyperbox.getCoveredSamples().size();
-        const double candidateFidelity = candidateHyperbox.getFidelity();
-        const double bestCandidateFidelity = bestCandidateHyperbox.getFidelity();
-        const double fidelityDeltaVsBestCandidate = candidateFidelity - bestCandidateFidelity;
+        const bool reducesCurrentRuleCover = candidateCoverSize < ruleCoverSize;
+        if (!reducesCurrentRuleCover) {
+          continue;
+        }
 
-        // Candidate ranking within this outer iteration
-        // 1) The covering size has to decrease (otherwise the antecedant is useless)
-        // 2) Among valid candidates, prefer higher fidelity; if fidelity is (approximately) equal, prefer larger covering
-        const bool reducesCurrentRuleCover = candidateCoverSize < ruleCoverSize;                                                                                                                     // Candidate must reduce the covering size compared to current rule (otherwise the new antecedent is useless and we would never progress)
-        const bool improvesBestCandidateFidelity = fidelityDeltaVsBestCandidate > fidelityEpsilon;                                                                                                   // Primary ranking criterion: higher fidelity is always better
-        const bool sameFidelityWithBetterCover = fidelityDeltaVsBestCandidate >= -fidelityEpsilon && fidelityDeltaVsBestCandidate <= fidelityEpsilon && candidateCoverSize > bestCandidateCoverSize; // Tie-breaker: with equal fidelity (within epsilon), prefer the candidate covering more samples
-        const bool isBetterCandidate = improvesBestCandidateFidelity || sameFidelityWithBetterCover;                                                                                                 // Combined ranking criterion used for this iteration
+        const double candidateGainedFidelity = (candidateFidelity - currentRuleFidelity) / (minFidelity - currentRuleFidelity); // Percentage of gained fidelity with this antecedent out of the maximum possible gain to reach the wanted fidelity
+        if (candidateGainedFidelity < -scoreEpsilon) {
+          continue; // Worsens fidelity
+        }
 
-        if (reducesCurrentRuleCover && isBetterCandidate) {
+        const bool candidateIsImproving = candidateGainedFidelity > scoreEpsilon;
+        const bool candidateIsFlat = !candidateIsImproving && candidateGainedFidelity >= -scoreEpsilon && candidateGainedFidelity <= scoreEpsilon;
+        if (candidateIsFlat && !allowNoFidChange) {
+          continue;
+        }
+        const int candidateType = candidateIsImproving ? 1 : 0;
+
+        const double candidateCoveringDrop = (ruleCoverSize - candidateCoverSize) / static_cast<double>(ruleCoverSize);                          // Percentage of drop in covering with this antecedent
+        const double candidateScore = coeffFidelityImportance * candidateGainedFidelity - (1 - coeffFidelityImportance) * candidateCoveringDrop; // Combined score to select the best candidate in this iteration based on the parameters
+
+        bool isBetterCandidate = false;
+        if (candidateType > bestCandidateType) {
+          // Strict priority: if any candidateGainedFidelity>0 candidate exists, it always beats candidateGainedFidelity==0 candidates.
+          isBetterCandidate = true;
+        } else if (candidateType == bestCandidateType) {
+          const double scoreDeltaVsBestCandidate = candidateScore - bestCandidateScore;
+          const size_t bestCandidateCoverSize = bestCandidateHyperbox.getCoveredSamples().size();
+          const bool improvesBestCandidateScore = scoreDeltaVsBestCandidate > scoreEpsilon;
+          const bool sameScore = scoreDeltaVsBestCandidate >= -scoreEpsilon && scoreDeltaVsBestCandidate <= scoreEpsilon;
+          const bool sameScoreWithBetterFidelityGain = sameScore && candidateGainedFidelity > bestCandidateGainedFidelity;
+          const bool sameScoreWithBetterCovering = sameScore && candidateCoverSize > bestCandidateCoverSize;
+          // Tie-break policy:
+          // - mixed objective (a < 1): equal score -> prefer higher fidelity gain
+          // - fidelity-only mode (a = 1): equal score -> prefer larger covering (same behavior as compute())
+          isBetterCandidate = improvesBestCandidateScore ||
+                              (fidelityOnlyMode ? sameScoreWithBetterCovering : sameScoreWithBetterFidelityGain);
+        }
+
+        if (isBetterCandidate) {
           bestCandidateHyperbox.setFidelity(candidateHyperbox.getFidelity()); // Update best hyperbox
           bestCandidateHyperbox.setCoveredSamples(candidateCoveredSamples);
+          bestCandidateType = candidateType;
+          bestCandidateScore = candidateScore;
+          bestCandidateGainedFidelity = candidateGainedFidelity;
           indexBestHyp = static_cast<int>(k);
           bestDimension = dimension;
 
@@ -231,29 +278,36 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
     }
 
     // Apply the best candidate found during this outer iteration
+    bool antecedentAdded = false;
     if (indexBestHyp != -1 && bestDimension != -1) { // If we found any good dimension with good hyperplane (with enough covering)
       const auto &bestCandidateCoveredSamples = bestCandidateHyperbox.getCoveredSamples();
       const size_t bestCandidateCoverSize = bestCandidateCoveredSamples.size();
       // Candidate acceptance (after selection above)
       // 1) accept if it improves the current rule fidelity
       // 2) otherwise, accept only if same fidelity is explicitly allowed (XOR workaround / progression path)
-      const double currentRuleFidelity = hyperbox->getFidelity();
       const double bestCandidateFidelity = bestCandidateHyperbox.getFidelity();
       const double fidelityDeltaVsCurrentRule = bestCandidateFidelity - currentRuleFidelity;
-      const bool improvesCurrentRuleFidelity = fidelityDeltaVsCurrentRule > fidelityEpsilon;                                                                   // Standard case: adding the antecedent strictly increases fidelity
-      const bool sameFidelityAndAllowed = allowNoFidChange && fidelityDeltaVsCurrentRule >= -fidelityEpsilon && fidelityDeltaVsCurrentRule <= fidelityEpsilon; // Candidate keeps the same fidelity as the current rule (within epsilon) and this is allowed by the parameter
+      const bool improvesCurrentRuleFidelity = fidelityDeltaVsCurrentRule > scoreEpsilon;                                                                // Standard case: adding the antecedent strictly increases fidelity
+      const bool sameFidelityAndAllowed = allowNoFidChange && fidelityDeltaVsCurrentRule >= -scoreEpsilon && fidelityDeltaVsCurrentRule <= scoreEpsilon; // Candidate keeps the same fidelity as the current rule (within epsilon) and this is allowed by the parameter
 
       if (improvesCurrentRuleFidelity || sameFidelityAndAllowed) {
-
         hyperbox->setFidelity(bestCandidateFidelity);
         hyperbox->addIncreasedFidelity(bestCandidateFidelity);
         hyperbox->setCoveredSamples(bestCandidateCoveredSamples);
         hyperbox->addCoveringSizesWithNewAntecedent(bestCandidateCoverSize);
         hyperbox->addDiscriminativeHyperplan(bestDimension, indexBestHyp);
+        antecedentAdded = true;
 
         double ruleAccuracy = hyperbox->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of covered samples whose true class matches the rule prediction
         hyperbox->addAccuracyChanges(ruleAccuracy);
       }
+    }
+    if (!antecedentAdded) {
+      if (!(hasdd || hasdh)) {
+        break;
+      }
+      nbIt += 1;
+      continue;
     }
     nbIt += 1;
   }
