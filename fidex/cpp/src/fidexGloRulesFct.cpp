@@ -1224,8 +1224,10 @@ int fidexGloRules(const std::string &command) {
                                                       params->getInt(POSITIVE_CLASS_INDEX));
 
     const double requiredMinFidelity = params->getFloat(MIN_FIDELITY);
+    const int requiredMinCovering = params->getInt(MIN_COVERING);
     const double fidelityEpsilon = 1e-12;
     size_t nbRulesBelowRequiredFidelity = 0;
+    size_t nbRulesBelowRequiredCovering = 0;
     double meanFidelityKeptRules = 0.0;
     if (!generatedRules.empty()) {
       for (const Rule &keptRule : generatedRules) {
@@ -1234,15 +1236,31 @@ int fidexGloRules(const std::string &command) {
         if (ruleFidelity + fidelityEpsilon < requiredMinFidelity) {
           nbRulesBelowRequiredFidelity += 1;
         }
+        if (keptRule.getCoveringSize() < requiredMinCovering) {
+          nbRulesBelowRequiredCovering += 1;
+        }
       }
       meanFidelityKeptRules /= static_cast<double>(generatedRules.size());
     }
+
+    std::cout << "Final fidelity check: ";
     if (nbRulesBelowRequiredFidelity == 0) {
-      std::cout << "Final fidelity check: no kept rule below required fidelity." << std::endl;
+      std::cout << "no kept rule below required fidelity";
     } else {
-      std::cout << "Final fidelity check: " << nbRulesBelowRequiredFidelity
-                << " kept rule(s) below required fidelity. Mean fidelity: "
-                << meanFidelityKeptRules << std::endl;
+      std::cout << nbRulesBelowRequiredFidelity << " kept rule(s) below required fidelity";
+    }
+    std::cout << ". Mean fidelity: ";
+    const bool meanFidelityIsOne = meanFidelityKeptRules + fidelityEpsilon >= 1.0 && meanFidelityKeptRules - fidelityEpsilon <= 1.0;
+    if (meanFidelityIsOne) {
+      std::cout << 1;
+    } else {
+      std::cout << meanFidelityKeptRules;
+    }
+    std::cout << std::endl;
+
+    if (nbRulesBelowRequiredCovering > 0) {
+      std::cout << "Final covering check: " << nbRulesBelowRequiredCovering
+                << " kept rule(s) below required minimal covering (" << requiredMinCovering << ")." << std::endl;
     }
 
     std::cout << "Mean covering size per rule : " << std::get<0>(stats) << std::endl;
