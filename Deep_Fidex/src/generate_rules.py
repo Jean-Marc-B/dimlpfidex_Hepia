@@ -24,6 +24,7 @@ def generate_rules(cfg, args, nb_attributes = None):
         f'--nb_attributes {nb_attributes} '
         f'--heuristic 1 '
         f'--nb_threads 35 '
+        f'--fidelity_importance 0.6 '
         f'--max_iterations 25 '
         f'--nb_quant_levels {NB_QUANT_LEVELS} '
         f'--dropout_dim {DROPOUT_DIM} '
