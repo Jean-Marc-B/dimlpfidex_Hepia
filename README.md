@@ -1,30 +1,38 @@
 # dimlpfidex
+
 Discretized Interpretable Multi Layer Perceptron (DIMLP) and related algorithms
+
+Authors: Jean Marc Boutay, Guido Bologna & Damian Boquete
+
+---
+
 
 ### How to build
 
 1. Pull submodules dependencies
-```shell
+```sh
 $ git submodule init
 $ git submodule update
 ```
 
 2. Build with [docker CLI](https://docs.docker.com/reference/cli/docker/) (from project root):
-```shell
+```sh
 docker build . -t compile:latest
 docker run -u $(id -u):$(id -g) -v ./:/app compile:latest
 ```
 
 ### How to run
 
-- From binaries (built inside the `bin` folder)
-```shell
+#### From binaries (built inside the `bin` folder)
+```sh
 # example with fidexGloRules, from root project
 ./bin/fidexGloRules
 ```
 
-- Using python bindings:
-```shell
+#### Using python bindings:
+
+1. install Python dependencies
+```sh
 # install dependencies
 python -m venv .venv
 source .venv/bin/activate
@@ -33,38 +41,17 @@ pip install .
 pip install dist/[FILENAME].whl
 ```
 
+2. Import a dimlpfidex library to your code like so:
 ```py
 # import example
 from dimpfidex import dimlp
 ...
 ```
 
-To download the required dependencies on your system, run:
-
-
-### Install Python dependencies
-
-#### Using pip
-
-```shell
-python -m venv .venv
-source .venv/bin/activate
-pip install .
-```
-
-#### Add dependencies
-
-To add new dependencies to the project, add them to the `pyproject.toml` file.
-To add them to the virtualenv, use:
-
-```shell
-pip install .
-```
-
-### Compile
+### Compile from sources
 
 1. Build binaries
-```shell
+```sh
 mkdir build && cd build
 cmake ..
 cmake --build .
@@ -73,28 +60,22 @@ cmake --build .
 > [!NOTE]
 > On Windows, you may have to use `cmake -DCMAKE_PREFIX_PATH="C:\<absolute\path\to>\.venv" ..` instead.
 
-> [!TIP]
-> To speed up the compilation process, you can also add `-j X` with `X` being your number of CPU cores.
-
 > [!WARNING]
 > If you need to rebuild the project, you must erase the content of the `build/` directory.
 
 2. Build pip package
 
-```shell
+```sh
 python -m build
 ```
 
-## Documentation
+### Generate documentation
 
-Install [Doxygen](https://www.doxygen.nl/):
+1. Install [Doxygen](https://www.doxygen.nl/):
 
-* **Linux, macOS, Windows/WSL**: Use your package manager to install `doxygen`
-* **Windows**: `winget install DimitriVanHeesch.Doxygen`
+2. Generate the documentation following these commands:
 
-Create the documentation:
-
-```shell
+```sh
 mkdir build && cd build
 cmake -DBUILD_DOCUMENTATION=ON ..
 cmake --build .
