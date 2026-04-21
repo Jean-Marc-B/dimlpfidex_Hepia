@@ -6,49 +6,23 @@ Authors: Jean Marc Boutay, Guido Bologna & Damian Boquete
 
 ---
 
+## How to build
 
-### How to build
-
-1. Pull submodules dependencies
+First of all, pull submodules dependencies
 ```sh
-$ git submodule init
-$ git submodule update
+git submodule init
+git submodule update
 ```
 
-2. Build with [docker CLI](https://docs.docker.com/reference/cli/docker/) (from project root):
+### Option 1: via docker (easiest)
+
+Build with [docker CLI](https://docs.docker.com/reference/cli/docker/) (from project root):
 ```sh
 docker build . -t compile:latest
 docker run -u $(id -u):$(id -g) -v ./:/app compile:latest
 ```
 
-### How to run
-
-#### From binaries (built inside the `bin` folder)
-```sh
-# example with fidexGloRules, from root project
-./bin/fidexGloRules
-```
-
-#### Using python bindings:
-
-1. install Python dependencies
-```sh
-# install dependencies
-python -m venv .venv
-source .venv/bin/activate
-pip install .
-# install the file ending with .whl inside the `dist` directory
-pip install dist/[FILENAME].whl
-```
-
-2. Import a dimlpfidex library to your code like so:
-```py
-# import example
-from dimpfidex import dimlp
-...
-```
-
-### Compile from sources
+### Option 2 : from sources
 
 1. Build binaries
 ```sh
@@ -69,7 +43,36 @@ cmake --build .
 python -m build
 ```
 
-### Generate documentation
+This will generate the `wheel` package into the `dist` folder. Later usable by installing it via `pip`.
+
+## How to run
+
+### From binaries (built inside the `bin` folder)
+```sh
+# example with fidexGloRules, from root project
+./bin/fidexGloRules
+```
+
+### Using python bindings:
+
+1. install Python dependencies
+```sh
+# install dependencies
+python -m venv .venv
+source .venv/bin/activate
+pip install .
+# install the file ending with .whl inside the `dist` directory
+pip install dist/[FILENAME].whl
+```
+
+2. Import a dimlpfidex library to your code like so:
+```py
+# import example
+from dimlpfidex import dimlp
+...
+```
+
+## How to generate documentation
 
 1. Install [Doxygen](https://www.doxygen.nl/):
 
