@@ -74,9 +74,11 @@ from dimlpfidex import dimlp
 
 ## How to generate documentation
 
-1. Install [Doxygen](https://www.doxygen.nl/):
+1. Install [Doxygen](https://www.doxygen.nl/).
 
-2. Generate the documentation following these commands:
+2. You'll probably have to install [Sphinx](https://www.sphinx-doc.org/en/master/usage/installation.html) too. 
+
+3. Generate the documentation following these commands:
 
 ```sh
 mkdir build && cd build
@@ -84,7 +86,8 @@ cmake -DBUILD_DOCUMENTATION=ON ..
 cmake --build .
 ```
 
-The generated HTML documentation will be found in `build/docs/sphinx`.
+4. If the build process is successful, You should find the `index.html` page inside `build/docs/sphinx`. 
+
 
 ## Credits
 Our test suite is using [Obesity or CVD risk dataset](https://www.kaggle.com/datasets/aravindpcoder/obesity-or-cvd-risk-classifyregressorcluster) from [AravindPCoder](https://www.kaggle.com/aravindpcoder) (under CC BY-SA 4.0 license)
