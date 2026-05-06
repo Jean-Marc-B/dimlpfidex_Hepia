@@ -207,9 +207,11 @@ int sizeOf2DVector(const std::vector<std::vector<T>> &vec) {
  * If a barrier does not participate in enclosing any sample within its lower or upper interval, it is removed.
  *
  * @param originalHypLocus the hyperlocus to be optimized.
- * @param datas dataset used to filter the barriers.
+ * @param ds dataset used to filter the barriers.
+ * @param enableRevive determines the use of the barrier reviving process.
+ * @param hasWeightsFile whether the hyperlocus was built from a weights file.
  */
-void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds, bool enableRevive) {
+void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds, bool enableRevive, bool hasWeightsFile) {
   // =========================================================================
   // 1) Validate inputs and summarize optimization context
   // =========================================================================
@@ -224,21 +226,25 @@ void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSe
     return;
   }
 
-  const int nbNets = ds.getNbNets();
-  if (nbNets <= 0) {
-    std::cout << "Hyperlocus optimization skipped: invalid number of networks.\n";
-    return;
-  }
-  const int hyperlocusSize = static_cast<int>(originalHypLocus.size());
+  const int nbFeatures = static_cast<int>(originalHypLocus.size());
   const int nbSamples = static_cast<int>(datas.size());
-  const int barriers_per_net = static_cast<int>(originalHypLocus[0].size()) / nbNets;
   const int totalNbHyperplans = sizeOf2DVector(originalHypLocus);
-  std::cout << "original hyperlocus dimensions: " << nbNets << "*" << hyperlocusSize << "*" << barriers_per_net << "=" << totalNbHyperplans << "\n";
+  if (hasWeightsFile) {
+    const int nbNets = ds.getNbNets();
+    if (nbNets <= 0) {
+      std::cout << "Hyperlocus optimization skipped: invalid number of networks.\n";
+      return;
+    }
+    const int barriersPerNet = static_cast<int>(originalHypLocus[0].size()) / nbNets;
+    std::cout << "original hyperlocus dimensions: " << nbNets << "*" << nbFeatures << "*" << barriersPerNet << "=" << totalNbHyperplans << "\n";
+  } else {
+    std::cout << "original hyperlocus dimensions: " << nbFeatures << " feature(s), " << totalNbHyperplans << " hyperplan(s)\n";
+  }
 
   // =========================================================================
   // 2) Score and filter barriers feature by feature
   // =========================================================================
-  for (int hlId = 0; hlId < hyperlocusSize; hlId++) {
+  for (int hlId = 0; hlId < nbFeatures; hlId++) {
     std::vector<double> &currentBarriers = originalHypLocus[hlId];
     if (currentBarriers.empty()) {
       continue;

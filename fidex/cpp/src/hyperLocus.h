@@ -24,9 +24,10 @@ std::vector<std::vector<double>> calcHypLocus(const std::string &rulesFile, Data
  * If a barrier does not participate in enclosing any sample within its lower or upper interval, it is removed.
  *
  * @param originalHypLocus the hyperlocus to be optimized.
- * @param datas dataset used to filter the barriers.
+ * @param ds dataset used to filter the barriers.
  * @param enableRevive determines the use of the barrier reviving process.
+ * @param hasWeightsFile whether the hyperlocus was built from a weights file.
  */
-void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds, bool enableRevive);
+void optimizeHypLocus(std::vector<std::vector<double>> &originalHypLocus, DataSetFid &ds, bool enableRevive, bool hasWeightsFile);
 
 #endif // HYPERLOCUSFCT_H

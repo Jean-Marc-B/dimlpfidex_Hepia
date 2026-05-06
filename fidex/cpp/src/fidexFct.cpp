@@ -427,7 +427,7 @@ int fidex(const std::string &command) {
     }
 
     if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
-      optimizeHypLocus(matHypLocus, *trainDatas, params->getBool(REVIVE_BARRIERS));
+      optimizeHypLocus(matHypLocus, *trainDatas, params->getBool(REVIVE_BARRIERS), params->isStringSet(WEIGHTS_FILE));
     }
 
     Hyperspace hyperspace(matHypLocus); // Initialize hyperbox and get hyperplans
