@@ -1147,7 +1147,7 @@ int fidexGloRules(const std::string &command) {
     }
 
     if (params->isBoolSet(HYPERPLAN_OPTI) && params->getBool(HYPERPLAN_OPTI)) {
-      optimizeHypLocus(matHypLocus, *trainDatas, params->getBool(REVIVE_BARRIERS));
+      optimizeHypLocus(matHypLocus, *trainDatas, params->getBool(REVIVE_BARRIERS), params->isStringSet(WEIGHTS_FILE));
     }
 
     // Number of neurons in the first hidden layer (May be the number of input variables or a multiple)
