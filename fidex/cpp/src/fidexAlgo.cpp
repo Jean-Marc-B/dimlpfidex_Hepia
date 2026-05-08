@@ -1,11 +1,97 @@
 #include "fidexAlgo.h"
 
+#include <cmath>
+#include <limits>
+#include <utility>
+
 namespace {
 // ============================================================================
 // Local constants
 // ============================================================================
 constexpr double kDropoutActivationThreshold = 0.001;
 constexpr double kFidelityRelaxationStep = 0.05;
+constexpr double kThresholdZeroVisitRatio = 0.2; // Ratio of hyperplanes to visit before threshold reaches 0
+constexpr double kThresholdPowerExponent = 4.0;
+constexpr double kThresholdVeryPowerExponent = 8.0;
+constexpr double kThresholdExpLambda = 6.0;
+
+enum class ThresholdDecayFunction {
+  Linear,
+  FastPower,
+  SlowPower,
+  VeryFastPower,
+  VerySlowPower,
+  FastExponential,
+  SlowExponential
+};
+
+constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunction::Linear;
+
+double computeThresholdFromProgress(double progress, ThresholdDecayFunction function) {
+  if (progress <= 0.0) {
+    return 1.0;
+  }
+  if (progress >= 1.0) {
+    return 0.0;
+  }
+
+  switch (function) {
+  case ThresholdDecayFunction::FastPower:
+    return std::pow(1.0 - progress, kThresholdPowerExponent);
+  case ThresholdDecayFunction::SlowPower:
+    return 1.0 - std::pow(progress, kThresholdPowerExponent);
+  case ThresholdDecayFunction::VeryFastPower:
+    return std::pow(1.0 - progress, kThresholdVeryPowerExponent);
+  case ThresholdDecayFunction::VerySlowPower:
+    return 1.0 - std::pow(progress, kThresholdVeryPowerExponent);
+  case ThresholdDecayFunction::FastExponential:
+    return (std::exp(-kThresholdExpLambda * progress) - std::exp(-kThresholdExpLambda)) / (1.0 - std::exp(-kThresholdExpLambda));
+  case ThresholdDecayFunction::SlowExponential:
+    return 1.0 - (std::exp(kThresholdExpLambda * progress) - 1.0) / (std::exp(kThresholdExpLambda) - 1.0);
+  case ThresholdDecayFunction::Linear:
+  default:
+    return 1.0 - progress;
+  }
+}
+
+size_t computeThresholdZeroVisitCount(size_t nbHyperplans) {
+  if (nbHyperplans == 0) {
+    return 0;
+  }
+
+  double ratio = kThresholdZeroVisitRatio; 
+  if (ratio <= 0.0) {
+    ratio = 1.0 / static_cast<double>(nbHyperplans); // Visit at least one hyperplane before threshold reaches 0
+  } else if (ratio > 1.0) {
+    ratio = 1.0; // Threshold reaches 0 only at the end of the visit of all hyperplanes
+  }
+
+  size_t thresholdZeroVisitCount = static_cast<size_t>(std::ceil(static_cast<double>(nbHyperplans) * ratio)); // Number of hyperplanes to visit before threshold reaches 0
+  if (thresholdZeroVisitCount == 0) {
+    thresholdZeroVisitCount = 1; // Visit at least one hyperplane before threshold reaches 0
+  }
+  if (thresholdZeroVisitCount > nbHyperplans) {
+    thresholdZeroVisitCount = nbHyperplans; // Threshold reaches 0 only at the end of the visit of all hyperplanes
+  }
+  return thresholdZeroVisitCount;
+}
+
+/**
+ * @brief Computes the gain in fidelity of a candidate rule compared to the current rule, adjusted to reflect the gain to reach a perfect fidelity of 1.0.
+ * 
+ * This function calculates the gain in fidelity of a candidate rule compared to the current rule, and adjusts it to reflect the gain needed to reach a perfect fidelity of 1.0. The gain is computed as the difference between the candidate's fidelity and the current rule's fidelity, divided by the remaining fidelity needed to reach 1.0. If the remaining fidelity is less than or equal to a small epsilon value, the function returns 1.0, indicating that any improvement would effectively lead to a perfect fidelity.
+ * * @param candidateFidelity The fidelity of the candidate rule.
+ * @param currentRuleFidelity The fidelity of the current rule.
+ * @param scoreEpsilon A small epsilon value for numerical stability.
+ * @return double The adjusted gain in fidelity of the candidate rule compared to the current rule, reflecting the gain to reach a perfect fidelity of 1.0.
+ */
+double computeFidelityGainToOne(double candidateFidelity, double currentRuleFidelity, double scoreEpsilon) {
+  const double remainingFidelity = 1.0 - currentRuleFidelity;
+  if (remainingFidelity <= scoreEpsilon) { // If the remaining fidelity is very small, we consider that we are effectively at 1.0, and any improvement would lead to a perfect fidelity.
+    return 1.0;
+  }
+  return (candidateFidelity - currentRuleFidelity) / remainingFidelity;
+}
 } // namespace
 
 /**
@@ -309,6 +395,266 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
       nbIt += 1;
       continue;
     }
+    nbIt += 1;
+  }
+
+  // =========================================================================
+  // 5) Post-processing and final metrics
+  // =========================================================================
+
+  // Post-process: remove unnecessary antecedents
+  while (optimizeRule(mainSampleValues, mainSamplePred)) {
+  }
+
+  // Final rule metrics
+  double ruleAccuracy = hyperbox->computeRuleAccuracy(mainSamplePred, trainTrueClass);
+  double ruleConfidence = hyperspace->computeRuleConfidence(trainPredictionScores, mainSamplePred, mainSamplePredictionScore); // Mean output value of prediction of class chosen by the rule for the covered samples
+
+  // Extract the rule from the final hyperbox state
+  if (_parameters->isDoubleVectorSet(MUS)) {
+    rule = hyperspace->ruleExtraction(mainSampleValues, mainSamplePred, ruleAccuracy, ruleConfidence, mus, sigmas, normalizationIndices);
+  } else {
+    rule = hyperspace->ruleExtraction(mainSampleValues, mainSamplePred, ruleAccuracy, ruleConfidence);
+  }
+
+  // Persist execution stats
+  specs.showInitialFidelity = false;
+  setNbIt(nbIt);
+
+  if (hyperbox->getFidelity() < minFidelity) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * @brief Executes the Fidex algorithm with a randomized threshold search for the next antecedent.
+ *
+ * Fidex builds a rule that explains the prediction of a model for a specific sample. It is based on
+ * the training samples and the hyperlocus and directed by the given parameters, including the maximum
+ * number of iterations allowed and whether an antecedent is allowed to keep the same fidelity.
+ * It visits candidate hyperplanes in a shuffled order and accepts the current best candidate as soon as
+ * its fidelity gain reaches a decreasing threshold. It updates the provided rule object with the computed
+ * rule even if the rule doesn't meet the criteria (minimum covering and minimum fidelity). It returns True
+ * if we found a rule meeting the criteria.
+ *
+ * @param rule Reference to the Rule object to be updated by the computation.
+ * @param mainSampleValues A vector of double values representing the main sample values.
+ * @param mainSamplePred An integer representing the predicted class of the main sample.
+ * @param minFidelity A double representing the minimum fidelity threshold for rule creation.
+ * @param minCoverSize An integer representing the minimum number of samples a rule must cover.
+ * @return True if a rule meeting the criteria is found.
+ * @return False if no rule meeting the criteria is found.
+ */
+bool Fidex::computeV2(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minCoverSize) {
+
+  // =========================================================================
+  // 1) Setup and context initialization
+  // =========================================================================
+
+  specs.nbIt = 0;
+
+  // Execution context
+  bool showInitialFidelity = getShowInitialFidelity();
+  double mainSamplePredictionScore = getMainSamplePredScore(); // Prediction score of the main sample on the predicted class
+
+  // Cached references used throughout the search
+  Hyperspace *hyperspace = _hyperspace; // Hyperspace containing the hyperbox and the hyperlocus
+  int nbAttributes = _trainDataset->getNbAttributes();
+  const std::vector<int> &trainPreds = _trainDataset->getPredictions();
+  const std::vector<int> &trainTrueClass = _trainDataset->getClasses();
+  const std::vector<std::vector<double>> &trainData = _trainDataset->getDatas();
+  const std::vector<std::vector<double>> &trainPredictionScores = _trainDataset->getPredictionScores();
+  const auto &hyperLocus = hyperspace->getHyperLocus();    // Matrix of all possible hyperplanes for each dimension
+  const auto &hyperbox = hyperspace->getHyperbox();        // Main hyperbox of the rule
+  auto nbDimensions = static_cast<int>(hyperLocus.size()); // Number of dimensions in the hyperlocus (must be a multiple of the number of attributes)
+  int maxIterations = _parameters->getInt(MAX_ITERATIONS); // Max number of antecedents in the rule
+  bool allowNoFidChange = _parameters->getBool(ALLOW_NO_FID_CHANGE); // Whether to allow that a new antecedent does not increase the fidelity of the rule
+  const double scoreEpsilon = 1e-12;                                // Tolerance for floating-point score comparisons
+
+  // Optional denormalization metadata
+  std::vector<int> normalizationIndices;
+  std::vector<double> mus;
+  std::vector<double> sigmas;
+
+  if (_parameters->isIntVectorSet(NORMALIZATION_INDICES)) {
+    normalizationIndices = _parameters->getIntVector(NORMALIZATION_INDICES);
+  }
+  if (_parameters->isDoubleVectorSet(MUS)) {
+    mus = _parameters->getDoubleVector(MUS);
+  }
+  if (_parameters->isDoubleVectorSet(SIGMAS)) {
+    sigmas = _parameters->getDoubleVector(SIGMAS);
+  }
+  if (_parameters->isDoubleVectorSet(MUS) && !(_parameters->isIntVectorSet(NORMALIZATION_INDICES) && _parameters->isDoubleVectorSet(SIGMAS))) {
+    throw InternalError("Error during computation of Fidex: mus are specified but sigmas or normalization indices are not specified.");
+  }
+
+  // =========================================================================
+  // 2) Input and consistency checks
+  // =========================================================================
+
+  // Input and consistency checks
+  // Check that we have the prediction value of the main sample if we use test samples (used to compute rule confidence)
+  if (mainSamplePredictionScore == -1.0 && _usingTestSamples) {
+    throw InternalError("Error during computation of Fidex: Execution with a test sample but no sample prediction value has been given.");
+  }
+
+  // Check mainSampleValues size
+  if (mainSampleValues.size() != nbAttributes) {
+    throw InternalError("Error during computation of Fidex: main sample values size (" + std::to_string(mainSampleValues.size()) + ") is different from the number of attributes in the training dataset (" + std::to_string(nbAttributes) + ").");
+  }
+  if (nbAttributes <= 0) {
+    throw InternalError("Error during computation of Fidex: number of attributes must be strictly positive.");
+  }
+  if (nbDimensions % nbAttributes != 0) {
+    throw InternalError("Error during computation of Fidex: hyperlocus dimension count (" + std::to_string(nbDimensions) + ") must be a multiple of the number of attributes (" + std::to_string(nbAttributes) + ").");
+  }
+
+  if (minCoverSize < 1) {
+    throw InternalError("Error during computation of Fidex: minimum covering must be >= 1.");
+  }
+
+  // =========================================================================
+  // 3) Hyperbox initialization
+  // =========================================================================
+
+  // Initialize the rule hyperbox with full covering
+  std::vector<int> coveredSamples(trainData.size());   // Samples covered by the hyperbox
+  iota(begin(coveredSamples), end(coveredSamples), 0); // The vector goes from 0 to len(coveredSamples)-1
+
+  // Reset hyperbox state and compute initial fidelity
+  hyperbox->setCoveredSamples(coveredSamples);
+  hyperbox->computeFidelity(mainSamplePred, trainPreds); // Compute fidelity of initial hyperbox
+  hyperbox->resetDiscriminativeHyperplans();             // We reset hyperbox discriminativeHyperplans
+  hyperbox->resetIncreasedFidelity();                    // We reset the increased fidelities
+  hyperbox->resetAccuracyChanges();                      // We reset the accuracy changes
+  hyperbox->resetCoveringSizesWithNewAntecedent();       // We reset the covering sizes for each antecedent
+
+  if (_usingTestSamples && showInitialFidelity) { // Test samples are not used with fidexGloRules, so we don't show the initial fidelity in this case
+    std::cout << "Initial fidelity : " << hyperbox->getFidelity() << std::endl;
+  }
+
+  int nbIt = 0;
+  std::vector<std::pair<int, int>> randomHyperplans;
+  size_t nbHyperplans = 0;
+
+  for (int dimension = 0; dimension < nbDimensions; ++dimension) {
+    nbHyperplans += hyperLocus[dimension].size();
+  }
+
+  randomHyperplans.reserve(nbHyperplans);
+  for (int dimension = 0; dimension < nbDimensions; ++dimension) {
+    const size_t nbHyp = hyperLocus[dimension].size();
+    for (size_t k = 0; k < nbHyp; ++k) {
+      randomHyperplans.push_back(std::make_pair(dimension, static_cast<int>(k)));
+    }
+  }
+
+  const size_t thresholdZeroVisitCount = computeThresholdZeroVisitCount(randomHyperplans.size());
+
+  // =========================================================================
+  // 4) Randomized threshold antecedent search
+  // =========================================================================
+
+  // Main search loop: at each iteration, select and apply the first good enough antecedent if found.
+  while (hyperbox->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough, we try to add a new discriminative hyperplane (antecedent in the rule)
+
+    Hyperbox bestCandidateHyperbox; // best hyperbox to choose for next step
+    Hyperbox candidateHyperbox;
+
+    // Current rule covering used as the common baseline for all candidates in this iteration
+    const auto &currentCoveredSamples = hyperbox->getCoveredSamples();
+    const size_t ruleCoverSize = currentCoveredSamples.size();
+    const double currentRuleFidelity = hyperbox->getFidelity();
+    int indexBestHyp = -1;
+    int bestDimension = -1;
+    double bestCandidateFidelityGain = -std::numeric_limits<double>::infinity();
+    bool candidateAccepted = false;
+
+    // Explore all hyperplanes in random order without visiting the same pair twice in this iteration
+    shuffle(begin(randomHyperplans), end(randomHyperplans), _rnd);
+
+    for (size_t visitedHyperplans = 0; visitedHyperplans < randomHyperplans.size(); ++visitedHyperplans) {
+      int dimension = randomHyperplans[visitedHyperplans].first;
+      int indexHyp = randomHyperplans[visitedHyperplans].second;
+      int attribute = dimension % nbAttributes;
+      double mainSampleValue = mainSampleValues[attribute];
+      double hypValue = hyperLocus[dimension][indexHyp];
+      bool mainSampleGreater = hypValue <= mainSampleValue; // Check if the main sample is on the right side of the hyperplane
+
+      candidateHyperbox.computeCoveredSamplesAndFidelity(currentCoveredSamples, attribute, trainData, mainSampleGreater, hypValue, mainSamplePred, trainPreds); // Compute new cover samples and fidelity
+
+      const auto &candidateCoveredSamples = candidateHyperbox.getCoveredSamples();
+      const size_t candidateCoverSize = candidateCoveredSamples.size();
+      const double candidateFidelity = candidateHyperbox.getFidelity();
+
+      // Skip candidates that already fail the minimum covering constraint
+      if (candidateCoverSize >= static_cast<size_t>(minCoverSize)) {
+        const bool reducesCurrentRuleCover = candidateCoverSize < ruleCoverSize;
+
+        if (reducesCurrentRuleCover) { // Only consider candidates that reduce the covering of the current rule
+          const double fidelityDeltaVsCurrentRule = candidateFidelity - currentRuleFidelity;
+          const bool improvesCurrentRuleFidelity = fidelityDeltaVsCurrentRule > scoreEpsilon;                                                                // Standard case: adding the antecedent strictly increases fidelity
+          const bool sameFidelityAndAllowed = allowNoFidChange && fidelityDeltaVsCurrentRule >= -scoreEpsilon && fidelityDeltaVsCurrentRule <= scoreEpsilon; // Candidate keeps the same fidelity as the current rule (within epsilon) and this is allowed by the parameter
+
+          if (improvesCurrentRuleFidelity || sameFidelityAndAllowed) {
+            const double candidateFidelityGain = computeFidelityGainToOne(candidateFidelity, currentRuleFidelity, scoreEpsilon); // Percentage of gained fidelity with this antecedent out of the maximum possible gain to reach fidelity 1
+
+            bool isBetterCandidate = false;
+            if (indexBestHyp == -1) {
+              isBetterCandidate = true;
+            } else {
+              const double fidelityDeltaVsBestCandidate = candidateFidelity - bestCandidateHyperbox.getFidelity();
+              const size_t bestCandidateCoverSize = bestCandidateHyperbox.getCoveredSamples().size();
+              const bool improvesBestCandidateFidelity = fidelityDeltaVsBestCandidate > scoreEpsilon;
+              const bool sameFidelity = fidelityDeltaVsBestCandidate >= -scoreEpsilon && fidelityDeltaVsBestCandidate <= scoreEpsilon;
+              const bool sameFidelityWithBetterCovering = sameFidelity && candidateCoverSize > bestCandidateCoverSize;
+              isBetterCandidate = improvesBestCandidateFidelity || sameFidelityWithBetterCovering;
+            }
+
+            if (isBetterCandidate) {
+              bestCandidateHyperbox.setFidelity(candidateHyperbox.getFidelity()); // Update best hyperbox
+              bestCandidateHyperbox.setCoveredSamples(candidateCoveredSamples);
+              bestCandidateFidelityGain = candidateFidelityGain;
+              indexBestHyp = indexHyp;
+              bestDimension = dimension;
+            }
+          }
+        }
+      }
+
+      // Accept the current best candidate as soon as it reaches the decreasing threshold
+      if (indexBestHyp != -1 && thresholdZeroVisitCount > 0) {
+        const double progress = static_cast<double>(visitedHyperplans + 1) / static_cast<double>(thresholdZeroVisitCount);
+        const double threshold = computeThresholdFromProgress(progress, kThresholdDecayFunction);
+        if (bestCandidateFidelityGain + scoreEpsilon >= threshold) {
+          candidateAccepted = true;
+          break;
+        }
+      }
+    }
+
+    // If we visited all hyperplanes without accepting a candidate, no valid antecedent can be found for the current rule
+    if (!candidateAccepted) {
+      break;
+    }
+
+    // Apply the best candidate found during this outer iteration
+    const auto &bestCandidateCoveredSamples = bestCandidateHyperbox.getCoveredSamples();
+    const size_t bestCandidateCoverSize = bestCandidateCoveredSamples.size();
+    const double bestCandidateFidelity = bestCandidateHyperbox.getFidelity();
+
+    hyperbox->setFidelity(bestCandidateFidelity);
+    hyperbox->addIncreasedFidelity(bestCandidateFidelity);
+    hyperbox->setCoveredSamples(bestCandidateCoveredSamples);
+    hyperbox->addCoveringSizesWithNewAntecedent(bestCandidateCoverSize);
+    hyperbox->addDiscriminativeHyperplan(bestDimension, indexBestHyp);
+
+    double ruleAccuracy = hyperbox->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of covered samples whose true class matches the rule prediction
+    hyperbox->addAccuracyChanges(ruleAccuracy);
+
     nbIt += 1;
   }
 
