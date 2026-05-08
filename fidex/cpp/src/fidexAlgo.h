@@ -84,6 +84,10 @@ public:
    * @brief Executes the Fidex algorithm to compute an explaining rule for the given sample based on the training samples and hyperlocus and directed by the given parameters.
    */
   bool compute(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
+
+  /**
+   * @brief Executes the Fidex algorithm with a randomized threshold search for the next antecedent.
+   */
   bool computeV2(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
 
   // SETTERS
