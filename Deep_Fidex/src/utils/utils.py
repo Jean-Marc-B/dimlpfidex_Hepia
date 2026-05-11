@@ -34,21 +34,23 @@ nbStairsPerUnitInv = 1.0/nbStairsPerUnit
 def load_data(cfg):
     print("\nLoading data...")
 
-    # Load train data
-    train = np.loadtxt(cfg["train_data_file"])
+    if cfg.get("crossval_n_folds") is not None:
+        fold_files = _crossval_fold_files(cfg)
+        if _crossval_fold_exists(fold_files):
+            train, Y_train, test, Y_test = _load_crossval_split(cfg, fold_files)
+        else:
+            train, test, Y_train, Y_test = _load_raw_data_files(cfg)
+            train, Y_train, test, Y_test = _apply_crossval_split(cfg, train, Y_train, test, Y_test, fold_files)
+    else:
+        train, test, Y_train, Y_test = _load_raw_data_files(cfg)
+
     print("train data shape : ", train.shape)
     X_train = train.reshape(train.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
     X_train = X_train.astype('int32' if cfg["data_type"] == "integer" else 'float32')
 
-    # Load test data
-    test = np.loadtxt(cfg["test_data_file"])
     print("test data shape : ", test.shape)
     X_test = test.reshape(test.shape[0], cfg["size1D"], cfg["size1D"], cfg["nb_channels"])
     X_test = X_test.astype('int32' if cfg["data_type"] == "integer" else 'float32')
-
-    # Load labels
-    Y_train = np.loadtxt(cfg["train_class_file"]).astype('int32')
-    Y_test = np.loadtxt(cfg["test_class_file"]).astype('int32')
 
     # Normalize if necessary
     if cfg["data_type"] == "integer":
@@ -58,6 +60,160 @@ def load_data(cfg):
     print("Data loaded.\n")
 
     return X_train, Y_train, X_test, Y_test
+
+
+def _load_raw_data_files(cfg):
+    """Load the original train/test data and class files configured for the dataset."""
+    train = np.loadtxt(cfg["train_data_file"])
+    test = np.loadtxt(cfg["test_data_file"])
+    Y_train = np.loadtxt(cfg["train_class_file"]).astype('int32')
+    Y_test = np.loadtxt(cfg["test_class_file"]).astype('int32')
+    return train, test, Y_train, Y_test
+
+
+def _apply_crossval_split(cfg, train, Y_train, test, Y_test, fold_files):
+    """Build the requested fold, save it, and redirect cfg files to these saved copies."""
+    if cfg.get("crossval_seed") is None:
+        raise ValueError("crossval_seed is required to create missing cross-validation fold files.")
+    data = np.concatenate((np.atleast_2d(train), np.atleast_2d(test)), axis=0)
+    labels = _normalize_loaded_labels(Y_train, Y_test, cfg["nb_classes"])
+    train_indices, test_indices = _build_crossval_split(
+        labels,
+        cfg["crossval_n_folds"],
+        cfg["crossval_fold"],
+        cfg["crossval_seed"],
+    )
+
+    fold_train = data[train_indices]
+    fold_test = data[test_indices]
+    fold_Y_train = labels[train_indices]
+    fold_Y_test = labels[test_indices]
+
+    cfg["crossval_train_indices"] = train_indices
+    cfg["crossval_test_indices"] = test_indices
+
+    _redirect_to_crossval_files(cfg, fold_files)
+
+    _save_crossval_array(cfg["train_data_file"], fold_train)
+    _save_crossval_array(cfg["test_data_file"], fold_test)
+    _save_crossval_array(cfg["train_class_file"], fold_Y_train, fmt="%d")
+    _save_crossval_array(cfg["test_class_file"], fold_Y_test, fmt="%d")
+    _save_crossval_array(fold_files["train_indices_file"], train_indices, fmt="%d")
+    _save_crossval_array(fold_files["test_indices_file"], test_indices, fmt="%d")
+
+    print(
+        f"Created cross-validation fold {cfg['crossval_fold']}/{cfg['crossval_n_folds']} "
+        f"with seed {cfg['crossval_seed']}"
+    )
+    print(f"Cross-validation files folder : {cfg['files_folder']}")
+
+    return fold_train, fold_Y_train.astype('int32'), fold_test, fold_Y_test.astype('int32')
+
+
+def _load_crossval_split(cfg, fold_files):
+    """Reload an existing fold from files so rules reuse the exact train/stats split."""
+    _redirect_to_crossval_files(cfg, fold_files)
+
+    train = np.atleast_2d(np.loadtxt(cfg["train_data_file"]))
+    test = np.atleast_2d(np.loadtxt(cfg["test_data_file"]))
+    Y_train = _load_crossval_labels(cfg["train_class_file"], cfg["nb_classes"])
+    Y_test = _load_crossval_labels(cfg["test_class_file"], cfg["nb_classes"])
+    cfg["crossval_train_indices"] = np.loadtxt(fold_files["train_indices_file"], dtype=int).reshape(-1)
+    cfg["crossval_test_indices"] = np.loadtxt(fold_files["test_indices_file"], dtype=int).reshape(-1)
+
+    print(
+        f"Loaded existing cross-validation fold {cfg['crossval_fold']}/{cfg['crossval_n_folds']} "
+        f"from {cfg['files_folder']}"
+    )
+    if cfg.get("crossval_seed") is not None:
+        print("Existing fold files found; the seed is not used to regenerate this fold.")
+
+    return train, Y_train, test, Y_test
+
+
+def _crossval_fold_files(cfg):
+    """Return the file paths used to persist one cross-validation fold."""
+    return {
+        "train_data_file": os.path.join(cfg["files_folder"], "crossval_trainData.txt"),
+        "test_data_file": os.path.join(cfg["files_folder"], "crossval_testData.txt"),
+        "train_class_file": os.path.join(cfg["files_folder"], "crossval_trainClass.txt"),
+        "test_class_file": os.path.join(cfg["files_folder"], "crossval_testClass.txt"),
+        "train_indices_file": os.path.join(cfg["files_folder"], "crossval_trainIndices.txt"),
+        "test_indices_file": os.path.join(cfg["files_folder"], "crossval_testIndices.txt"),
+    }
+
+
+def _crossval_fold_exists(fold_files):
+    """Return True only when all persisted fold files are present; reject partial folds."""
+    existing = {key: os.path.exists(file_path) for key, file_path in fold_files.items()}
+    if all(existing.values()):
+        return True
+    if any(existing.values()):
+        missing = [file_path for key, file_path in fold_files.items() if not existing[key]]
+        raise ValueError("Incomplete cross-validation fold files. Missing: " + ", ".join(missing))
+    return False
+
+
+def _redirect_to_crossval_files(cfg, fold_files):
+    """Point cfg data/class paths to the current fold files used by downstream steps."""
+    for key in ("train_data_file", "test_data_file", "train_class_file", "test_class_file"):
+        cfg[key] = fold_files[key]
+
+
+def _load_crossval_labels(file_path, nb_classes):
+    """Load fold labels while preserving one-hot labels when there is a single sample."""
+    labels = np.loadtxt(file_path).astype('int32')
+    if labels.ndim == 1 and _looks_like_one_hot_row(labels, nb_classes):
+        return labels.reshape(1, -1)
+    return labels
+
+
+def _normalize_loaded_labels(Y_train, Y_test, nb_classes):
+    """Return labels as one array (concatenate train and test) while preserving one-hot rows loaded as a single sample."""
+    Y_train = np.asarray(Y_train)
+    Y_test = np.asarray(Y_test)
+    if Y_train.ndim == 1 and Y_test.ndim == 1:
+        if _looks_like_one_hot_row(Y_train, nb_classes) and _looks_like_one_hot_row(Y_test, nb_classes):
+            return np.vstack((Y_train, Y_test))
+        return np.concatenate((Y_train, Y_test), axis=0)
+    return np.concatenate((np.atleast_2d(Y_train), np.atleast_2d(Y_test)), axis=0)
+
+
+def _looks_like_one_hot_row(values, nb_classes):
+    """Detect the single-sample one-hot case that np.loadtxt reads as a 1D row."""
+    return len(values) == nb_classes and np.isin(values, [0, 1]).all() and np.sum(values) == 1
+
+
+def _build_crossval_split(labels, n_folds, fold, seed):
+    """Create deterministic train/test indices by rotating one shuffled dataset across folds."""
+    if n_folds < 2:
+        raise ValueError("crossval_n_folds must be at least 2.")
+    if fold < 1 or fold > n_folds:
+        raise ValueError("crossval_fold must be between 1 and crossval_n_folds.")
+
+    if len(labels) < n_folds:
+        raise ValueError(
+            f"Dataset contains {len(labels)} samples, which is less than crossval_n_folds={n_folds}."
+        )
+
+    rng = np.random.default_rng(seed)
+    shuffled_indices = np.arange(len(labels))
+    rng.shuffle(shuffled_indices)
+
+    folds = np.array_split(shuffled_indices, n_folds)
+    test_indices = folds[fold - 1]
+    train_mask = np.ones(len(labels), dtype=bool)
+    train_mask[test_indices] = False
+    train_indices = np.where(train_mask)[0]
+    rng.shuffle(train_indices)
+
+    return train_indices, test_indices
+
+
+def _save_crossval_array(file_path, values, fmt="%.18g"):
+    """Persist fold data/classes/indices so downstream steps read the same split."""
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    np.savetxt(file_path, values, fmt=fmt)
 
 def output_data(data, data_file):
     """

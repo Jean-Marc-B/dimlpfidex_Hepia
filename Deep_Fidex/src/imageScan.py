@@ -28,7 +28,7 @@ if not os.environ.get(_MARK): # relaunch the script in a clean environment
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" # Change this to select the GPU to use, -1 to use CPU only
+os.environ["CUDA_VISIBLE_DEVICES"] = "1" # Change this to select the GPU to use, -1 to use CPU only
 
 import tensorflow as tf
 # from tensorflow.keras.mixed_precision import set_global_policy
@@ -121,6 +121,10 @@ def parse_arguments():
     parser.add_argument("--heatmap", action="store_true", help="Generate a heatmap") # Only evaluation on patches
 
     parser.add_argument("--dct_patch_size", type=int, help="DCT patch size N for square patches of size N×N (required if --statistic=DCT_and_image)")
+    parser.add_argument("--crossval_n_folds", type=int, default=None, help="Number of folds for cross-validation")
+    parser.add_argument("--crossval_fold", type=int, default=None, help="Fold index to use as test fold, starting at 1")
+    parser.add_argument("--crossval_seed", type=int, default=None, help="Seed used to build cross-validation folds; crossVal.py generates one if omitted")
+    parser.add_argument("--crossval_output_folder", type=str, default=None, help=argparse.SUPPRESS)
 
     return parser.parse_args()
 
@@ -135,6 +139,17 @@ if __name__ == "__main__":
 
     if args.statistic == "DCT_and_image" and args.dct_patch_size is None:
         raise ValueError("--dct_patch_size is required when --statistic is 'DCT_and_image'")
+
+    # For cross-validation only
+    if (args.crossval_n_folds is None) != (args.crossval_fold is None):
+        raise ValueError("--crossval_n_folds and --crossval_fold must be used together.")
+    if args.crossval_n_folds is not None:
+        if args.crossval_n_folds < 2:
+            raise ValueError("--crossval_n_folds must be at least 2.")
+        if args.crossval_fold < 1 or args.crossval_fold > args.crossval_n_folds:
+            raise ValueError("--crossval_fold must be between 1 and --crossval_n_folds.")
+        # The seed is only needed when load_data has to create a fold for the first time.
+        # Existing fold files can be reused without regenerating the split.
 
     # If generating rules, we force CPU only
     if args.rules:
@@ -155,10 +170,17 @@ if __name__ == "__main__":
     if cfg["model"] == "VGG_metadatas":
         train_meta = np.loadtxt(cfg["train_meta_file"])
         print("train metadata shape : ", train_meta.shape)
-        X_train_meta = train_meta.astype('float32')
         test_meta = np.loadtxt(cfg["test_meta_file"])
         print("test metadata shape : ", test_meta.shape)
-        X_test_meta = test_meta.astype('float32')
+        if cfg.get("crossval_n_folds") is not None:
+            meta = np.concatenate((train_meta, test_meta), axis=0)
+            X_train_meta = meta[cfg["crossval_train_indices"]].astype('float32')
+            X_test_meta = meta[cfg["crossval_test_indices"]].astype('float32')
+            print("cross-validation train metadata shape : ", X_train_meta.shape)
+            print("cross-validation test metadata shape : ", X_test_meta.shape)
+        else:
+            X_train_meta = train_meta.astype('float32')
+            X_test_meta = test_meta.astype('float32')
 
     ##############################################################################
 
