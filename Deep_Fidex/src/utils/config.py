@@ -89,6 +89,11 @@ def load_config(args, script_dir):
 
     config["nb_classes"] = len(config["classes"])
 
+    # For crossValidation :
+    config["crossval_n_folds"] = getattr(args, "crossval_n_folds", None)
+    config["crossval_fold"] = getattr(args, "crossval_fold", None)
+    config["crossval_seed"] = getattr(args, "crossval_seed", None)
+
     if getattr(args, "train_with_patches", False) and len(FILTER_SIZE) != 1:
         raise ValueError("Error : When training with patches, only one stride and one filter size can be chosen.")
 
@@ -164,7 +169,10 @@ def load_config(args, script_dir):
         "patch_impact_and_image": "patch_impact_and_image" + patches_sufix + folder_suf,
         "patch_impact_and_stats": "patch_impact_and_stats" + patches_sufix + folder_suf
     }
-    scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
+    if getattr(args, "crossval_output_folder", None) is not None:
+        scan_folder = os.path.join(scan_folder, args.crossval_output_folder)
+    else:
+        scan_folder = os.path.join(scan_folder, STATISTIC_FOLDERS.get(args.statistic, "Probability_Images"))
 
     # 📂 Definition of folders of files
     config["scan_folder"] = scan_folder
