@@ -125,6 +125,8 @@ def parse_arguments():
     parser.add_argument("--crossval_fold", type=int, default=None, help="Fold index to use as test fold, starting at 1")
     parser.add_argument("--crossval_seed", type=int, default=None, help="Seed used to build cross-validation folds; crossVal.py generates one if omitted")
     parser.add_argument("--crossval_output_folder", type=str, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--zeroFidelityRatio", type=float, default=1.0, help="Ratio of hyperplanes to visit before Fidex early-stopping threshold reaches 0")
+    parser.add_argument("--fidexVersion", type=str, choices=["fidexEarlyStopping", "fidexFull"], default="fidexEarlyStopping", help="Fidex algorithm version to use")
 
     return parser.parse_args()
 

@@ -58,6 +58,8 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
   DROPOUT_DIM,
   FIDELITY_IMPORTANCE,
   THRESHOLD_FIDELITY_ONLY,
+  ZERO_FIDELITY_RATIO,
+  FIDEX_VERSION,
   MIN_FIDELITY,
   LOWEST_MIN_FIDELITY,
   LEARNING_RATE,

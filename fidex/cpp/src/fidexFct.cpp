@@ -104,6 +104,8 @@ void showFidexParams() {
   printOptionDescription("--allow_no_fid_change <bool>", "Whether to allow to add a new attribute with the same fidelity and less covering. It can be usefull when not finding a fidel rule (default: False)");
   printOptionDescription("--fidelity_importance <float [0,1]>", "Weight of fidelity in candidate scoring in Fidex (default: 1.0)");
   printOptionDescription("--threshold_fidelity_only <float [0,1]>", "Iteration ratio from which Fidex switches to fidelity-only mode (default: 0.6, used only if fidelity_importance < 1)");
+  printOptionDescription("--zeroFidelityRatio <float [0,1]>", "Ratio of hyperplanes to visit before the early-stopping acceptance threshold reaches 0 (default: 1.0)");
+  printOptionDescription("--fidexVersion <fidexEarlyStopping|fidexFull>", "Fidex algorithm version to use (default: fidexEarlyStopping)");
   printOptionDescription("--min_fidelity <float [0,1]>", "Minimal rule fidelity accepted when generating a rule (default: 1.0)");
   printOptionDescription("--lowest_min_fidelity <float [0,1]>", "Minimal min_fidelity to which we agree to go down during the covering_strategy (default: 0.75)");
   printOptionDescription("--hi_knot <float>", "High side of the intervall of the hyperlocus (default: 5.0)");
@@ -269,7 +271,7 @@ int fidex(const std::string &command) {
                                                            WEIGHTS_FILE, RULES_FILE, RULES_OUTFILE, NB_ATTRIBUTES, NB_CLASSES,
                                                            ROOT_FOLDER, TEST_PRED_FILE, TEST_CLASS_FILE, ATTRIBUTES_FILE,
                                                            STATS_FILE, CONSOLE_FILE, MAX_ITERATIONS, MIN_COVERING, COVERING_STRATEGY,
-                                                           MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, FIDELITY_IMPORTANCE, THRESHOLD_FIDELITY_ONLY, MIN_FIDELITY, LOWEST_MIN_FIDELITY, HI_KNOT, DROPOUT_DIM, DROPOUT_HYP,
+                                                           MAX_FAILED_ATTEMPTS, ALLOW_NO_FID_CHANGE, FIDELITY_IMPORTANCE, THRESHOLD_FIDELITY_ONLY, ZERO_FIDELITY_RATIO, FIDEX_VERSION, MIN_FIDELITY, LOWEST_MIN_FIDELITY, HI_KNOT, DROPOUT_DIM, DROPOUT_HYP,
                                                            NB_QUANT_LEVELS, DECISION_THRESHOLD, POSITIVE_CLASS_INDEX, NORMALIZATION_FILE, MUS,
                                                            SIGMAS, NORMALIZATION_INDICES, SEED, HYPERPLAN_OPTI, REVIVE_BARRIERS};
     if (commandList[1].compare("--json_config_file") == 0) {

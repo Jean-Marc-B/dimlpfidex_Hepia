@@ -63,6 +63,8 @@ const std::unordered_map<std::string, ParameterCode> parameterNames = {
     {"dropout_dim", DROPOUT_DIM},
     {"fidelity_importance", FIDELITY_IMPORTANCE},
     {"threshold_fidelity_only", THRESHOLD_FIDELITY_ONLY},
+    {"zeroFidelityRatio", ZERO_FIDELITY_RATIO},
+    {"fidexVersion", FIDEX_VERSION},
     {"min_fidelity", MIN_FIDELITY},
     {"lowest_min_fidelity", LOWEST_MIN_FIDELITY},
     {"normalization_file", NORMALIZATION_FILE},
@@ -437,6 +439,14 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
 
   case THRESHOLD_FIDELITY_ONLY:
     setFloat(THRESHOLD_FIDELITY_ONLY, arg);
+    break;
+
+  case ZERO_FIDELITY_RATIO:
+    setFloat(ZERO_FIDELITY_RATIO, arg);
+    break;
+
+  case FIDEX_VERSION:
+    setString(FIDEX_VERSION, arg);
     break;
 
   case MAX_FAILED_ATTEMPTS:
@@ -1277,6 +1287,15 @@ void Parameters::checkParametersFidex() {
     throw CommandArgumentException("Error : Threshold fidelity only must be between [0.0, 1.0].");
   }
 
+  if (getFloat(ZERO_FIDELITY_RATIO) < 0.0f || getFloat(ZERO_FIDELITY_RATIO) > 1.0f) {
+    throw CommandArgumentException("Error : zeroFidelityRatio must be between [0.0, 1.0].");
+  }
+
+  const std::string fidexVersion = getString(FIDEX_VERSION);
+  if (fidexVersion != "fidexEarlyStopping" && fidexVersion != "fidexFull") {
+    throw CommandArgumentException("Error : fidexVersion must be either fidexEarlyStopping or fidexFull.");
+  }
+
   if (getFloat(LOWEST_MIN_FIDELITY) < 0.0f || getFloat(LOWEST_MIN_FIDELITY) > 1.0f) {
     throw CommandArgumentException("Error : Minimum fidelity has to be between [0.0, 1.0]");
   }
@@ -1440,6 +1459,8 @@ void Parameters::setDefaultFidex() {
   setDefaultInt(MAX_FAILED_ATTEMPTS, 30);
   setDefaultFloat(FIDELITY_IMPORTANCE, 1.0f);
   setDefaultFloat(THRESHOLD_FIDELITY_ONLY, 0.6f);
+  setDefaultFloat(ZERO_FIDELITY_RATIO, 1.0f);
+  setDefaultString(FIDEX_VERSION, "fidexEarlyStopping");
   setDefaultFloat(MIN_FIDELITY, 1.0);
   setDefaultFloat(LOWEST_MIN_FIDELITY, 0.75);
   setDefaultBool(COVERING_STRATEGY, true);
