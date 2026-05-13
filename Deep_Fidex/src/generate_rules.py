@@ -5,6 +5,8 @@ from utils.config import *
 
 def generate_rules(cfg, args, nb_attributes = None):
     start_time_global_rules = time.time()
+    zero_fidelity_ratio = getattr(args, "zeroFidelityRatio", 1.0)
+    fidex_version = getattr(args, "fidexVersion", "fidexEarlyStopping")
     if nb_attributes is None:
         nb_attributes = cfg["nb_stats_attributes"]
     if args.statistic == "convDimlpFilter":
@@ -29,6 +31,8 @@ def generate_rules(cfg, args, nb_attributes = None):
         f'--nb_quant_levels {NB_QUANT_LEVELS} '
         f'--dropout_dim {DROPOUT_DIM} '
         f'--dropout_hyp {DROPOUT_HYP} '
+        f'--zeroFidelityRatio {zero_fidelity_ratio} '
+        f'--fidexVersion {fidex_version} '
         f'--verbose 3 '
     )
     if args.statistic == "histogram":

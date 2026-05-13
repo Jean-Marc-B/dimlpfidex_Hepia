@@ -10,7 +10,6 @@ namespace {
 // ============================================================================
 constexpr double kDropoutActivationThreshold = 0.001;
 constexpr double kFidelityRelaxationStep = 0.05;
-constexpr double kThresholdZeroVisitRatio = 0.2; // Ratio of hyperplanes to visit before threshold reaches 0
 constexpr double kThresholdPowerExponent = 4.0;
 constexpr double kThresholdVeryPowerExponent = 8.0;
 constexpr double kThresholdExpLambda = 6.0;
@@ -54,12 +53,12 @@ double computeThresholdFromProgress(double progress, ThresholdDecayFunction func
   }
 }
 
-size_t computeThresholdZeroVisitCount(size_t nbHyperplans) {
+size_t computeThresholdZeroVisitCount(size_t nbHyperplans, double zeroFidelityRatio) {
   if (nbHyperplans == 0) {
     return 0;
   }
 
-  double ratio = kThresholdZeroVisitRatio; 
+  double ratio = zeroFidelityRatio;
   if (ratio <= 0.0) {
     ratio = 1.0 / static_cast<double>(nbHyperplans); // Visit at least one hyperplane before threshold reaches 0
   } else if (ratio > 1.0) {
@@ -131,8 +130,7 @@ Fidex::Fidex(DataSetFid &trainDataset, Parameters &parameters, Hyperspace &hyper
  * @return True if a rule meeting the criteria is found.
  * @return False if no rule meeting the criteria is found.
  */
-bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minCoverSize) {
-
+bool Fidex::computeFull(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minCoverSize) {
   // =========================================================================
   // 1) Setup and context initialization
   // =========================================================================
@@ -163,7 +161,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
   double coeffFidelityImportance = _parameters->getFloat(FIDELITY_IMPORTANCE);   // Coefficient to adjust the importance of fidelity with respect to the covering in the candidate selection objective function (1 = maximise fidelity only, 0 = minimise drop of covering only)
   double thresholdFidelityOnly = _parameters->getFloat(THRESHOLD_FIDELITY_ONLY); // Ratio of max iterations from which it switches to fidelity-only mode
   int thresholdScoreMode = static_cast<int>(thresholdFidelityOnly * maxIterations);
-  bool fidelityOnlyMode = coeffFidelityImportance >= 1.0 - scoreEpsilon; // Keep behavior close to compute() when only fidelity matters
+  bool fidelityOnlyMode = coeffFidelityImportance >= 1.0 - scoreEpsilon; // Keep behavior close to computeFull() when only fidelity matters
 
   // Optional denormalization metadata
   std::vector<int> normalizationIndices;
@@ -314,7 +312,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
           continue;
         }
 
-        const double candidateGainedFidelity = (candidateFidelity - currentRuleFidelity) / (minFidelity - currentRuleFidelity); // Percentage of gained fidelity with this antecedent out of the maximum possible gain to reach the wanted fidelity
+        const double candidateGainedFidelity = (candidateFidelity - currentRuleFidelity) / (1 - currentRuleFidelity); // Percentage of gained fidelity with this antecedent out of the maximum possible gain to reach a perfect fidelity of 1.0.
         if (candidateGainedFidelity < -scoreEpsilon) {
           continue; // Worsens fidelity
         }
@@ -342,7 +340,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
           const bool sameScoreWithBetterCovering = sameScore && candidateCoverSize > bestCandidateCoverSize;
           // Tie-break policy:
           // - mixed objective (a < 1): equal score -> prefer higher fidelity gain
-          // - fidelity-only mode (a = 1): equal score -> prefer larger covering (same behavior as compute())
+          // - fidelity-only mode (a = 1): equal score -> prefer larger covering (same behavior as computeFull())
           isBetterCandidate = improvesBestCandidateScore ||
                               (fidelityOnlyMode ? sameScoreWithBetterCovering : sameScoreWithBetterFidelityGain);
         }
@@ -447,8 +445,7 @@ bool Fidex::compute(Rule &rule, const std::vector<double> &mainSampleValues, int
  * @return True if a rule meeting the criteria is found.
  * @return False if no rule meeting the criteria is found.
  */
-bool Fidex::computeV2(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minCoverSize) {
-
+bool Fidex::computeEarlyStopping(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minCoverSize) {
   // =========================================================================
   // 1) Setup and context initialization
   // =========================================================================
@@ -472,6 +469,7 @@ bool Fidex::computeV2(Rule &rule, const std::vector<double> &mainSampleValues, i
   int maxIterations = _parameters->getInt(MAX_ITERATIONS); // Max number of antecedents in the rule
   bool allowNoFidChange = _parameters->getBool(ALLOW_NO_FID_CHANGE); // Whether to allow that a new antecedent does not increase the fidelity of the rule
   const double scoreEpsilon = 1e-12;                                // Tolerance for floating-point score comparisons
+  double zeroFidelityRatio = _parameters->getFloat(ZERO_FIDELITY_RATIO); // Ratio of hyperplanes to visit before the acceptance threshold reaches 0
 
   // Optional denormalization metadata
   std::vector<int> normalizationIndices;
@@ -552,7 +550,7 @@ bool Fidex::computeV2(Rule &rule, const std::vector<double> &mainSampleValues, i
     }
   }
 
-  const size_t thresholdZeroVisitCount = computeThresholdZeroVisitCount(randomHyperplans.size());
+  const size_t thresholdZeroVisitCount = computeThresholdZeroVisitCount(randomHyperplans.size(), zeroFidelityRatio);
 
   // =========================================================================
   // 4) Randomized threshold antecedent search
@@ -716,7 +714,10 @@ bool Fidex::tryComputeFidex(Rule &rule, const std::vector<double> &mainSampleVal
     std::cout << "Restarting fidex with a minimum covering of " << minCoverSize << " and a minimum accepted fidelity of " << minFidelity << "." << std::endl;
   }
 
-  const bool ruleCreated = compute(rule, mainSampleValues, mainSamplePred, minFidelity, minCoverSize);
+  const std::string fidexVersion = _parameters->getString(FIDEX_VERSION);
+  const bool ruleCreated = fidexVersion == "fidexFull"
+                               ? computeFull(rule, mainSampleValues, mainSamplePred, minFidelity, minCoverSize)
+                               : computeEarlyStopping(rule, mainSampleValues, mainSamplePred, minFidelity, minCoverSize);
   if (verbose) {
     std::cout << "Final fidelity : " << rule.getFidelity() << std::endl;
   }
