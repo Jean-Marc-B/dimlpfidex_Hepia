@@ -156,8 +156,8 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args, stat
     train_data = X_train
     test_data = X_test
     if args.train_with_patches:
-        train_pred = np.loadtxt(cfg["train_pred_file"])
-        test_pred = np.loadtxt(cfg["test_pred_file"])
+        train_pred = np.loadtxt(input_file(cfg, "train_pred_file"))
+        test_pred = np.loadtxt(input_file(cfg, "test_pred_file"))
         nb_train_images = train_pred.shape[0] // (cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"])
         nb_test_images = test_pred.shape[0] // (cfg["size_Height_proba_stat"] * cfg["size_Width_proba_stat"])
         train_data = train_pred
@@ -227,10 +227,12 @@ def compute_stats(cfg, X_train, X_test, CNNModel, intermediate_model, args, stat
         else:
             if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
                 # use stored full-image predictions as baselines if available
-                if os.path.exists(cfg["train_pred_file"]):
-                    baseline_train = np.loadtxt(cfg["train_pred_file"])
-                if os.path.exists(cfg["test_pred_file"]):
-                    baseline_test = np.loadtxt(cfg["test_pred_file"])
+                train_pred_file = input_file(cfg, "train_pred_file")
+                test_pred_file = input_file(cfg, "test_pred_file")
+                if os.path.exists(train_pred_file):
+                    baseline_train = np.loadtxt(train_pred_file)
+                if os.path.exists(test_pred_file):
+                    baseline_test = np.loadtxt(test_pred_file)
             if args.statistic in ["patch_impact_and_image", "patch_impact_and_stats"]:
                 print("\nComputing patch impacts on training set...\n")
             else:

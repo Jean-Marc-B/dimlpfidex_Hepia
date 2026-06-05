@@ -65,6 +65,7 @@ const std::unordered_map<std::string, ParameterCode> parameterNames = {
     {"threshold_fidelity_only", THRESHOLD_FIDELITY_ONLY},
     {"zeroFidelityRatio", ZERO_FIDELITY_RATIO},
     {"fidexVersion", FIDEX_VERSION},
+    {"threshold_decay_function", THRESHOLD_DECAY_FUNCTION},
     {"min_fidelity", MIN_FIDELITY},
     {"lowest_min_fidelity", LOWEST_MIN_FIDELITY},
     {"normalization_file", NORMALIZATION_FILE},

@@ -112,7 +112,7 @@ def generate_heatmaps(cfg, X_test, CNNModel, args, test_positions=None):
 
     if args.train_with_patches:
         test_positions = np.array(test_positions)
-        test_pred = np.loadtxt(cfg["test_pred_file"])
+        test_pred = np.loadtxt(input_file(cfg, "test_pred_file"))
         nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
 
     for idx, img in enumerate(X_test[:100]):

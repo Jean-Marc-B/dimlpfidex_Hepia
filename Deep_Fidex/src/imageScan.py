@@ -127,6 +127,7 @@ def parse_arguments():
     parser.add_argument("--crossval_output_folder", type=str, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--zeroFidelityRatio", type=float, default=1.0, help="Ratio of hyperplanes to visit before Fidex early-stopping threshold reaches 0")
     parser.add_argument("--fidexVersion", type=str, choices=["fidexEarlyStopping", "fidexFull"], default="fidexEarlyStopping", help="Fidex algorithm version to use")
+    parser.add_argument("--alternative_folder", type=str, default=None, help="Alternative input folder, relative to the main files folder when not absolute")
 
     return parser.parse_args()
 
@@ -170,9 +171,9 @@ if __name__ == "__main__":
     X_train, Y_train, X_test, Y_test = load_data(cfg)
     # Load meta data
     if cfg["model"] == "VGG_metadatas":
-        train_meta = np.loadtxt(cfg["train_meta_file"])
+        train_meta = np.loadtxt(input_file(cfg, "train_meta_file"))
         print("train metadata shape : ", train_meta.shape)
-        test_meta = np.loadtxt(cfg["test_meta_file"])
+        test_meta = np.loadtxt(input_file(cfg, "test_meta_file"))
         print("test metadata shape : ", test_meta.shape)
         if cfg.get("crossval_n_folds") is not None:
             meta = np.concatenate((train_meta, test_meta), axis=0)
@@ -222,9 +223,9 @@ if __name__ == "__main__":
     if args.statistic not in ["LBP_and_image", "DCT_and_image", "HOG_and_image", "HOG", "stats_and_image"]:
         print("Loading model...")
         if cfg["model"] =="RF":
-            firstModel = joblib.load(cfg["model_file"])
+            firstModel = joblib.load(input_file(cfg, "model_file"))
         else:
-            firstModel = keras.saving.load_model(cfg["model_file"])
+            firstModel = keras.saving.load_model(input_file(cfg, "model_file"))
         print("Model loaded.")
     else:
         firstModel = None
@@ -247,10 +248,10 @@ if __name__ == "__main__":
             compute_little_patch_stats(cfg, X_train_patches, X_test_patches, len(X_train), len(X_test), stats_file=[cfg["train_stats_file_2"], cfg["test_stats_file_2"]])
             print("Patch impact stats and patch stats computed and saved.")
             print("Concatenating patch impact stats and patch stats...")
-            train_patch_impact_stats = np.loadtxt(cfg["train_stats_file_1"]).astype('float32')
-            test_patch_impact_stats = np.loadtxt(cfg["test_stats_file_1"]).astype('float32')
-            train_patch_stats = np.loadtxt(cfg["train_stats_file_2"]).astype('float32')
-            test_patch_stats = np.loadtxt(cfg["test_stats_file_2"]).astype('float32')
+            train_patch_impact_stats = np.loadtxt(input_file(cfg, "train_stats_file_1")).astype('float32')
+            test_patch_impact_stats = np.loadtxt(input_file(cfg, "test_stats_file_1")).astype('float32')
+            train_patch_stats = np.loadtxt(input_file(cfg, "train_stats_file_2")).astype('float32')
+            test_patch_stats = np.loadtxt(input_file(cfg, "test_stats_file_2")).astype('float32')
             # Concatenate patch impact stats and patch stats
             # train_patch_impact_stats shape : (nb_train_data, nb_patches * nb_classes),
 
@@ -302,7 +303,7 @@ if __name__ == "__main__":
 
     # GENERATION OF EXPLAINING IMAGES ILLUSTRATING SAMPLES AND RULES
     if args.images is not None:
-        data_in_rules = np.loadtxt(cfg["train_stats_file"]).astype('float32') # The data used for the rules (Ex: image pixels and probabilities of patches)
+        data_in_rules = np.loadtxt(input_file(cfg, "train_stats_file")).astype('float32') # The data used for the rules (Ex: image pixels and probabilities of patches)
         if args.image_version:
             if args.train_with_patches and args.statistic == "histogram":
                 generate_explaining_images_img_version(cfg, X_train, Y_train, firstModel, intermediate_model, args, train_positions, data_in_rules=data_in_rules)
