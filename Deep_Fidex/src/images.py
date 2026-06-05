@@ -814,17 +814,18 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
     if getattr(args, "train_with_patches", False):
         print("Loading train predictions...")
         train_positions = np.array(train_positions)
-        train_pred = np.loadtxt(cfg["train_pred_file"])
+        train_pred = np.loadtxt(input_file(cfg, "train_pred_file"))
         nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
         print("Train predictions loaded.")
 
     # 1) Load rules
-    global_rules = getRules(cfg["global_rules_file"])
+    global_rules_file = input_file(cfg, "global_rules_file")
+    global_rules = getRules(global_rules_file)
     print(len(global_rules), "rules loaded.")
 
     # 2) Load attributes
     if args.statistic == "histogram":
-        attributes = get_attribute_file(cfg["attributes_file"], cfg["nb_stats_attributes"])[0]
+        attributes = get_attribute_file(input_file(cfg, "attributes_file"), cfg["nb_stats_attributes"])[0]
 
     # 3) Create out folder
     if os.path.exists(cfg["rules_folder"]):
@@ -995,7 +996,7 @@ def generate_explaining_images(cfg, X_train, Y_train, CNNModel, intermediate_mod
             file.write(str(rule_to_print))
 
         # We create and save an image for each covered sample
-        if not cfg["global_rules_file"].endswith(".json"):
+        if not global_rules_file.endswith(".json"):
             if data_in_rules is None:
                 data_in_rules = X_train
             rule.covered_samples = getCoveredSamples(rule, data_in_rules)[1]
@@ -1042,17 +1043,18 @@ def generate_explaining_images_img_version(cfg, X_train, Y_train, CNNModel, inte
     if getattr(args, "train_with_patches", False):
         print("Loading train predictions...")
         train_positions = np.array(train_positions)
-        train_pred = np.loadtxt(cfg["train_pred_file"])
+        train_pred = np.loadtxt(input_file(cfg, "train_pred_file"))
         nb_patches_per_image = cfg["size_Height_proba_stat"]*cfg["size_Width_proba_stat"]
         print("Train predictions loaded.")
 
     # 1) Load rules
-    global_rules = getRules(cfg["global_rules_file"])
+    global_rules_file = input_file(cfg, "global_rules_file")
+    global_rules = getRules(global_rules_file)
     print(len(global_rules), "rules loaded.")
 
     # 2) Load attributes
     if args.statistic == "histogram":
-        attributes = get_attribute_file(cfg["attributes_file"], cfg["nb_stats_attributes"])[0]
+        attributes = get_attribute_file(input_file(cfg, "attributes_file"), cfg["nb_stats_attributes"])[0]
 
     # 3) Create out folder
     if os.path.exists(cfg["rules_folder"]):

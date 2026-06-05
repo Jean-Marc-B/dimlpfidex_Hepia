@@ -45,6 +45,7 @@ def parse_arguments():
     parser.add_argument("--rules", action="store_true", help="Compute global rules")
     parser.add_argument("--each_class", action="store_true", help="Generate N images per class")
     parser.add_argument("--folder_sufix", type=str, help="Add a sufix to the folder name")
+    parser.add_argument("--alternative_folder", type=str, default=None, help="Alternative input folder, relative to the main files folder when not absolute")
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -74,7 +75,7 @@ if __name__ == '__main__':
 
     if args.get_data or args.images:
         print("Loading first model...")
-        model = load_model(cfg["model_file"])
+        model = load_model(input_file(cfg, "model_file"))
         print("Model loaded.")
 
     # DATA THROUGH FIRST CONV LAYER
@@ -98,9 +99,9 @@ if __name__ == '__main__':
     if args.second_train or args.rules or args.images:
         if (not args.get_data):
             print("Loading feature map data...")
-            X_train_conv = np.load(cfg["train_feature_map_file_npy"])
+            X_train_conv = np.load(input_file(cfg, "train_feature_map_file_npy"))
             if args.second_train:
-                X_test_conv = np.load(cfg["test_feature_map_file_npy"])
+                X_test_conv = np.load(input_file(cfg, "test_feature_map_file_npy"))
         print(X_train_conv.shape)
         # if args.dataset == "Mnist_Guido":
         #     height = 12

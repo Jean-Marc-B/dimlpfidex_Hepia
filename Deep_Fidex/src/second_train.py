@@ -26,8 +26,8 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
 
     if args.statistic == "HOG": # If we don't add the original image
         print("Loading descriptors...")
-        train_descriptors = np.loadtxt(cfg["train_stats_file"]).astype('float32')
-        test_descriptors = np.loadtxt(cfg["test_stats_file"]).astype('float32')
+        train_descriptors = np.loadtxt(input_file(cfg, "train_stats_file")).astype('float32')
+        test_descriptors = np.loadtxt(input_file(cfg, "test_stats_file")).astype('float32')
         print("Descriptors loaded.")
         train_descriptors_h1, mu, sigma = compute_first_hidden_layer("train", train_descriptors, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"], activation_fct_stairobj="identity")
         test_descriptors_h1 = compute_first_hidden_layer("test", test_descriptors, K_VAL, NB_QUANT_LEVELS, HIKNOT, mu=mu, sigma=sigma, activation_fct_stairobj="identity")
@@ -41,8 +41,8 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
 
     elif args.statistic == "patch_impact_and_stats":
         print("Loading patch impact stats and patch stats...")
-        train_patch_impact_and_stats = np.loadtxt(cfg["train_stats_file"]).astype('float32')
-        test_patch_impact_and_stats = np.loadtxt(cfg["test_stats_file"]).astype('float32')
+        train_patch_impact_and_stats = np.loadtxt(input_file(cfg, "train_stats_file")).astype('float32')
+        test_patch_impact_and_stats = np.loadtxt(input_file(cfg, "test_stats_file")).astype('float32')
         print("Patch impact stats and patch stats loaded.")
 
         train_patch_impact_stats_h1, mu, sigma = compute_first_hidden_layer("train", train_patch_impact_and_stats, K_VAL, NB_QUANT_LEVELS, HIKNOT, cfg["second_model_output_weights"], activation_fct_stairobj="identity")
@@ -59,8 +59,8 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
     elif args.statistic in ["probability", "probability_and_image", "probability_multi_nets", "probability_multi_nets_and_image", "probability_multi_nets_and_image_in_one", "LBP_and_image", "DCT_and_image", "HOG_and_image", "stats_and_image", "SHAP_and_image", "patch_impact_and_image"]:   # We create an image out of the probabilities(or stats) (for each class) of cropped areas of the original image
         # Load probas of areas from file
         print("Loading patch stats...")
-        train_patch_stats = np.loadtxt(cfg["train_stats_file"]).astype('float32')
-        test_patch_stats = np.loadtxt(cfg["test_stats_file"]).astype('float32')
+        train_patch_stats = np.loadtxt(input_file(cfg, "train_stats_file")).astype('float32')
+        test_patch_stats = np.loadtxt(input_file(cfg, "test_stats_file")).astype('float32')
         print("Patch stats loaded.")
         #print(train_patch_stats.shape) # (nb_train_samples, 4840) (22*22*10)
         #print(test_patch_stats.shape) # (nb_test_samples, 4840)
@@ -241,8 +241,8 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
                     gathering_predictions(test_pred_files, cfg["second_model_test_pred"])
 
                     # Compute and save predictions of the second (gathering of all models) model
-                    second_model_train_preds = np.argmax(np.loadtxt(cfg["second_model_train_pred"]), axis=1)
-                    second_model_test_preds = np.argmax(np.loadtxt(cfg["second_model_test_pred"]), axis=1)
+                    second_model_train_preds = np.argmax(np.loadtxt(input_file(cfg, "second_model_train_pred")), axis=1)
+                    second_model_test_preds = np.argmax(np.loadtxt(input_file(cfg, "second_model_test_pred")), axis=1)
 
                     # Compute and save train and test accuracies of the second model
                     train_accuracy = 0
@@ -288,10 +288,10 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
         else:
             # Execution of randomForestsTrn, gradBoostTrn, etc.
             command = (
-                f'--train_data_file {cfg["train_stats_file"]} '
-                f'--train_class_file {cfg["train_class_file"]} '
-                f'--test_data_file {cfg["test_stats_file"]} '
-                f'--test_class_file {cfg["test_class_file"]} '
+                f'--train_data_file {input_file(cfg, "train_stats_file")} '
+                f'--train_class_file {input_file(cfg, "train_class_file")} '
+                f'--test_data_file {input_file(cfg, "test_stats_file")} '
+                f'--test_class_file {input_file(cfg, "test_class_file")} '
                 f'--stats_file {cfg["second_model_stats"]} '
                 f'--train_pred_outfile {cfg["second_model_train_pred"]} '
                 f'--test_pred_outfile {cfg["second_model_test_pred"]} '
@@ -306,10 +306,10 @@ def train_second_model(cfg, X_train, Y_train, X_test, Y_test, intermediate_model
         # For "histogram" or "activation_layer"
         # Train model
         command = (
-            f'--train_data_file {cfg["train_stats_file"]} '
-            f'--train_class_file {cfg["train_class_file"]} '
-            f'--test_data_file {cfg["test_stats_file"]} '
-            f'--test_class_file {cfg["test_class_file"]} '
+            f'--train_data_file {input_file(cfg, "train_stats_file")} '
+            f'--train_class_file {input_file(cfg, "train_class_file")} '
+            f'--test_data_file {input_file(cfg, "test_stats_file")} '
+            f'--test_class_file {input_file(cfg, "test_class_file")} '
             f'--stats_file {cfg["second_model_stats"]} '
             f'--train_pred_outfile {cfg["second_model_train_pred"]} '
             f'--test_pred_outfile {cfg["second_model_test_pred"]} '

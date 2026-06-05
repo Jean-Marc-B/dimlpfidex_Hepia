@@ -20,6 +20,7 @@
 #include <numeric>
 #include <random>
 #include <sstream>
+#include <string>
 #include <sys/stat.h>
 #include <unordered_set>
 
@@ -46,6 +47,12 @@ void sortRulesByCoveringDesc(std::vector<Rule> &rules) {
 
 void removeAdjacentDuplicateRules(std::vector<Rule> &rules) {
   rules.erase(unique(rules.begin(), rules.end()), rules.end());
+}
+
+void setEarlyStoppingThresholdDecayFunction(Parameters &params) {
+  if (params.getString(FIDEX_VERSION) == "fidexEarlyStopping") {
+    params.setString(THRESHOLD_DECAY_FUNCTION, getThresholdDecayFunctionName(), true);
+  }
 }
 
 } // namespace
@@ -92,8 +99,8 @@ void showRulesParams() {
   printOptionDescription("--covering_strategy <bool>", "Whether to use the covering strategy : if no rule is found with min_covering, find best rule with best covering using dichotomic search. Decreases min_fidelity if needed (default: True)");
   printOptionDescription("--max_failed_attempts <int [0,inf[>", "Maximum number of failed attempts to find a Fidex rule when the covering is 1 and the covering strategy is used (default: 30)");
   printOptionDescription("--allow_no_fid_change <bool>", "Whether to allow to add a new attribute with the same fidelity and less covering. It can be usefull when not finding a fidel rule (default: False)");
-  printOptionDescription("--fidelity_importance <float [0,1]>", "Weight of fidelity in candidate scoring in Fidex (default: 1.0)");
-  printOptionDescription("--threshold_fidelity_only <float [0,1]>", "Iteration ratio from which Fidex switches to fidelity-only mode (default: 0.6, used only if fidelity_importance < 1)");
+  printOptionDescription("--fidelity_importance <float [0,1]>", "Weight of fidelity in candidate scoring in Fidex. With fidexEarlyStopping, covering is considered only before the fidelity-only switch and among candidates whose fidelity gain is high enough relative to the current threshold (default: 1.0)");
+  printOptionDescription("--threshold_fidelity_only <float [0,1]>", "Iteration ratio from which Fidex switches to fidelity-only mode in fidexFull and fidexEarlyStopping (default: 0.6, used only if fidelity_importance < 1)");
   printOptionDescription("--zeroFidelityRatio <float [0,1]>", "Ratio of hyperplanes to visit before the early-stopping acceptance threshold reaches 0 (default: 1.0)");
   printOptionDescription("--fidexVersion <fidexEarlyStopping|fidexFull>", "Fidex algorithm version to use (default: fidexEarlyStopping)");
   printOptionDescription("--min_fidelity <float [0,1]>", "Minimal rule fidelity accepted when generating a rule (default: 1.0)");
@@ -1052,6 +1059,7 @@ int fidexGloRules(const std::string &command) {
     // =========================================================================
 
     // Show chosen parameters
+    setEarlyStoppingThresholdDecayFunction(*params);
     std::cout << *params;
 
     // Import files

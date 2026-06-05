@@ -36,7 +36,7 @@ def load_data(cfg):
 
     if cfg.get("crossval_n_folds") is not None:
         fold_files = _crossval_fold_files(cfg)
-        if _crossval_fold_exists(fold_files):
+        if _crossval_fold_exists(cfg, fold_files):
             train, Y_train, test, Y_test = _load_crossval_split(cfg, fold_files)
         else:
             train, test, Y_train, Y_test = _load_raw_data_files(cfg)
@@ -64,10 +64,10 @@ def load_data(cfg):
 
 def _load_raw_data_files(cfg):
     """Load the original train/test data and class files configured for the dataset."""
-    train = np.loadtxt(cfg["train_data_file"])
-    test = np.loadtxt(cfg["test_data_file"])
-    Y_train = np.loadtxt(cfg["train_class_file"]).astype('int32')
-    Y_test = np.loadtxt(cfg["test_class_file"]).astype('int32')
+    train = np.loadtxt(_input_file(cfg, "train_data_file"))
+    test = np.loadtxt(_input_file(cfg, "test_data_file"))
+    Y_train = np.loadtxt(_input_file(cfg, "train_class_file")).astype('int32')
+    Y_test = np.loadtxt(_input_file(cfg, "test_class_file")).astype('int32')
     return train, test, Y_train, Y_test
 
 
@@ -114,12 +114,12 @@ def _load_crossval_split(cfg, fold_files):
     """Reload an existing fold from files so rules reuse the exact train/stats split."""
     _redirect_to_crossval_files(cfg, fold_files)
 
-    train = np.atleast_2d(np.loadtxt(cfg["train_data_file"]))
-    test = np.atleast_2d(np.loadtxt(cfg["test_data_file"]))
-    Y_train = _load_crossval_labels(cfg["train_class_file"], cfg["nb_classes"])
-    Y_test = _load_crossval_labels(cfg["test_class_file"], cfg["nb_classes"])
-    cfg["crossval_train_indices"] = np.loadtxt(fold_files["train_indices_file"], dtype=int).reshape(-1)
-    cfg["crossval_test_indices"] = np.loadtxt(fold_files["test_indices_file"], dtype=int).reshape(-1)
+    train = np.atleast_2d(np.loadtxt(_input_file(cfg, "train_data_file")))
+    test = np.atleast_2d(np.loadtxt(_input_file(cfg, "test_data_file")))
+    Y_train = _load_crossval_labels(cfg, "train_class_file", cfg["nb_classes"])
+    Y_test = _load_crossval_labels(cfg, "test_class_file", cfg["nb_classes"])
+    cfg["crossval_train_indices"] = np.loadtxt(_input_file(cfg, fold_files["train_indices_file"]), dtype=int).reshape(-1)
+    cfg["crossval_test_indices"] = np.loadtxt(_input_file(cfg, fold_files["test_indices_file"]), dtype=int).reshape(-1)
 
     print(
         f"Loaded existing cross-validation fold {cfg['crossval_fold']}/{cfg['crossval_n_folds']} "
@@ -143,9 +143,9 @@ def _crossval_fold_files(cfg):
     }
 
 
-def _crossval_fold_exists(fold_files):
+def _crossval_fold_exists(cfg, fold_files):
     """Return True only when all persisted fold files are present; reject partial folds."""
-    existing = {key: os.path.exists(file_path) for key, file_path in fold_files.items()}
+    existing = {key: os.path.exists(_input_file(cfg, file_path)) for key, file_path in fold_files.items()}
     if all(existing.values()):
         return True
     if any(existing.values()):
@@ -160,9 +160,9 @@ def _redirect_to_crossval_files(cfg, fold_files):
         cfg[key] = fold_files[key]
 
 
-def _load_crossval_labels(file_path, nb_classes):
+def _load_crossval_labels(cfg, key_or_path, nb_classes):
     """Load fold labels while preserving one-hot labels when there is a single sample."""
-    labels = np.loadtxt(file_path).astype('int32')
+    labels = np.loadtxt(_input_file(cfg, key_or_path)).astype('int32')
     if labels.ndim == 1 and _looks_like_one_hot_row(labels, nb_classes):
         return labels.reshape(1, -1)
     return labels
@@ -214,6 +214,23 @@ def _save_crossval_array(file_path, values, fmt="%.18g"):
     """Persist fold data/classes/indices so downstream steps read the same split."""
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     np.savetxt(file_path, values, fmt=fmt)
+
+
+def _input_file(cfg, key_or_path):
+    path = cfg.get(key_or_path, key_or_path)
+    if os.path.exists(path):
+        return path
+
+    alternative_folder = cfg.get("alternative_folder")
+    if alternative_folder is None:
+        return path
+
+    alternative_path = os.path.join(alternative_folder, os.path.basename(path))
+    if os.path.exists(alternative_path):
+        print(f"Using alternative input file: {alternative_path}")
+        return alternative_path
+
+    return path
 
 def output_data(data, data_file):
     """

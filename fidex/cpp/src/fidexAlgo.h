@@ -13,9 +13,12 @@
 #include <omp.h>
 #include <random>
 #include <sstream>
+#include <string>
 #include <time.h>
 #include <tuple>
 #include <vector>
+
+std::string getThresholdDecayFunctionName();
 
 /**
  * @brief Class to implement the Fidex algorithm for rule extraction.

@@ -60,6 +60,7 @@ enum ParameterCode { // to add a new parameter, just add a new parameter code BE
   THRESHOLD_FIDELITY_ONLY,
   ZERO_FIDELITY_RATIO,
   FIDEX_VERSION,
+  THRESHOLD_DECAY_FUNCTION,
   MIN_FIDELITY,
   LOWEST_MIN_FIDELITY,
   LEARNING_RATE,

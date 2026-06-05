@@ -29,6 +29,42 @@ K_VAL = 1.0
 DROPOUT_HYP = 0.95
 DROPOUT_DIM = 0.95
 
+def input_file(config, key_or_path):
+    """
+    Return the main input path if it exists, otherwise the matching file in
+    alternative_folder when configured. Output paths must keep using config
+    values directly.
+    """
+    path = config.get(key_or_path, key_or_path)
+    if os.path.exists(path):
+        return path
+
+    alternative_folder = config.get("alternative_folder")
+    if alternative_folder is None:
+        return path
+
+    alternative_path = os.path.join(alternative_folder, os.path.basename(path))
+    if os.path.exists(alternative_path):
+        print(f"Using alternative input file: {alternative_path}")
+        return alternative_path
+
+    return path
+
+
+def _set_alternative_folder(config, args):
+    alternative_folder = getattr(args, "alternative_folder", None)
+    if alternative_folder is None:
+        return
+
+    if not os.path.isabs(alternative_folder):
+        alternative_folder = os.path.join(config["files_folder"], alternative_folder)
+    alternative_folder = os.path.abspath(alternative_folder)
+
+    if not os.path.isdir(alternative_folder):
+        raise ValueError(f"Alternative folder does not exist: {alternative_folder}")
+
+    config["alternative_folder"] = alternative_folder
+
 # ===============================
 # FONCTION TO INITIALIZE PARAMETERS WITH RESPECT TO THE ARGUMENTS
 # ===============================
@@ -166,7 +202,7 @@ def load_config(args, script_dir):
         "DCT_and_image": "DCT_and_image" + patches_sufix + folder_suf,
         "stats_and_image": "stats_and_image" + patches_sufix + folder_suf,
         "HOG": "HOG" + patches_sufix + folder_suf,
-        "patch_impact_and_image": "patch_impact_and_image" + patches_sufix + folder_suf,
+        "patch_impact_and_image": "patch_impact_and_image/patch_impact_and_image" + patches_sufix + folder_suf,
         "patch_impact_and_stats": "patch_impact_and_stats" + patches_sufix + folder_suf
     }
     if getattr(args, "crossval_output_folder", None) is not None:
@@ -179,6 +215,7 @@ def load_config(args, script_dir):
     config["plot_folder"] = os.path.join(config["base_folder"], scan_folder, "plots")
     config["files_folder"] = os.path.join(config["base_folder"], scan_folder, "files")
     config["data_folder"] = os.path.join(config["base_folder"], "data")
+    _set_alternative_folder(config, args)
     if args.image_version:
         config["rules_folder"] = os.path.join(config["plot_folder"], "Images")
     else:
@@ -336,6 +373,8 @@ def load_config(args, script_dir):
     print(f"Attributes file : {config['attributes_file']}")
     print(f"Rules folder : {config['rules_folder']}")
     print(f"Heat maps folder : {config['heat_maps_folder']}")
+    if config.get("alternative_folder") is not None:
+        print(f"Alternative input folder : {config['alternative_folder']}")
 
     if args.train:
         print("\n-------------")
