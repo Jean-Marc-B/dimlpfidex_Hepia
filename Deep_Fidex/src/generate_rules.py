@@ -7,6 +7,8 @@ def generate_rules(cfg, args, nb_attributes = None):
     start_time_global_rules = time.time()
     zero_fidelity_ratio = getattr(args, "zeroFidelityRatio", 1.0)
     fidex_version = getattr(args, "fidexVersion", "fidexEarlyStopping")
+    fidelity_importance = getattr(args, "fidelity_importance", 0.6)
+    threshold_fidelity_only = getattr(args, "threshold_fidelity_only", 0.6)
     if nb_attributes is None:
         nb_attributes = cfg["nb_stats_attributes"]
     if args.statistic == "convDimlpFilter":
@@ -26,7 +28,8 @@ def generate_rules(cfg, args, nb_attributes = None):
         f'--nb_attributes {nb_attributes} '
         f'--heuristic 1 '
         f'--nb_threads 35 '
-        f'--fidelity_importance 1.0 '
+        f'--fidelity_importance {fidelity_importance} '
+        f'--threshold_fidelity_only {threshold_fidelity_only} '
         f'--max_iterations 25 '
         f'--nb_quant_levels {NB_QUANT_LEVELS} '
         f'--dropout_dim {DROPOUT_DIM} '

@@ -27,6 +27,12 @@ VALUE_OPTIONS = {
     "--crossval_fold",
     "--crossval_seed",
     "--crossval_output_folder",
+    "--zeroFidelityRatio",
+    "--fidexVersion",
+    "--fidelity_importance",
+    "--threshold_fidelity_only",
+    "--gpu",
+    "--alternative_folder",
 }
 
 CROSSVAL_OPTIONS = {
@@ -124,6 +130,7 @@ def main():
         fold_name = f"fold_{fold:0{width}d}"
         fold_output_folder = f"{root_name}/{fold_name}"
         fold_args = _with_fold_options(image_scan_args, fold_output_folder, args.n_folds, fold, args.crossval_seed)
+        fold_args = _with_fold_placeholders(fold_args, fold, fold_name)
 
         print("\n" + "=" * 80)
         print(f"Cross-validation fold {fold}/{args.n_folds} -> {fold_output_folder}")
@@ -193,6 +200,13 @@ def _with_fold_options(image_scan_args, fold_output_folder, n_folds, fold, seed)
         ]
     )
     return args
+
+# Replace placeholders in args with fold-specific values
+def _with_fold_placeholders(args, fold, fold_name): 
+    result = []
+    for token in args:
+        result.append(token.replace("{fold}", str(fold)).replace("{fold_name}", fold_name))
+    return result
 
 
 def _collect_metrics(script_dir, image_scan_args, base_suffix, args):
