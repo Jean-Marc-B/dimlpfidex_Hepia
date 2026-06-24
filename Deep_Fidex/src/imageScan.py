@@ -28,7 +28,16 @@ if not os.environ.get(_MARK): # relaunch the script in a clean environment
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1" # Change this to select the GPU to use, -1 to use CPU only
+_default_gpu = os.environ.get("DEEP_FIDEX_GPU", "1")
+_gpu_from_cli = None
+for _i, _arg in enumerate(sys.argv[1:], start=1):
+    if _arg == "--gpu" and _i + 1 < len(sys.argv):
+        _gpu_from_cli = sys.argv[_i + 1]
+        break
+    if _arg.startswith("--gpu="):
+        _gpu_from_cli = _arg.split("=", 1)[1]
+        break
+os.environ["CUDA_VISIBLE_DEVICES"] = _gpu_from_cli or _default_gpu
 
 import tensorflow as tf
 # from tensorflow.keras.mixed_precision import set_global_policy
@@ -127,6 +136,9 @@ def parse_arguments():
     parser.add_argument("--crossval_output_folder", type=str, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--zeroFidelityRatio", type=float, default=1.0, help="Ratio of hyperplanes to visit before Fidex early-stopping threshold reaches 0")
     parser.add_argument("--fidexVersion", type=str, choices=["fidexEarlyStopping", "fidexFull"], default="fidexEarlyStopping", help="Fidex algorithm version to use")
+    parser.add_argument("--fidelity_importance", type=float, default=0.6, help="Weight of fidelity in Fidex candidate scoring")
+    parser.add_argument("--threshold_fidelity_only", type=float, default=0.6, help="Iteration ratio from which Fidex switches to fidelity-only mode")
+    parser.add_argument("--gpu", type=str, default=None, help="GPU id used by TensorFlow stages; use -1 for CPU")
     parser.add_argument("--alternative_folder", type=str, default=None, help="Alternative input folder, relative to the main files folder when not absolute")
 
     return parser.parse_args()
