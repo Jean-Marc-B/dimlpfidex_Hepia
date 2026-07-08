@@ -70,3 +70,5 @@ def generate_rules(cfg, args, nb_attributes = None):
     end_time_global_rules = time.time()
     full_time_global_rules = end_time_global_rules - start_time_global_rules
     print(f"\nGlobal rules time = {full_time_global_rules:.2f} sec")
+    with open(cfg["global_rules_stats"], "a") as stats_file:
+        stats_file.write(f"Rules time : {full_time_global_rules}\n")

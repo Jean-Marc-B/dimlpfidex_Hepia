@@ -24,7 +24,7 @@ enum class ThresholdDecayFunction {
   SlowExponential
 };
 
-constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunction::FastExponential;
+constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunction::Linear;
 
 const char *thresholdDecayFunctionName(ThresholdDecayFunction function) {
   switch (function) {
