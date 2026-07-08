@@ -235,11 +235,16 @@ def _parse_stats_file(file_path):
     for line in file_path.read_text(errors="replace").splitlines():
         if ":" not in line:
             continue
-        key, value = line.split(":", 1)
-        value = value.strip()
-        if not NUMBER_RE.fullmatch(value):
-            continue
-        stats[key.strip()] = float(value)
+        # Some lines pack several "key : value" pairs separated by commas
+        # (e.g. "Number of rules : 1171, mean sample covering number per rule : 236.92, ...").
+        for chunk in line.split(","):
+            if ":" not in chunk:
+                continue
+            key, value = chunk.split(":", 1)
+            value = value.strip()
+            if not NUMBER_RE.fullmatch(value):
+                continue
+            stats[key.strip()] = float(value)
     return stats
 
 
