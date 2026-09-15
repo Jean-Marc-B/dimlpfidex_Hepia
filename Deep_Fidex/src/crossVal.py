@@ -80,6 +80,9 @@ DATASET_FOLDERS = {
 }
 
 NUMBER_RE = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
+STAT_ENTRY_RE = re.compile(
+    rf"(?:^|,\s*)(?P<key>.+?)\s*:\s*(?P<value>{NUMBER_RE.pattern})(?=,|$)"
+)
 
 
 def parse_arguments():
@@ -95,6 +98,7 @@ def parse_arguments():
     parser.add_argument("--crossval_seed", type=int, default=None)
     parser.add_argument("--keep_going", action="store_true", help="Continue with next folds after a failed command")
     parser.add_argument("--dry_run", action="store_true", help="Print commands without running them")
+    parser.add_argument("--summary_only", action="store_true", help="Only aggregate existing fold statistics without running imageScan.py")
     parser.add_argument("--python", default=sys.executable, help="Python executable used to launch imageScan.py")
 
     args, image_scan_args = parser.parse_known_args()
@@ -126,34 +130,36 @@ def main():
     width = max(2, len(str(args.n_folds)))
     command_records = []
 
-    for fold in range(args.start_fold, args.end_fold + 1):
-        fold_name = f"fold_{fold:0{width}d}"
-        fold_output_folder = f"{root_name}/{fold_name}"
-        fold_args = _with_fold_options(image_scan_args, fold_output_folder, args.n_folds, fold, args.crossval_seed)
-        fold_args = _with_fold_placeholders(fold_args, fold, fold_name)
+    if not args.summary_only:
+        for fold in range(args.start_fold, args.end_fold + 1):
+            fold_name = f"fold_{fold:0{width}d}"
+            fold_output_folder = f"{root_name}/{fold_name}"
+            fold_args = _with_fold_options(image_scan_args, fold_output_folder, args.n_folds, fold, args.crossval_seed)
+            fold_args = _with_fold_placeholders(fold_args, fold, fold_name)
 
-        print("\n" + "=" * 80)
-        print(f"Cross-validation fold {fold}/{args.n_folds} -> {fold_output_folder}")
-        print("=" * 80)
+            print("\n" + "=" * 80)
+            print(f"Cross-validation fold {fold}/{args.n_folds} -> {fold_output_folder}")
+            print("=" * 80)
 
-        for phase, phase_args in _build_phase_args(fold_args):
-            command = [args.python, str(image_scan_py)] + phase_args
-            command_records.append({"fold": fold, "phase": phase, "command": command})
-            print(f"\n[{phase}] {shlex.join(command)}\n")
-            if args.dry_run:
-                continue
-            status = subprocess.run(command, cwd=script_dir)
-            if status.returncode != 0:
-                print(f"Command failed with status {status.returncode}: {shlex.join(command)}")
-                if not args.keep_going:
-                    raise SystemExit(status.returncode)
+            for phase, phase_args in _build_phase_args(fold_args):
+                command = [args.python, str(image_scan_py)] + phase_args
+                command_records.append({"fold": fold, "phase": phase, "command": command})
+                print(f"\n[{phase}] {shlex.join(command)}\n")
+                if args.dry_run:
+                    continue
+                status = subprocess.run(command, cwd=script_dir)
+                if status.returncode != 0:
+                    print(f"Command failed with status {status.returncode}: {shlex.join(command)}")
+                    if not args.keep_going:
+                        raise SystemExit(status.returncode)
 
     if args.dry_run:
         return
 
     summary_dir = _summary_dir(script_dir, image_scan_args, base_suffix)
     summary_dir.mkdir(parents=True, exist_ok=True)
-    _write_command_log(summary_dir, command_records)
+    if not args.summary_only:
+        _write_command_log(summary_dir, command_records)
     metrics, missing_files = _collect_metrics(script_dir, image_scan_args, base_suffix, args)
     _write_summary(summary_dir, args, image_scan_args, metrics, missing_files)
 
@@ -235,16 +241,10 @@ def _parse_stats_file(file_path):
     for line in file_path.read_text(errors="replace").splitlines():
         if ":" not in line:
             continue
-        # Some lines pack several "key : value" pairs separated by commas
-        # (e.g. "Number of rules : 1171, mean sample covering number per rule : 236.92, ...").
-        for chunk in line.split(","):
-            if ":" not in chunk:
-                continue
-            key, value = chunk.split(":", 1)
-            value = value.strip()
-            if not NUMBER_RE.fullmatch(value):
-                continue
-            stats[key.strip()] = float(value)
+        # Some lines pack several "key : value" pairs separated by commas.
+        # Metric names can also contain commas, so match complete key/value pairs.
+        for match in STAT_ENTRY_RE.finditer(line):
+            stats[match.group("key").strip()] = float(match.group("value"))
     return stats
 
 

@@ -74,8 +74,11 @@ Valeurs utilisées ici :
 ```cpp
 ThresholdDecayFunction::Linear
 ThresholdDecayFunction::FastExponential
+ThresholdDecayFunction::SlowExponential
 ThresholdDecayFunction::FastPower
+ThresholdDecayFunction::VeryFastPower
 ThresholdDecayFunction::SlowPower
+ThresholdDecayFunction::VerySlowPower
 ```
 
 Après chaque modification de cette ligne, recompiler :
@@ -148,7 +151,7 @@ nohup python -u crossVal.py \
   > ../../../data/Mnist/logs_mnist_es_zfr00025_linear_fi1_thr1.out 2>&1 &
 ```
 
-### CIFAR - fullFidex 0.95/0.95 FI=1, threshold_fidelity_only=1
+### CIFAR - fullFidex 0.95/0.95 FI=1, threshold_fidelity_only=1 -> FAIT
 
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
@@ -165,7 +168,7 @@ nohup python -u crossVal.py \
   > ../../../data/Cifar/logs_cifar_full_fi1_thr1.out 2>&1 &
 ```
 
-### CIFAR - fullFidex 0.95/0.95 FI=0.6, threshold_fidelity_only=0.6
+### CIFAR - fullFidex 0.95/0.95 FI=0.6, threshold_fidelity_only=0.6 -> FAIT
 
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
@@ -187,7 +190,7 @@ nohup python -u crossVal.py \
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
 
- ### LANCE
+ ### FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
   --folder_sufix _cv_es_zfr00025_linear_fi1_thr1 \
@@ -196,7 +199,7 @@ nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
   > ../../../data/Cifar/logs_cifar_es_zfr00025_linear_fi1_thr1.out 2>&1 &
 
-### LANCE
+### FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
   --folder_sufix _cv_es_zfr001_linear_fi06_thr06 \
@@ -205,7 +208,34 @@ nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
   > ../../../data/Cifar/logs_cifar_es_zfr001_linear_fi06_thr06.out 2>&1 &
 
-### LANCE
+### CIFAR - earlyStopping 0.005 Linear FI=0.6, threshold_fidelity_only=0.6 FAIT
+nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr0005_linear_fi06_thr06 \
+  --rules --gpu -1 --fidexVersion fidexEarlyStopping --zeroFidelityRatio 0.005 \
+  --fidelity_importance 0.6 --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr0005_linear_fi06_thr06.out 2>&1 &
+
+### CIFAR - earlyStopping 0.0025 Linear FI=0.6, threshold_fidelity_only=0.6 FAIT
+nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr00025_linear_fi06_thr06 \
+  --rules --gpu -1 --fidexVersion fidexEarlyStopping --zeroFidelityRatio 0.0025 \
+  --fidelity_importance 0.6 --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr00025_linear_fi06_thr06.out 2>&1 &
+
+### CIFAR - earlyStopping 0.00125 Linear FI=0.6, threshold_fidelity_only=0.6 FAIT
+nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr000125_linear_fi06_thr06 \
+  --rules --gpu -1 --fidexVersion fidexEarlyStopping --zeroFidelityRatio 0.00125 \
+  --fidelity_importance 0.6 --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr000125_linear_fi06_thr06.out 2>&1 &
+
+### FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
   --folder_sufix _cv_es_zfr001_linear_fi1_thr1 \
@@ -214,6 +244,7 @@ nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
   > ../../../data/Cifar/logs_cifar_es_zfr001_linear_fi1_thr1.out 2>&1 &
 
+#FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
   --folder_sufix _cv_es_zfr002_linear_fi1_thr1 \
@@ -222,6 +253,7 @@ nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
   > ../../../data/Cifar/logs_cifar_es_zfr002_linear_fi1_thr1.out 2>&1 &
 
+#FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
   --folder_sufix _cv_es_zfr003_linear_fi1_thr1 \
@@ -241,7 +273,7 @@ constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunctio
 
 Puis recompiler avec les commandes de la section 3.
 
-### MNIST - earlyStopping 0.0025 FastExponential FI=0.6, threshold_fidelity_only=0.6
+### MNIST - earlyStopping 0.0025 FastExponential FI=0.6, threshold_fidelity_only=0.6 -> FAIT
 
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
@@ -258,7 +290,87 @@ nohup python -u crossVal.py \
   > ../../../data/Mnist/logs_mnist_es_zfr00025_fastExp_fi06_thr06.out 2>&1 &
 ```
 
-## 6. Règles avec décroissance FastPower
+### MNIST - earlyStopping 0.00125 FastExponential FI=0.6, threshold_fidelity_only=0.6 - FAIT
+
+Permet de comparer FastPower vs FastExp sur le même ratio. Très utile pour savoir si FastExp est plus stable.
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Mnist --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr000125_fastExp_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.00125 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Mnist/logs_mnist_es_zfr000125_fastExp_fi06_thr06.out 2>&1 &
+```
+
+### CIFAR - earlyStopping 0.0025 FastExponential FI=0.6, threshold_fidelity_only=0.6 -> FAIT
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr00025_fastExp_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.0025 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr00025_fastExp_fi06_thr06.out 2>&1 &
+```
+
+### CIFAR - earlyStopping 0.01 FastExponential FI=0.6, threshold_fidelity_only=0.6
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr001_fastExp_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.01 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr001_fastExp_fi06_thr06.out 2>&1 &
+```
+
+## 6. Règles avec décroissance SlowExponential
+
+Modifier `kThresholdDecayFunction` en :
+
+```cpp
+constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunction::SlowExponential;
+```
+
+Puis recompiler avec les commandes de la section 3.
+
+### CIFAR - earlyStopping 0.01 SlowExponential FI=0.6, threshold_fidelity_only=0.6 - FAIT
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr001_slowExp_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.01 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr001_slowExp_fi06_thr06.out 2>&1 &
+```
+
+## 7. Règles avec décroissance FastPower
 
 Modifier `kThresholdDecayFunction` en :
 
@@ -268,7 +380,9 @@ constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunctio
 
 Puis recompiler avec les commandes de la section 3.
 
-### MNIST - earlyStopping 0.00125 FastPower FI=0.6, threshold_fidelity_only=0.6
+### MNIST - earlyStopping 0.00125 FastPower FI=0.6, threshold_fidelity_only=0.6 -> FAIT
+
+Meilleur temps ponctuel, peu de règles, bon covering, très bon default. C’est celle qu’il faut valider.
 
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
@@ -285,7 +399,70 @@ nohup python -u crossVal.py \
   > ../../../data/Mnist/logs_mnist_es_zfr000125_fastPower_fi06_thr06.out 2>&1 &
 ```
 
-## 7. Règles avec décroissance SlowPower
+### CIFAR - earlyStopping 0.01 FastPower FI=0.6, threshold_fidelity_only=0.6 -> FAIT
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr001_fastPower_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.01 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr001_fastPower_fi06_thr06.out 2>&1 &
+```
+
+## 8. Règles avec décroissance VeryFastPower
+
+Modifier `kThresholdDecayFunction` en :
+
+```cpp
+constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunction::VeryFastPower;
+```
+
+Puis recompiler avec les commandes de la section 3.
+
+### MNIST - earlyStopping 0.00125 VeryFastPower FI=0.6, threshold_fidelity_only=0.6 - FAIT
+
+Meilleure accuracy ponctuelle, mais potentiellement plus agressive. À lancer si le coût reste acceptable.
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Mnist --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr000125_veryFastPower_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.00125 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Mnist/logs_mnist_es_zfr000125_veryFastPower_fi06_thr06.out 2>&1 &
+```
+
+### CIFAR - earlyStopping 0.01 VeryFastPower FI=0.6, threshold_fidelity_only=0.6 - FAIT
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr001_veryFastPower_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.01 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr001_veryFastPower_fi06_thr06.out 2>&1 &
+```
+
+## 9. Règles avec décroissance SlowPower
 
 Modifier `kThresholdDecayFunction` en :
 
@@ -295,7 +472,7 @@ constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunctio
 
 Puis recompiler avec les commandes de la section 3.
 
-### CIFAR - earlyStopping 0.01 SlowPower FI=0.6, threshold_fidelity_only=0.6
+### CIFAR - earlyStopping 0.01 SlowPower FI=0.6, threshold_fidelity_only=0.6 -> FAIT
 
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
@@ -312,7 +489,34 @@ nohup python -u crossVal.py \
   > ../../../data/Cifar/logs_cifar_es_zfr001_slowPower_fi06_thr06.out 2>&1 &
 ```
 
-## 8. Résultats
+## 10. Règles avec décroissance VerySlowPower
+
+Modifier `kThresholdDecayFunction` en :
+
+```cpp
+constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunction::VerySlowPower;
+```
+
+Puis recompiler avec les commandes de la section 3.
+
+### CIFAR - earlyStopping 0.01 VerySlowPower FI=0.6, threshold_fidelity_only=0.6 - FAIT
+
+```bash
+cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
+nohup python -u crossVal.py \
+  --n_folds 10 --crossval_seed 12 --python python \
+  --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
+  --folder_sufix _cv_es_zfr001_verySlowPower_fi06_thr06 \
+  --rules --gpu -1 \
+  --fidexVersion fidexEarlyStopping \
+  --zeroFidelityRatio 0.01 \
+  --fidelity_importance 0.6 \
+  --threshold_fidelity_only 0.6 \
+  --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
+  > ../../../data/Cifar/logs_cifar_es_zfr001_verySlowPower_fi06_thr06.out 2>&1 &
+```
+
+## 11. Résultats
 
 Chaque config écrit un résumé ici :
 
