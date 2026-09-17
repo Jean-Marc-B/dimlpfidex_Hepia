@@ -45,6 +45,7 @@ NB_ATTRIBUTES = None
 NB_CLASSES = None
 FIDEX_VERSION = "fidexEarlyStopping"  # "fidexEarlyStopping" or "fidexFull"
 ZERO_FIDELITY_RATIO = 0.06
+THRESHOLD_DECAY_FUNCTION = "Linear"
 DROPOUT_DIM = 0.8
 DROPOUT_HYP = 0.8
 
@@ -67,6 +68,7 @@ FIDEX_GLO_RULES_OPTIONS = (
     f"--dropout_hyp {DROPOUT_HYP} "
     f"--fidexVersion {FIDEX_VERSION} "
     f"--zeroFidelityRatio {ZERO_FIDELITY_RATIO} "
+    f"--threshold_decay_function {THRESHOLD_DECAY_FUNCTION} "
     "--verbose 3 "
 )
 
@@ -272,6 +274,7 @@ def write_summary(seed, nb_attributes, nb_classes, metrics, missing_files, comma
         "nb_classes": nb_classes,
         "fidex_version": FIDEX_VERSION,
         "zero_fidelity_ratio": ZERO_FIDELITY_RATIO,
+        "threshold_decay_function": THRESHOLD_DECAY_FUNCTION,
         "metrics": {},
         "missing_files": missing_files,
         "commands": command_log,
@@ -289,6 +292,7 @@ def write_summary(seed, nb_attributes, nb_classes, metrics, missing_files, comma
         f"Number of classes: {nb_classes}",
         f"Fidex version: {FIDEX_VERSION}",
         f"Zero fidelity ratio: {ZERO_FIDELITY_RATIO}",
+        f"Threshold decay function: {THRESHOLD_DECAY_FUNCTION}",
     ]
     if FIDEX_VERSION == "fidexFull":
         lines.extend([

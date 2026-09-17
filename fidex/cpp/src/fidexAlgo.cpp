@@ -24,7 +24,7 @@ enum class ThresholdDecayFunction {
   SlowExponential
 };
 
-constexpr ThresholdDecayFunction kThresholdDecayFunction = ThresholdDecayFunction::Linear;
+constexpr ThresholdDecayFunction kDefaultThresholdDecayFunction = ThresholdDecayFunction::Linear;
 
 const char *thresholdDecayFunctionName(ThresholdDecayFunction function) {
   switch (function) {
@@ -71,6 +71,31 @@ double computeThresholdFromProgress(double progress, ThresholdDecayFunction func
   default:
     return 1.0 - progress;
   }
+}
+
+ThresholdDecayFunction thresholdDecayFunctionFromName(const std::string &name) {
+  if (name == "Linear") {
+    return ThresholdDecayFunction::Linear;
+  }
+  if (name == "FastPower") {
+    return ThresholdDecayFunction::FastPower;
+  }
+  if (name == "SlowPower") {
+    return ThresholdDecayFunction::SlowPower;
+  }
+  if (name == "VeryFastPower") {
+    return ThresholdDecayFunction::VeryFastPower;
+  }
+  if (name == "VerySlowPower") {
+    return ThresholdDecayFunction::VerySlowPower;
+  }
+  if (name == "FastExponential") {
+    return ThresholdDecayFunction::FastExponential;
+  }
+  if (name == "SlowExponential") {
+    return ThresholdDecayFunction::SlowExponential;
+  }
+  throw CommandArgumentException("Error : threshold_decay_function must be one of Linear, FastPower, SlowPower, VeryFastPower, VerySlowPower, FastExponential, SlowExponential.");
 }
 
 size_t computeThresholdZeroVisitCount(size_t nbHyperplans, double zeroFidelityRatio) {
@@ -258,7 +283,7 @@ int selectBestEarlyStoppingCandidate(const std::vector<EarlyStoppingCandidate> &
 } // namespace
 
 std::string getThresholdDecayFunctionName() {
-  return thresholdDecayFunctionName(kThresholdDecayFunction);
+  return thresholdDecayFunctionName(kDefaultThresholdDecayFunction);
 }
 
 /**
@@ -646,6 +671,7 @@ bool Fidex::computeEarlyStopping(Rule &rule, const std::vector<double> &mainSamp
   double thresholdFidelityOnly = _parameters->getFloat(THRESHOLD_FIDELITY_ONLY); // Ratio of max iterations from which it switches to fidelity-only mode
   int thresholdScoreMode = static_cast<int>(thresholdFidelityOnly * maxIterations); // Iteration from which it switches to fidelity-only mode
   double zeroFidelityRatio = _parameters->getFloat(ZERO_FIDELITY_RATIO); // Ratio of hyperplanes to visit before the acceptance threshold reaches 0
+  ThresholdDecayFunction thresholdDecayFunction = thresholdDecayFunctionFromName(_parameters->getString(THRESHOLD_DECAY_FUNCTION)); // Early-stopping threshold decay function
 
   // Optional denormalization metadata
   std::vector<int> normalizationIndices;
@@ -836,7 +862,7 @@ bool Fidex::computeEarlyStopping(Rule &rule, const std::vector<double> &mainSamp
 
       if (thresholdZeroVisitCount > 0) {
         const double progress = static_cast<double>(visitedHyperplans + 1) / static_cast<double>(thresholdZeroVisitCount);
-        const double threshold = computeThresholdFromProgress(progress, kThresholdDecayFunction);
+        const double threshold = computeThresholdFromProgress(progress, thresholdDecayFunction);
 
         if (fidelityOnlySelection && indexBestHyp != -1 && bestCandidateFidelityGain + scoreEpsilon >= threshold) {
           candidateAccepted = true;

@@ -6,6 +6,7 @@ from utils.config import *
 def generate_rules(cfg, args, nb_attributes = None):
     start_time_global_rules = time.time()
     zero_fidelity_ratio = getattr(args, "zeroFidelityRatio", 1.0)
+    threshold_decay_function = getattr(args, "threshold_decay_function", "Linear")
     fidex_version = getattr(args, "fidexVersion", "fidexEarlyStopping")
     fidelity_importance = getattr(args, "fidelity_importance", 0.6)
     threshold_fidelity_only = getattr(args, "threshold_fidelity_only", 0.6)
@@ -35,6 +36,7 @@ def generate_rules(cfg, args, nb_attributes = None):
         f'--dropout_dim {DROPOUT_DIM} '
         f'--dropout_hyp {DROPOUT_HYP} '
         f'--zeroFidelityRatio {zero_fidelity_ratio} '
+        f'--threshold_decay_function {threshold_decay_function} '
         f'--fidexVersion {fidex_version} '
         f'--verbose 3 '
     )

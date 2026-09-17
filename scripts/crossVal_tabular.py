@@ -209,7 +209,8 @@ def parse_arguments() -> argparse.Namespace:
             "FastExponential",
             "SlowExponential",
         ),
-        default=None,
+        default=["Linear"],
+        help="Early-stopping threshold decay function.",
     )
     fidex.add_argument("--fidelity_importance", nargs="+", type=float, default=None)
     fidex.add_argument("--threshold_fidelity_only", nargs="+", type=float, default=None)

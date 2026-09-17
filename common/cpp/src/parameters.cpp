@@ -450,6 +450,10 @@ void Parameters::parseArg(const std::string &param, const std::string &arg, cons
     setString(FIDEX_VERSION, arg);
     break;
 
+  case THRESHOLD_DECAY_FUNCTION:
+    setString(THRESHOLD_DECAY_FUNCTION, arg);
+    break;
+
   case MAX_FAILED_ATTEMPTS:
     setInt(MAX_FAILED_ATTEMPTS, arg);
     break;
@@ -1297,6 +1301,17 @@ void Parameters::checkParametersFidex() {
     throw CommandArgumentException("Error : fidexVersion must be either fidexEarlyStopping or fidexFull.");
   }
 
+  const std::string thresholdDecayFunction = getString(THRESHOLD_DECAY_FUNCTION);
+  if (thresholdDecayFunction != "Linear" &&
+      thresholdDecayFunction != "FastPower" &&
+      thresholdDecayFunction != "SlowPower" &&
+      thresholdDecayFunction != "VeryFastPower" &&
+      thresholdDecayFunction != "VerySlowPower" &&
+      thresholdDecayFunction != "FastExponential" &&
+      thresholdDecayFunction != "SlowExponential") {
+    throw CommandArgumentException("Error : threshold_decay_function must be one of Linear, FastPower, SlowPower, VeryFastPower, VerySlowPower, FastExponential, SlowExponential.");
+  }
+
   if (getFloat(LOWEST_MIN_FIDELITY) < 0.0f || getFloat(LOWEST_MIN_FIDELITY) > 1.0f) {
     throw CommandArgumentException("Error : Minimum fidelity has to be between [0.0, 1.0]");
   }
@@ -1462,6 +1477,7 @@ void Parameters::setDefaultFidex() {
   setDefaultFloat(THRESHOLD_FIDELITY_ONLY, 0.6f);
   setDefaultFloat(ZERO_FIDELITY_RATIO, 1.0f);
   setDefaultString(FIDEX_VERSION, "fidexEarlyStopping");
+  setDefaultString(THRESHOLD_DECAY_FUNCTION, "Linear");
   setDefaultFloat(MIN_FIDELITY, 1.0);
   setDefaultFloat(LOWEST_MIN_FIDELITY, 0.75);
   setDefaultBool(COVERING_STRATEGY, true);

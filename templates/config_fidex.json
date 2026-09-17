@@ -17,6 +17,7 @@
     "max_iterations": 10,
     "min_covering": 2,
     "max_failed_attempts": 30,
+    "threshold_decay_function": "Linear",
     "positive_class_index": 1,
     "seed": 0,
     "dropout_hyp": 0.5,
