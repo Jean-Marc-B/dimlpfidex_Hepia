@@ -22,7 +22,7 @@ Expected dataset files:
   <dataset_dir>/attributes.txt     optional
 
 Example:
-  python crossVal_tabular.py \
+  python scripts/crossVal_tabular.py \
     --dataset breastCancer \
     --n_folds 10 \
     --fidexVersion fidexEarlyStopping fidexFull \
@@ -44,10 +44,17 @@ import math
 from pathlib import Path
 import re
 import shlex
+import sys
 import time
 from typing import Callable
 
 import numpy as np
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 # =============================================================================
@@ -61,46 +68,6 @@ NUMBER_RE = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 STAT_ENTRY_RE = re.compile(
     rf"(?:^|,\s*)(?P<key>.+?)\s*[:=]\s*(?P<value>{NUMBER_RE.pattern})(?=,|$)"
 )
-
-MODEL_SELECTED_METRICS = (
-    (("Accuracy on training set",), "DIMLP train accuracy"),
-    (("Accuracy on testing set", "Accuracy on test set"), "DIMLP test accuracy"),
-)
-
-RULE_SELECTED_METRICS = (
-    (("Number of rules",), "Number of rules"),
-    (("mean sample covering number per rule",), "Mean sample covering number per rule"),
-    (("mean number of antecedents per rule",), "Mean number of antecedents per rule"),
-    (("The global rule accuracy is", "Global rule accuracy", "Rule accuracy"), "Rule accuracy"),
-    (("The global rule fidelity rate is", "Global rule fidelity", "Fidelity"), "Fidelity"),
-    (
-        ("The default rule rate (when we can't find any rule activated for a sample) is",),
-        "Default rule rate",
-    ),
-    (
-        (
-            "The explainability rate (when we can find one or more rules, either correct ones or activated ones which all agree on the same class) is",
-        ),
-        "Explainability rate",
-    ),
-    (
-        ("The mean number of correct(fidel) activated rules per sample is",),
-        "Mean correct activated rules/sample",
-    ),
-    (
-        ("The mean number of wrong(not fidel) activated rules per sample is",),
-        "Mean wrong activated rules/sample",
-    ),
-    (
-        ("The model test accuracy when rules and model agree is",),
-        "Model test acc when rules & model agree",
-    ),
-    (
-        ("The model test accuracy when activated rules and model agree is",),
-        "Model test acc when activated rules & model agree",
-    ),
-)
-
 
 # =============================================================================
 # Data containers
@@ -334,17 +301,19 @@ def resolve_dataset_dir(dataset: str) -> Path:
     Args:
         dataset: Dataset name or path passed through the CLI.
     """
-    script_dir = Path(__file__).resolve().parent
+    dataset_path = Path(dataset).expanduser()
     candidates = [
-        Path(dataset),
-        script_dir / dataset,
-        script_dir / "data" / dataset,
-        script_dir.parent / "data" / dataset,
+        dataset_path,
+        SCRIPT_DIR / dataset_path,
+        SCRIPT_DIR / "data" / dataset_path,
+        REPO_ROOT / dataset_path,
+        REPO_ROOT / "data" / dataset_path,
+        REPO_ROOT.parent / "data" / dataset_path,
     ]
     for candidate in candidates:
         if candidate.exists() and candidate.is_dir():
             return candidate.resolve()
-    return (script_dir.parent / "data" / dataset).resolve()
+    return (REPO_ROOT / "data" / dataset_path).resolve()
 
 
 def load_dataset(args: argparse.Namespace, dataset_dir: Path) -> Dataset:
@@ -832,9 +801,8 @@ def write_summary(
         "start_fold": args.start_fold,
         "end_fold": args.end_fold,
         "seed": seed,
-        "fidex_configs": {config.name: asdict(config) for config in configs},
-        "selected_metrics": {},
-        "metrics": metrics,
+        "model": build_model_summary(metrics["model"], timings.get("model", {})),
+        "fidex_configs": build_fidex_summaries(args, configs, metrics["rules"], timings),
         "missing_files": missing_files,
         "commands": command_log,
     }
@@ -849,8 +817,9 @@ def write_summary(
         "",
     ]
 
-    append_selected_metrics(lines, summary, metrics, timings, configs, args)
-    append_all_metrics(lines, metrics, configs, args)
+    append_model_report(lines, summary["model"])
+    if not args.skip_rules:
+        append_fidex_reports(lines, summary["fidex_configs"])
     append_missing_files(lines, missing_files)
 
     output_root.mkdir(parents=True, exist_ok=True)
@@ -859,50 +828,76 @@ def write_summary(
     write_command_log(output_root, command_log)
 
 
-def append_selected_metrics(
-    lines: list[str],
-    summary: dict,
+def build_model_summary(metrics: dict, timings: dict) -> dict:
+    """Build the complete model report payload.
+
+    Args:
+        metrics: Model metrics collected from DIMLP stats files.
+        timings: Command timings collected for model steps.
+    """
+    return {
+        "source_file": MODEL_STATS_FILE,
+        "timings": summarize_timings(timings),
+        "metrics": summarize_metrics(metrics),
+    }
+
+
+def build_fidex_summaries(
+    args: argparse.Namespace,
+    configs: list[FidexConfig],
     metrics: dict,
     timings: dict,
-    configs: list[FidexConfig],
-    args: argparse.Namespace,
-) -> None:
-    """Append the most important metrics to the text and JSON summaries.
+) -> dict:
+    """Build complete report payloads for every Fidex configuration.
+
+    Args:
+        args: Parsed command-line arguments containing cross-validation settings.
+        configs: Fidex configurations to report.
+        metrics: Rule metrics indexed by configuration name.
+        timings: Command timings indexed by configuration name.
+    """
+    summaries = {}
+    for config in configs:
+        summaries[config.name] = {
+            "parameters": asdict(config),
+            "parameters_text": format_config_parameters(args, config),
+            "source_file": f"rules/{config.name}/{RULE_STATS_FILE}",
+            "timings": summarize_timings(timings.get(config.name, {})),
+            "metrics": summarize_metrics(metrics.get(config.name, {})),
+        }
+    return summaries
+
+
+def append_model_report(lines: list[str], model_summary: dict) -> None:
+    """Append the complete model report to the text summary.
 
     Args:
         lines: Text summary lines to mutate.
-        summary: JSON summary dictionary to mutate.
-        metrics: Collected metrics from stats files.
-        timings: Collected execution timings.
-        configs: Fidex configurations to report.
-        args: Parsed command-line arguments.
+        model_summary: Complete model report payload.
     """
-    selected = summary["selected_metrics"]
-    if metrics["model"]:
-        selected["model"] = {}
-        lines.append("Model")
-        for aliases, display_name in MODEL_SELECTED_METRICS:
-            append_metric_if_present(lines, selected["model"], metrics["model"], aliases, display_name)
-        append_timing_if_present(lines, selected["model"], timings.get("model", {}).get("dimlpTrn", []), "dimlpTrn execution time (s)")
-        lines.append("")
-
-    if args.skip_rules:
+    if not model_summary["metrics"] and not model_summary["timings"]:
         return
+    lines.append("Model")
+    lines.append(f"  source file: {model_summary['source_file']}")
+    append_timing_block(lines, model_summary["timings"])
+    append_metric_block(lines, model_summary["metrics"])
+    lines.append("")
 
+
+def append_fidex_reports(lines: list[str], fidex_summaries: dict) -> None:
+    """Append complete Fidex configuration reports to the text summary.
+
+    Args:
+        lines: Text summary lines to mutate.
+        fidex_summaries: Complete Fidex report payloads indexed by config name.
+    """
     lines.append("Fidex configurations")
-    for index, config in enumerate(configs, start=1):
-        config_metrics = metrics["rules"].get(config.name, {})
-        selected[config.name] = {"parameters": asdict(config)}
-        lines.append(f"{index}. {config.name}")
-        lines.append(f"  parameters: {format_config_parameters(args, config)}")
-        append_rule_time(
-            lines,
-            selected[config.name],
-            config_metrics,
-            timings.get(config.name, {}).get("fidexGloRules", []),
-        )
-        for aliases, display_name in RULE_SELECTED_METRICS:
-            append_metric_if_present(lines, selected[config.name], config_metrics, aliases, display_name)
+    for index, (name, config_summary) in enumerate(fidex_summaries.items(), start=1):
+        lines.append(f"{index}. {name}")
+        lines.append(f"  parameters: {config_summary['parameters_text']}")
+        lines.append(f"  source file: {config_summary['source_file']}")
+        append_timing_block(lines, config_summary["timings"])
+        append_metric_block(lines, config_summary["metrics"])
     lines.append("")
 
 
@@ -940,94 +935,26 @@ def format_config_parameters(args: argparse.Namespace, config: FidexConfig) -> s
     return ", ".join(f"{name}={value}" for name, value in parameters)
 
 
-def append_rule_time(lines: list[str], selected: dict, metrics: dict, timing_entries: list[dict]) -> None:
-    """Append rule generation time as the first selected rule metric.
+def append_timing_block(lines: list[str], timings: dict) -> None:
+    """Append timing summaries to the text report.
 
     Args:
         lines: Text summary lines to mutate.
-        selected: JSON selected-metrics dictionary to mutate.
-        metrics: Available rule metrics indexed by source name.
-        timing_entries: fidexGloRules timing entries from the command log.
+        timings: Timing summaries indexed by display name.
     """
-    _, entries = find_metric(metrics, ("Rules time",))
-    if entries:
-        append_metric_if_present(lines, selected, metrics, ("Rules time",), "Rules time")
-    elif timing_entries:
-        append_timing_if_present(lines, selected, timing_entries, "Rules time")
-
-
-def append_metric_if_present(lines: list[str], selected: dict, metrics: dict, aliases: tuple[str, ...], display_name: str) -> None:
-    """Append one selected metric if any of its aliases is present.
-
-    Args:
-        lines: Text summary lines to mutate.
-        selected: JSON selected-metrics dictionary to mutate.
-        metrics: Available metrics indexed by source name.
-        aliases: Possible source names for the same logical metric.
-        display_name: Name shown in the summary.
-    """
-    metric_name, entries = find_metric(metrics, aliases)
-    if not entries:
-        return
-    line, payload = summarize_entries(display_name, entries)
-    lines.append("  " + line)
-    payload["source_metric"] = metric_name
-    selected[display_name] = payload
-
-
-def append_timing_if_present(lines: list[str], selected: dict, entries: list[dict], display_name: str) -> None:
-    """Append one timing metric if timing entries are available.
-
-    Args:
-        lines: Text summary lines to mutate.
-        selected: JSON selected-metrics dictionary to mutate.
-        entries: Timing entries with fold/value pairs.
-        display_name: Name shown in the summary.
-    """
-    if not entries:
-        return
-    line, payload = summarize_entries(display_name, entries)
-    lines.append("  " + line)
-    payload["source"] = "command_log"
-    selected[display_name] = payload
-
-
-def append_all_metrics(lines: list[str], metrics: dict, configs: list[FidexConfig], args: argparse.Namespace) -> None:
-    """Append every collected metric to the text summary.
-
-    Args:
-        lines: Text summary lines to mutate.
-        metrics: Collected model and rule metrics.
-        configs: Fidex configurations to report.
-        args: Parsed command-line arguments.
-    """
-    if metrics["model"]:
-        lines.append(MODEL_STATS_FILE)
-        append_metric_block(lines, metrics["model"])
-        lines.append("")
-
-    if args.skip_rules:
-        return
-
-    for config in configs:
-        config_metrics = metrics["rules"].get(config.name, {})
-        if not config_metrics:
-            continue
-        lines.append(f"{config.name}/{RULE_STATS_FILE}")
-        append_metric_block(lines, config_metrics)
-        lines.append("")
+    for timing_name in sorted(timings):
+        lines.append("  " + summary_line(timing_name, timings[timing_name]))
 
 
 def append_metric_block(lines: list[str], metrics: dict) -> None:
-    """Append a sorted block of metric summaries.
+    """Append metric summaries to the text report.
 
     Args:
         lines: Text summary lines to mutate.
-        metrics: Metrics dictionary for one source file.
+        metrics: Metric summaries indexed by source metric name.
     """
     for metric_name in sorted(metrics):
-        line, _ = summarize_entries(metric_name, metrics[metric_name])
-        lines.append("  " + line)
+        lines.append("  " + summary_line(metric_name, metrics[metric_name]))
 
 
 def append_missing_files(lines: list[str], missing_files: list[dict]) -> None:
@@ -1046,31 +973,51 @@ def append_missing_files(lines: list[str], missing_files: list[dict]) -> None:
     lines.append("")
 
 
-def summarize_entries(name: str, entries: list[dict]) -> tuple[str, dict]:
-    """Compute mean/std and build text/JSON summaries for one metric.
+def summarize_metrics(metrics: dict) -> dict:
+    """Summarize every collected metric for JSON and text reports.
 
     Args:
-        name: Display name of the metric.
+        metrics: Raw metric entries indexed by metric name.
+    """
+    return {metric_name: summarize_entries(entries) for metric_name, entries in metrics.items()}
+
+
+def summarize_timings(timings: dict) -> dict:
+    """Summarize every collected command timing for JSON and text reports.
+
+    Args:
+        timings: Raw timing entries indexed by command step.
+    """
+    return {
+        f"{step} execution time (s)": summarize_entries(entries, source="command_log")
+        for step, entries in timings.items()
+    }
+
+
+def summarize_entries(entries: list[dict], source: str | None = None) -> dict:
+    """Compute mean/std and build a JSON summary for one metric.
+
+    Args:
         entries: Fold/value entries for the metric.
+        source: Optional source label for generated metrics such as timings.
     """
     values = [entry["value"] for entry in entries]
     mean, std = mean_std(values)
-    folds = [entry["fold"] for entry in entries]
-    line = f"{name} : {mean:.10g} ({std:.10g}) [n={len(values)} folds={folds}]"
-    return line, {"mean": mean, "std": std, "n": len(values), "values": entries}
+    payload = {"mean": mean, "std": std, "n": len(values), "values": entries}
+    if source is not None:
+        payload["source"] = source
+    return payload
 
 
-def find_metric(metrics: dict, aliases: tuple[str, ...]) -> tuple[str | None, list[dict]]:
-    """Find the first available metric matching one of several aliases.
+def summary_line(name: str, payload: dict) -> str:
+    """Format one summarized metric or timing for the text report.
 
     Args:
-        metrics: Metrics dictionary indexed by source metric name.
-        aliases: Candidate source names to search in order.
+        name: Display name of the metric or timing.
+        payload: Summary payload produced by summarize_entries.
     """
-    for alias in aliases:
-        if alias in metrics:
-            return alias, metrics[alias]
-    return None, []
+    folds = [entry["fold"] for entry in payload["values"]]
+    return f"{name} : {payload['mean']:.10g} ({payload['std']:.10g}) [n={payload['n']} folds={folds}]"
 
 
 def collect_timings(command_log: list[dict]) -> dict:
