@@ -296,6 +296,7 @@ def init_args() -> argparse.Namespace:
     parser.add_argument('--max_failed_attempts', type=int, default=30, help="Max failed attempts for covering=1")
     parser.add_argument('--min_fidelity', type=float, default=1.0, help="Minimum rule fidelity")
     parser.add_argument('--lowest_min_fidelity', type=float, default=0.75, help="Lowest accepted min fidelity")
+    parser.add_argument('--threshold_decay_function', choices=["Linear", "FastPower", "SlowPower", "VeryFastPower", "VerySlowPower", "FastExponential", "SlowExponential"], default="Linear", help="Early-stopping threshold decay function")
     parser.add_argument('--dropout_dim', type=float, default=0.0, help="Dropout probability for dimensions")
     parser.add_argument('--dropout_hyp', type=float, default=0.0, help="Dropout probability for hyperplanes")
     parser.add_argument('--decision_threshold', type=float, help="Threshold used for predictions")

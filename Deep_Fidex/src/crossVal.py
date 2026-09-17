@@ -28,6 +28,7 @@ VALUE_OPTIONS = {
     "--crossval_seed",
     "--crossval_output_folder",
     "--zeroFidelityRatio",
+    "--threshold_decay_function",
     "--fidexVersion",
     "--fidelity_importance",
     "--threshold_fidelity_only",
