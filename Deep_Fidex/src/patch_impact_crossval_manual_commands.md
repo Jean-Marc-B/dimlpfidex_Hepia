@@ -190,7 +190,7 @@ nohup python -u crossVal.py \
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
 
- ### FAIT
+### CIFAR - earlyStopping 0.01 Linear FI=1 FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
   --folder_sufix _cv_es_zfr00025_linear_fi1_thr1 \
@@ -199,14 +199,14 @@ nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
   > ../../../data/Cifar/logs_cifar_es_zfr00025_linear_fi1_thr1.out 2>&1 &
 
-### FAIT
+### CIFAR - earlyStopping 0.01 Linear FI=0.6, threshold_fidelity_only=0.6 FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
   --dataset Cifar --statistic patch_impact_and_image --train_with_patches False \
-  --folder_sufix _cv_es_zfr001_linear_fi06_thr06 \
+  --folder_sufix _cv_es_zfr001_linear_fi06_thr06_V2 \
   --rules --gpu -1 --fidexVersion fidexEarlyStopping --zeroFidelityRatio 0.01 \
   --fidelity_importance 0.6 --threshold_fidelity_only 0.6 \
   --alternative_folder "../../../CrossVal_patch_impact_and_image_cv_base_patch_impact/{fold_name}/files" \
-  > ../../../data/Cifar/logs_cifar_es_zfr001_linear_fi06_thr06.out 2>&1 &
+  > ../../../data/Cifar/logs_cifar_es_zfr001_linear_fi06_thr06_V2.out 2>&1 &
 
 ### CIFAR - earlyStopping 0.005 Linear FI=0.6, threshold_fidelity_only=0.6 FAIT
 nohup python -u crossVal.py --n_folds 10 --crossval_seed 12 --python python \
@@ -326,7 +326,7 @@ nohup python -u crossVal.py \
   > ../../../data/Cifar/logs_cifar_es_zfr00025_fastExp_fi06_thr06.out 2>&1 &
 ```
 
-### CIFAR - earlyStopping 0.01 FastExponential FI=0.6, threshold_fidelity_only=0.6
+### CIFAR - earlyStopping 0.01 FastExponential FI=0.6, threshold_fidelity_only=0.6 -> FAIT
 
 ```bash
 cd /home/HES/jeanmarc.boutay/dimlpfidex_Hepia/Deep_Fidex/src
