@@ -112,7 +112,7 @@ void showFidexGloParams() {
   printOptionDescription("--threshold_fidelity_only <float [0,1]>", "Iteration ratio from which Fidex switches to fidelity-only mode in fidexFull and fidexEarlyStopping (default: 0.6, used only if fidelity_importance < 1)");
   printOptionDescription("--zeroFidelityRatio <float [0,1]>", "Ratio of hyperplanes to visit before the early-stopping acceptance threshold reaches 0 (default: 1.0)");
   printOptionDescription("--threshold_decay_function <Linear|FastPower|SlowPower|VeryFastPower|VerySlowPower|FastExponential|SlowExponential>", "Early-stopping threshold decay function (default: Linear)");
-  printOptionDescription("--fidexVersion <fidexEarlyStopping|fidexFull>", "Fidex algorithm version to use (default: fidexEarlyStopping)");
+  printOptionDescription("--fidexVersion <fidexEarlyStopping|fidexFull>", "Candidate search strategy: fidexFull scans all eligible candidates at each iteration before selection (unless min_fidelity is reached), while fidexEarlyStopping stops the scan when a decreasing fidelity-gain threshold is reached (default: fidexEarlyStopping)");
   printOptionDescription("--min_fidelity <float [0,1]>", "Minimal rule fidelity accepted when generating a rule (default: 1.0)");
   printOptionDescription("--lowest_min_fidelity <float [0,1]>", "Minimal min_fidelity to which we agree to go down during the covering_strategy (default: 0.75)");
   printOptionDescription("--nb_fidex_rules <int [1,inf[>", "Number of Fidex rules to compute per sample when launching the Fidex algorithm (default: 1)");
