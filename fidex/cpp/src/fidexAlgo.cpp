@@ -307,13 +307,15 @@ Fidex::Fidex(DataSetFid &trainDataset, Parameters &parameters, Hyperspace &hyper
 }
 
 /**
- * @brief Executes the Fidex algorithm to compute an explaining rule for the given sample based on the training samples and hyperlocus and directed by the given parameters.
+ * @brief Computes a Fidex rule using a full candidate scan at each iteration.
  *
- * Fidex builds a rule that meets the specified fidelity and covering criteria. It is driven by
- * a few other parameters, including dropout and the maximum number of iterations allowed.
- * It works by identifying hyperplanes in the feature space that discriminate between different classes of samples and constructing
- * a rule based on these hyperplanes. It updates the provided rule object with the computed rule even if the rule doesn't meet the
- * criteria (minimum covering and minimum fidelity). It returns True if we found a rule metting the criteria.
+ * At each iteration, the algorithm visits the candidates in every non-dropped dimension and
+ * selects the best eligible hyperplane according to the candidate score. The scan may finish
+ * early when a candidate already reaches minFidelity. Unlike computeEarlyStopping(), candidate
+ * evaluation is not stopped by a decreasing fidelity-gain threshold.
+ *
+ * The algorithm updates the provided rule object even if the resulting rule does not meet the
+ * minimum covering and fidelity criteria. It returns True if a rule meeting the criteria is found.
  *
  * @param rule Reference to the Rule object to be updated by the computation.
  * @param mainSampleValues A vector of double values representing the main sample values.
@@ -354,7 +356,7 @@ bool Fidex::computeFull(Rule &rule, const std::vector<double> &mainSampleValues,
   double coeffFidelityImportance = _parameters->getFloat(FIDELITY_IMPORTANCE);   // Coefficient to adjust the importance of fidelity with respect to the covering in the candidate selection objective function (1 = maximise fidelity only, 0 = minimise drop of covering only)
   double thresholdFidelityOnly = _parameters->getFloat(THRESHOLD_FIDELITY_ONLY); // Ratio of max iterations from which it switches to fidelity-only mode
   int thresholdScoreMode = static_cast<int>(thresholdFidelityOnly * maxIterations);
-  bool fidelityOnlyMode = coeffFidelityImportance >= 1.0 - scoreEpsilon; // Keep behavior close to computeFull() when only fidelity matters
+  bool fidelityOnlyMode = coeffFidelityImportance >= 1.0 - scoreEpsilon; // Use fidelity gain as the sole score when its weight is effectively 1
 
   // Optional denormalization metadata
   std::vector<int> normalizationIndices;
@@ -533,7 +535,7 @@ bool Fidex::computeFull(Rule &rule, const std::vector<double> &mainSampleValues,
           const bool sameScoreWithBetterCovering = sameScore && candidateCoverSize > bestCandidateCoverSize;
           // Tie-break policy:
           // - mixed objective (a < 1): equal score -> prefer higher fidelity gain
-          // - fidelity-only mode (a = 1): equal score -> prefer larger covering (same behavior as computeFull())
+          // - fidelity-only mode (a = 1): equal fidelity gain -> prefer larger covering
           isBetterCandidate = improvesBestCandidateScore ||
                               (fidelityOnlyMode ? sameScoreWithBetterCovering : sameScoreWithBetterFidelityGain);
         }
@@ -634,7 +636,8 @@ bool Fidex::computeFull(Rule &rule, const std::vector<double> &mainSampleValues,
  * fidelity decrease. When fidelity_importance is 1.0, or once threshold_fidelity_only is reached, the original
  * fidelity-only early-stopping path is kept and no candidate list is built. It updates the provided rule object
  * with the computed rule even if the rule doesn't meet the criteria (minimum covering and minimum fidelity).
- * It returns True if we found a rule meeting the criteria.
+ * Unlike computeFull(), it can therefore select an antecedent without scanning all candidates. It returns True
+ * if a rule meeting the criteria is found.
  *
  * @param rule Reference to the Rule object to be updated by the computation.
  * @param mainSampleValues A vector of double values representing the main sample values.

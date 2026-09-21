@@ -84,12 +84,18 @@ public:
 
   // execute algo
   /**
-   * @brief Executes the Fidex algorithm to compute an explaining rule for the given sample based on the training samples and hyperlocus and directed by the given parameters.
+   * @brief Computes a Fidex rule using a full candidate scan at each iteration.
+   *
+   * Unlike computeEarlyStopping(), candidate evaluation is not stopped by a decreasing
+   * fidelity-gain threshold.
    */
   bool computeFull(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
 
   /**
    * @brief Executes the Fidex algorithm with a randomized threshold search for the next antecedent.
+   *
+   * The scan stops when the best fidelity gain seen so far reaches a decreasing threshold,
+   * so an antecedent can be selected without scanning all candidates.
    */
   bool computeEarlyStopping(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
 
