@@ -622,19 +622,21 @@ void getRules(std::vector<Rule> &rules, const std::string &rulesFile, const Data
         elements = readTokensOrThrow("confidence", 4, "invalid confidence line: ");
         rule.setConfidence(std::stod(elements[3]));
 
-        elements = readTokensOrThrow("covering size evolution", 8, "missing covering size for new antecedents in the line ");
+        // A universal rule has no antecedent steps, so its histories may be empty.
+        const bool noAntecedents = rule.getNbAntecedents() == 0;
+        elements = readTokensOrThrow("covering size evolution", noAntecedents ? 7 : 8, "missing covering size for new antecedents in the line ");
         std::vector<int> covSizeAnt;
         for (size_t i = 7; i < elements.size(); i++) {
           covSizeAnt.push_back(std::stoi(elements[i]));
         }
         rule.setCoveringSizesWithNewAntecedent(covSizeAnt);
-        elements = readTokensOrThrow("fidelity increase", 7, "missing increased fidelity for new antecedents in the line ");
+        elements = readTokensOrThrow("fidelity increase", noAntecedents ? 6 : 7, "missing increased fidelity for new antecedents in the line ");
         std::vector<double> fidIncr;
         for (size_t i = 6; i < elements.size(); i++) {
           fidIncr.push_back(std::stod(elements[i]));
         }
         rule.setIncreasedFidelity(fidIncr);
-        elements = readTokensOrThrow("accuracy change", 7, "missing accuracy change for new antecedents in the line ");
+        elements = readTokensOrThrow("accuracy change", noAntecedents ? 6 : 7, "missing accuracy change for new antecedents in the line ");
         std::vector<double> accChange;
         for (size_t i = 6; i < elements.size(); i++) {
           accChange.push_back(std::stod(elements[i]));
