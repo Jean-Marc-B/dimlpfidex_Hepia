@@ -215,7 +215,7 @@ def parse_normalization_file(file_name, nb_attributes, attributes=None):
 
     return indices_list, with_median, mus, sigmas
 
-def get_pattern_from_rule_file(rule_file, possible_patterns):
+def get_pattern_from_rule_file(rule_file, possible_patterns, empty_rule_pattern=None):
     """
     This function reads through a given rule file and identifies the pattern that matches the rules in the file.
     It narrows down the possible patterns to the one that matches the content of the file.
@@ -225,6 +225,8 @@ def get_pattern_from_rule_file(rule_file, possible_patterns):
     :type rule_file: str
     :param possible_patterns: A list of regular expression patterns to check against the lines in the file.
     :type possible_patterns: list of str
+    :param empty_rule_pattern: Optional pattern for universal rules, which do not determine the attribute format.
+    :type empty_rule_pattern: str or None
     :raises ValueError: If no rule matches the provided patterns, or if multiple patterns match different rules.
     :raises ValueError: If the file is not found or cannot be opened.
     :return: The pattern that matches the rules in the file.
@@ -234,7 +236,11 @@ def get_pattern_from_rule_file(rule_file, possible_patterns):
         with open(rule_file, "r") as file:
 
             has_rules = False
+            has_empty_rules = False
             for line in file:
+                if empty_rule_pattern is not None and re.fullmatch(empty_rule_pattern, line.rstrip("\r\n")):
+                    has_empty_rules = True
+                    continue
                 matches = [pattern for pattern in possible_patterns if re.search(pattern, line)]
                 # We keep the pattern that match the line, if there is some
                 if matches:
@@ -245,6 +251,8 @@ def get_pattern_from_rule_file(rule_file, possible_patterns):
                 if len(possible_patterns) == 1:
                     break
             if not has_rules:
+                if has_empty_rules:
+                    return empty_rule_pattern
                 raise ValueError(f"Error in file {rule_file}: There is no rule with correct format in the file. Maybe you forgot to add an attribute file.")
             pattern = possible_patterns[0]
     except FileNotFoundError:
@@ -564,6 +572,13 @@ def normalization(args: str = None):
             pattern_fidex_id = fr'(?P<first_part>.*?)(?P<antecedents>(X{int_pattern}[<>]=?{float_pattern} )+)(?P<last_part>-> class {int_pattern}.*)'
             pattern_dimlp_id = fr'(?P<first_part>.*?)(?P<antecedents>(\(x{int_pattern} [<>] {float_pattern}\) )+)(?P<last_part>Class = {int_pattern}.*)'
 
+            # Universal rules have no thresholds to transform and must not select
+            # the attribute convention for other rules in the same file.
+            empty_class_pattern = fr'class {int_pattern}'
+            if has_classes:
+                empty_class_pattern = fr'(?:{empty_class_pattern}|{class_pattern})'
+            empty_rule_pattern = fr'^(?P<first_part>Rule {int_pattern}:\s*)(?P<antecedents>)(?P<last_part>-> {empty_class_pattern}\s*)$'
+
             for r in range(len(args.rule_files)): # For each rule file
                 rule_file = args.rule_files[r]
                 output_rule_file = args.output_rule_files[r]
@@ -611,7 +626,7 @@ def normalization(args: str = None):
                             possible_patterns_with_attribute_names.append(pattern_dimlp_attributes_and_classes)
 
                     # Check which pattern is in the file
-                    pattern = get_pattern_from_rule_file(rule_file, possible_patterns)
+                    pattern = get_pattern_from_rule_file(rule_file, possible_patterns, empty_rule_pattern)
 
                     dimlp_rules = pattern in possible_dimlp_patters
                     with_attribute_names = pattern in possible_patterns_with_attribute_names
