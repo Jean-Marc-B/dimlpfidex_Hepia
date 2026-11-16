@@ -138,44 +138,19 @@ double computeFidelityGainToOne(double candidateFidelity, double currentRuleFide
 }
 
 /**
- * @brief Scalar metadata kept for early-stopping candidates.
+ * @brief Candidate state shared by mixed and fidelity-only early stopping.
  *
- * The covered samples are intentionally not stored here. Once the selected candidate is known,
- * its hyperbox is recomputed once from the current covered samples, dimension and hyperplane.
+ * The hyperbox is kept with its selection metadata. Swapping candidate states preserves the
+ * winning covering without copying its samples or recomputing it after the scan.
  */
 struct EarlyStoppingCandidate {
-  /**
-   * @brief Builds the scalar metadata needed to compare and later recompute a candidate.
-   */
-  EarlyStoppingCandidate(int dimension,
-                         int indexHyp,
-                         int attribute,
-                         bool mainSampleGreater,
-                         double hypValue,
-                         double fidelityGain,
-                         double coveringDrop,
-                         double score,
-                         size_t coverSize)
-      : dimension(dimension),
-        indexHyp(indexHyp),
-        attribute(attribute),
-        mainSampleGreater(mainSampleGreater),
-        hypValue(hypValue),
-        fidelityGain(fidelityGain),
-        coveringDrop(coveringDrop),
-        score(score),
-        coverSize(coverSize) {
-  }
-
-  int dimension;
-  int indexHyp;
-  int attribute;
-  bool mainSampleGreater;
-  double hypValue;
-  double fidelityGain;
-  double coveringDrop;
-  double score;
-  size_t coverSize;
+  Hyperbox hyperbox;
+  int dimension = -1;
+  int indexHyp = -1;
+  double fidelityGain = 0.0;
+  double score = 0.0;
+  size_t coverSize = 0;
+  bool improvesFidelity = false;
 };
 
 /**
@@ -183,6 +158,8 @@ struct EarlyStoppingCandidate {
  *
  * A high score means a good fidelity gain with a limited covering drop. A fidelityImportance of
  * 1.0 ignores covering, while 0.0 keeps only the covering-drop penalty.
+ * This raw score is shared by computeFull and computeEarlyStopping. Only early stopping adds
+ * (1 - fidelityImportance) to normalize it to [0, 1] for comparison with its decreasing threshold.
  *
  * @param fidelityGain Relative fidelity gain toward 1.0.
  * @param coveringDrop Relative covering loss compared to the current rule.
@@ -194,24 +171,9 @@ double computeCandidateSelectionScore(double fidelityGain, double coveringDrop, 
 }
 
 /**
- * @brief Checks whether a candidate can take part in the mixed-score selection.
- *
- * Early stopping is still triggered by the fidelity threshold. The mixed score is applied only
- * to candidates with a positive fidelity gain and with enough gain relative to the trigger.
- *
- * @param candidateFidelityGain Candidate relative fidelity gain toward 1.0.
- * @param requiredFidelityGain Minimum relative fidelity gain required for mixed-score selection.
- * @param scoreEpsilon Tolerance for floating-point score comparisons.
- * @return True if the candidate is eligible for mixed-score selection.
- */
-bool hasEnoughFidelityGainForMixedSelection(double candidateFidelityGain, double requiredFidelityGain, double scoreEpsilon) {
-  return candidateFidelityGain > scoreEpsilon && candidateFidelityGain + scoreEpsilon >= requiredFidelityGain;
-}
-
-/**
  * @brief Compares candidates with fidelity-first ordering.
  *
- * This is used by the threshold trigger and by fidelity-only early stopping. Covering is only a
+ * This orders fidelity-only candidates and breaks mixed-score ties. Covering is only a
  * tie-breaker when fidelity gain is numerically equal.
  *
  * @param candidate Candidate being tested.
@@ -232,8 +194,8 @@ bool isBetterByFidelityGain(const EarlyStoppingCandidate &candidate, const Early
 /**
  * @brief Compares candidates with mixed-score ordering.
  *
- * The mixed score is the primary criterion. Equal scores are resolved by higher fidelity gain,
- * then by higher covering, so covering never beats fidelity gain when the score is tied.
+ * Improving fidelity takes priority over a flat candidate, regardless of score. Within the same
+ * category, equal scores are resolved by higher fidelity gain, then by higher covering.
  *
  * @param candidate Candidate being tested.
  * @param bestCandidate Best candidate known so far.
@@ -241,6 +203,9 @@ bool isBetterByFidelityGain(const EarlyStoppingCandidate &candidate, const Early
  * @return True if candidate is better than bestCandidate.
  */
 bool isBetterByMixedScore(const EarlyStoppingCandidate &candidate, const EarlyStoppingCandidate &bestCandidate, double scoreEpsilon) {
+  if (candidate.improvesFidelity != bestCandidate.improvesFidelity) {
+    return candidate.improvesFidelity;
+  }
   if (candidate.score > bestCandidate.score + scoreEpsilon) {
     return true;
   }
@@ -251,35 +216,6 @@ bool isBetterByMixedScore(const EarlyStoppingCandidate &candidate, const EarlySt
   return isBetterByFidelityGain(candidate, bestCandidate, scoreEpsilon);
 }
 
-/**
- * @brief Selects the candidate applied by mixed-score early stopping.
- *
- * The fallback is the candidate that triggered the threshold. It is already stored in seenCandidates.
- * For positive fidelity gains it also satisfies requiredFidelityGain because
- * requiredFidelityGain = triggerThreshold * fidelityImportance and fidelityImportance <= 1.
- *
- * @param seenCandidates Valid candidates seen before the early-stopping trigger.
- * @param requiredFidelityGain Minimum fidelity gain required for mixed-score selection.
- * @param scoreEpsilon Tolerance for floating-point score comparisons.
- * @param fallbackCandidateIndex Index of the threshold-triggering candidate.
- * @return Index of the selected candidate in seenCandidates.
- */
-int selectBestEarlyStoppingCandidate(const std::vector<EarlyStoppingCandidate> &seenCandidates, double requiredFidelityGain, double scoreEpsilon, int fallbackCandidateIndex) {
-  int bestCandidateIndex = -1;
-
-  for (size_t i = 0; i < seenCandidates.size(); ++i) {
-    const EarlyStoppingCandidate &candidate = seenCandidates[i];
-    if (!hasEnoughFidelityGainForMixedSelection(candidate.fidelityGain, requiredFidelityGain, scoreEpsilon)) {
-      continue;
-    }
-
-    if (bestCandidateIndex == -1 || isBetterByMixedScore(candidate, seenCandidates[bestCandidateIndex], scoreEpsilon)) {
-      bestCandidateIndex = static_cast<int>(i);
-    }
-  }
-
-  return bestCandidateIndex != -1 ? bestCandidateIndex : fallbackCandidateIndex;
-}
 } // namespace
 
 std::string getThresholdDecayFunctionName() {
@@ -312,7 +248,7 @@ Fidex::Fidex(DataSetFid &trainDataset, Parameters &parameters, Hyperspace &hyper
  * At each iteration, the algorithm visits the candidates in every non-dropped dimension and
  * selects the best eligible hyperplane according to the candidate score. The scan may finish
  * early when a candidate already reaches minFidelity. Unlike computeEarlyStopping(), candidate
- * evaluation is not stopped by a decreasing fidelity-gain threshold.
+ * evaluation is not stopped by a decreasing acceptance threshold.
  *
  * The algorithm updates the provided rule object even if the resulting rule does not meet the
  * minimum covering and fidelity criteria. It returns True if a rule meeting the criteria is found.
@@ -627,14 +563,14 @@ bool Fidex::computeFull(Rule &rule, const std::vector<double> &mainSampleValues,
  * Fidex builds a rule that explains the prediction of a model for a specific sample. It is based on
  * the training samples and the hyperlocus and directed by the given parameters, including the maximum
  * number of iterations allowed and whether an antecedent is allowed to keep the same fidelity.
- * It visits candidate hyperplanes in a shuffled order until the best fidelity gain seen so far reaches a
- * decreasing threshold. At that point, the threshold is used as a trigger only: the applied antecedent is
- * selected among the already seen candidates whose fidelity gain is at least
- * threshold * fidelity_importance, using the same mixed score as computeFull (fidelity gain versus covering
- * drop). This means fidelity_importance affects early-stopping selection only between candidates that have
- * improved fidelity enough with respect to the current threshold; it never lets covering compensate for a
- * fidelity decrease. When fidelity_importance is 1.0, or once threshold_fidelity_only is reached, the original
- * fidelity-only early-stopping path is kept and no candidate list is built. It updates the provided rule object
+ * It visits candidate hyperplanes in a shuffled order. In mixed mode, one best candidate is kept, with
+ * strict priority for improving fidelity over a permitted flat candidate. The scan stops when the best
+ * improving candidate's normalized score FI*g + (1-FI)*(1-d) reaches the decreasing threshold.
+ * A flat candidate can only be applied as a fallback when the threshold reaches zero. When
+ * fidelity_importance is 1.0, or once threshold_fidelity_only is reached, candidates are still ranked and
+ * accepted by fidelity gain. In both modes, reaching a zero threshold ends the scan even if no candidate
+ * is admissible. The selected candidate is applied without a separate FI*threshold gain filter.
+ * It updates the provided rule object
  * with the computed rule even if the rule doesn't meet the criteria (minimum covering and minimum fidelity).
  * Unlike computeFull(), it can therefore select an antecedent without scanning all candidates. It returns True
  * if a rule meeting the criteria is found.
@@ -769,28 +705,19 @@ bool Fidex::computeEarlyStopping(Rule &rule, const std::vector<double> &mainSamp
   // 4) Randomized threshold antecedent search
   // =========================================================================
 
-  // Main search loop: stop when fidelity progress is good enough. In mixed mode, apply the best score candidate seen so far that still has enough fidelity gain.
+  // The selection mode is fixed for each antecedent search; the threshold restarts at each iteration.
   while (hyperbox->getFidelity() < minFidelity && nbIt < maxIterations) { // While fidelity of our hyperbox is not high enough, we try to add a new discriminative hyperplane (antecedent in the rule)
 
-    const bool fidelityOnlySelection = fidelityImportance >= 1.0 - scoreEpsilon || nbIt >= thresholdScoreMode; // Keep the original early-stopping path when only fidelity matters or when the mixed-score phase is over
+    const bool fidelityOnlySelection = fidelityImportance >= 1.0 - scoreEpsilon || nbIt >= thresholdScoreMode;
 
-    Hyperbox bestCandidateHyperbox; // best hyperbox to choose for next step
-    Hyperbox candidateHyperbox;
+    EarlyStoppingCandidate bestCandidate;
+    EarlyStoppingCandidate candidate;
 
     // Current rule covering used as the common baseline for all candidates in this iteration
     const auto &currentCoveredSamples = hyperbox->getCoveredSamples();
     const size_t ruleCoverSize = currentCoveredSamples.size();
     const double currentRuleFidelity = hyperbox->getFidelity();
-    int triggerCandidateIndex = -1;
-    int selectedCandidateIndex = -1;
-    int indexBestHyp = -1;
-    int bestDimension = -1;
-    double bestCandidateFidelityGain = -std::numeric_limits<double>::infinity();
     bool candidateAccepted = false;
-    std::vector<EarlyStoppingCandidate> seenCandidates;
-    if (!fidelityOnlySelection) {
-      seenCandidates.reserve(std::min(randomHyperplans.size(), static_cast<size_t>(1024)));
-    }
 
     // Explore all hyperplanes in random order without visiting the same pair twice in this iteration
     shuffle(begin(randomHyperplans), end(randomHyperplans), _rnd);
@@ -803,11 +730,11 @@ bool Fidex::computeEarlyStopping(Rule &rule, const std::vector<double> &mainSamp
       double hypValue = hyperLocus[dimension][indexHyp];
       bool mainSampleGreater = hypValue <= mainSampleValue; // Check if the main sample is on the right side of the hyperplane
 
-      candidateHyperbox.computeCoveredSamplesAndFidelity(currentCoveredSamples, attribute, trainData, mainSampleGreater, hypValue, mainSamplePred, trainPreds); // Compute new cover samples and fidelity
+      candidate.hyperbox.computeCoveredSamplesAndFidelity(currentCoveredSamples, attribute, trainData, mainSampleGreater, hypValue, mainSamplePred, trainPreds); // Compute new cover samples and fidelity
 
-      const auto &candidateCoveredSamples = candidateHyperbox.getCoveredSamples();
+      const auto &candidateCoveredSamples = candidate.hyperbox.getCoveredSamples();
       const size_t candidateCoverSize = candidateCoveredSamples.size();
-      const double candidateFidelity = candidateHyperbox.getFidelity();
+      const double candidateFidelity = candidate.hyperbox.getFidelity();
 
       // Skip candidates that already fail the minimum covering constraint
       if (candidateCoverSize >= static_cast<size_t>(minCoverSize)) {
@@ -819,45 +746,25 @@ bool Fidex::computeEarlyStopping(Rule &rule, const std::vector<double> &mainSamp
           const bool sameFidelityAndAllowed = allowNoFidChange && fidelityDeltaVsCurrentRule >= -scoreEpsilon && fidelityDeltaVsCurrentRule <= scoreEpsilon; // Candidate keeps the same fidelity as the current rule (within epsilon) and this is allowed by the parameter
 
           if (improvesCurrentRuleFidelity || sameFidelityAndAllowed) {
-            const double candidateFidelityGain = computeFidelityGainToOne(candidateFidelity, currentRuleFidelity, scoreEpsilon); // Percentage of gained fidelity with this antecedent out of the maximum possible gain to reach fidelity 1
+            candidate.dimension = dimension;
+            candidate.indexHyp = indexHyp;
+            candidate.fidelityGain = computeFidelityGainToOne(candidateFidelity, currentRuleFidelity, scoreEpsilon);
+            candidate.coverSize = candidateCoverSize;
+            candidate.improvesFidelity = improvesCurrentRuleFidelity;
 
+            bool isBetterCandidate = false;
             if (fidelityOnlySelection) {
-              bool isBetterCandidate = false;
-              if (indexBestHyp == -1) {
-                isBetterCandidate = true;
-              } else if (candidateFidelityGain > bestCandidateFidelityGain + scoreEpsilon) {
-                isBetterCandidate = true;
-              } else if (candidateFidelityGain + scoreEpsilon >= bestCandidateFidelityGain && candidateCoverSize > bestCandidateHyperbox.getCoveredSamples().size()) {
-                isBetterCandidate = true;
-              }
-
-              if (isBetterCandidate) {
-                bestCandidateHyperbox.setFidelity(candidateHyperbox.getFidelity());
-                bestCandidateHyperbox.setCoveredSamples(candidateCoveredSamples);
-                bestCandidateFidelityGain = candidateFidelityGain;
-                indexBestHyp = indexHyp;
-                bestDimension = dimension;
-              }
-            } else { // In mixed mode, we keep track of all candidates seen until now to be able to select the best one above the threshold when we reach it, but we don't update the best candidate at each step based on the mixed score because we only want to apply the score-based selection once we reach the threshold, not at each step.
+              isBetterCandidate = bestCandidate.dimension == -1 || isBetterByFidelityGain(candidate, bestCandidate, scoreEpsilon);
+            } else if (improvesCurrentRuleFidelity || !bestCandidate.improvesFidelity) {
+              // A flat candidate cannot replace an improving one, even with a higher normalized score.
               const double candidateCoveringDrop = (ruleCoverSize - candidateCoverSize) / static_cast<double>(ruleCoverSize);
-              const double candidateScore = computeCandidateSelectionScore(candidateFidelityGain, candidateCoveringDrop, fidelityImportance);
+              candidate.score = computeCandidateSelectionScore(candidate.fidelityGain, candidateCoveringDrop, fidelityImportance) + (1.0 - fidelityImportance);
+              isBetterCandidate = bestCandidate.dimension == -1 || isBetterByMixedScore(candidate, bestCandidate, scoreEpsilon);
+            }
 
-              // Store scalar metadata only. The covered samples are recomputed once for the selected candidate.
-              seenCandidates.push_back(EarlyStoppingCandidate(dimension,
-                                                              indexHyp,
-                                                              attribute,
-                                                              mainSampleGreater,
-                                                              hypValue,
-                                                              candidateFidelityGain,
-                                                              candidateCoveringDrop,
-                                                              candidateScore,
-                                                              candidateCoverSize));
-
-              const int currentCandidateIndex = static_cast<int>(seenCandidates.size()) - 1;
-              // Update the trigger candidate, which is the candidate with the best fidelity gain among those seen so far
-              if (triggerCandidateIndex == -1 || isBetterByFidelityGain(seenCandidates[currentCandidateIndex], seenCandidates[triggerCandidateIndex], scoreEpsilon)) {
-                triggerCandidateIndex = currentCandidateIndex;
-              }
+            if (isBetterCandidate) {
+              // Transfer the covering together with its metadata; no sample vector is copied.
+              std::swap(bestCandidate, candidate);
             }
           }
         }
@@ -867,52 +774,39 @@ bool Fidex::computeEarlyStopping(Rule &rule, const std::vector<double> &mainSamp
         const double progress = static_cast<double>(visitedHyperplans + 1) / static_cast<double>(thresholdZeroVisitCount);
         const double threshold = computeThresholdFromProgress(progress, thresholdDecayFunction);
 
-        if (fidelityOnlySelection && indexBestHyp != -1 && bestCandidateFidelityGain + scoreEpsilon >= threshold) {
+        // Check after every visited hyperplane, including rejected candidates. At zero, the visit
+        // budget is exhausted: apply the best candidate (possibly flat), or end construction.
+        if (threshold == 0.0) {
+          candidateAccepted = bestCandidate.dimension != -1;
+          break;
+        }
+
+        if (fidelityOnlySelection && bestCandidate.dimension != -1 && bestCandidate.fidelityGain + scoreEpsilon >= threshold) {
           candidateAccepted = true;
           break;
         }
 
-        // In mixed mode, stop scanning as soon as the best fidelity gain seen so far reaches the decreasing threshold.
-        // The applied candidate is then selected by mixed score, but only among candidates whose fidelity gain is at
-        // least threshold * fidelity_importance. If no such improving candidate exists (possible only for the
-        // allow_no_fid_change fallback when the threshold reaches 0), use the threshold-triggering candidate.
-        if (!fidelityOnlySelection && triggerCandidateIndex != -1 && seenCandidates[triggerCandidateIndex].fidelityGain + scoreEpsilon >= threshold) {
-          const double requiredFidelityGain = threshold * fidelityImportance;
-          selectedCandidateIndex = selectBestEarlyStoppingCandidate(seenCandidates, requiredFidelityGain, scoreEpsilon, triggerCandidateIndex);
+        if (!fidelityOnlySelection && bestCandidate.dimension != -1 && bestCandidate.improvesFidelity && bestCandidate.score + scoreEpsilon >= threshold) {
           candidateAccepted = true;
           break;
         }
       }
     }
 
-    // If we visited all hyperplanes without accepting a candidate, no valid antecedent can be found for the current rule
+    // No admissible candidate was found within the visit budget for this antecedent.
     if (!candidateAccepted) {
       break;
     }
 
-    int selectedDimension = bestDimension;
-    int selectedIndexHyp = indexBestHyp;
-    if (!fidelityOnlySelection) {
-      const EarlyStoppingCandidate &selectedCandidate = seenCandidates[selectedCandidateIndex];
-      bestCandidateHyperbox.computeCoveredSamplesAndFidelity(currentCoveredSamples,
-                                                             selectedCandidate.attribute,
-                                                             trainData,
-                                                             selectedCandidate.mainSampleGreater,
-                                                             selectedCandidate.hypValue,
-                                                             mainSamplePred,
-                                                             trainPreds);
-      selectedDimension = selectedCandidate.dimension;
-      selectedIndexHyp = selectedCandidate.indexHyp;
-    }
-    const auto &bestCandidateCoveredSamples = bestCandidateHyperbox.getCoveredSamples();
+    const auto &bestCandidateCoveredSamples = bestCandidate.hyperbox.getCoveredSamples();
     const size_t bestCandidateCoverSize = bestCandidateCoveredSamples.size();
-    const double bestCandidateFidelity = bestCandidateHyperbox.getFidelity();
+    const double bestCandidateFidelity = bestCandidate.hyperbox.getFidelity();
 
     hyperbox->setFidelity(bestCandidateFidelity);
     hyperbox->addIncreasedFidelity(bestCandidateFidelity);
     hyperbox->setCoveredSamples(bestCandidateCoveredSamples);
     hyperbox->addCoveringSizesWithNewAntecedent(bestCandidateCoverSize);
-    hyperbox->addDiscriminativeHyperplan(selectedDimension, selectedIndexHyp);
+    hyperbox->addDiscriminativeHyperplan(bestCandidate.dimension, bestCandidate.indexHyp);
 
     double ruleAccuracy = hyperbox->computeRuleAccuracy(mainSamplePred, trainTrueClass); // Percentage of covered samples whose true class matches the rule prediction
     hyperbox->addAccuracyChanges(ruleAccuracy);
