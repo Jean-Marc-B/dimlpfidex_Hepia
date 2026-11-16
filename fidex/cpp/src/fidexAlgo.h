@@ -87,15 +87,16 @@ public:
    * @brief Computes a Fidex rule using a full candidate scan at each iteration.
    *
    * Unlike computeEarlyStopping(), candidate evaluation is not stopped by a decreasing
-   * fidelity-gain threshold.
+   * acceptance threshold.
    */
   bool computeFull(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
 
   /**
    * @brief Executes the Fidex algorithm with a randomized threshold search for the next antecedent.
    *
-   * The scan stops when the best fidelity gain seen so far reaches a decreasing threshold,
-   * so an antecedent can be selected without scanning all candidates.
+   * Mixed mode stops on the best improving candidate's normalized fidelity/covering score;
+   * fidelity-only mode stops on its best fidelity gain. Both stop when the threshold reaches zero,
+   * with a permitted flat candidate used only as a mixed-mode fallback at that limit.
    */
   bool computeEarlyStopping(Rule &rule, const std::vector<double> &mainSampleValues, int mainSamplePred, double minFidelity, int minNbCover);
 
