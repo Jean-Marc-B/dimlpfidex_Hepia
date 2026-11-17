@@ -106,7 +106,7 @@ class FidexConfig:
 
     Args:
         fidex_version: Fidex algorithm version, or None to use the C++ default.
-        zero_fidelity_ratio: Early-stopping zero-fidelity ratio, if provided.
+        zero_fidelity_ratio: FES hyperplane-visit budget ratio per antecedent; the scan stops when its threshold reaches zero, if provided.
         threshold_decay_function: Early-stopping threshold decay function, if provided.
         fidelity_importance: Candidate scoring fidelity weight, if provided.
         threshold_fidelity_only: Fidelity-only switch threshold, if provided.
