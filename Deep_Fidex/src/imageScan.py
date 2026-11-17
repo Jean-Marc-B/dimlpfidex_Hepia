@@ -134,7 +134,7 @@ def parse_arguments():
     parser.add_argument("--crossval_fold", type=int, default=None, help="Fold index to use as test fold, starting at 1")
     parser.add_argument("--crossval_seed", type=int, default=None, help="Seed used to build cross-validation folds; crossVal.py generates one if omitted")
     parser.add_argument("--crossval_output_folder", type=str, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--zeroFidelityRatio", type=float, default=1.0, help="Ratio of hyperplanes to visit before Fidex early-stopping threshold reaches 0")
+    parser.add_argument("--zeroFidelityRatio", type=float, default=1.0, help="FES hyperplane-visit budget ratio per antecedent. Stop when the threshold reaches zero, even if no candidate was found; at least one hyperplane is visited when available")
     parser.add_argument("--threshold_decay_function", type=str, choices=["Linear", "FastPower", "SlowPower", "VeryFastPower", "VerySlowPower", "FastExponential", "SlowExponential"], default="Linear", help="Early-stopping threshold decay function")
     parser.add_argument("--fidexVersion", type=str, choices=["fidexEarlyStopping", "fidexFull"], default="fidexEarlyStopping", help="Fidex algorithm version to use")
     parser.add_argument("--fidelity_importance", type=float, default=0.6, help="Weight of fidelity in Fidex candidate scoring")
